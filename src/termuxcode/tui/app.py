@@ -5,6 +5,7 @@ from textual.widgets import Header, Input
 
 from .chat import ChatLog
 from .agent import AgentClient
+from .history import MessageHistory
 from .styles import CSS
 
 
@@ -19,6 +20,7 @@ class ClaudeChat(App):
         super().__init__()
         self.cwd = cwd
         self.max_history = max_history
+        self.history = MessageHistory(filename="messages.jsonl", max_messages=max_history)
 
     def compose(self) -> ComposeResult:
         yield Header(id="header")
@@ -32,6 +34,21 @@ class ClaudeChat(App):
         self.input = self.query_one("#message-input", Input)
         self.agent = AgentClient(self.chat_log, self.cwd, self.max_history)
         self._update_breakpoint()
+
+    async def on_mount_async(self) -> None:
+        """Cargar historial al iniciar la app"""
+        await self._load_history()
+
+    async def _load_history(self) -> None:
+        """Cargar y mostrar el historial de mensajes"""
+        history = self.history.load()
+        for msg in history:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if role == "user":
+                self.chat_log.write_user(content)
+            elif role == "assistant":
+                self.chat_log.write_assistant(content)
 
     def on_resize(self, event) -> None:
         self._update_breakpoint()
@@ -49,8 +66,9 @@ class ClaudeChat(App):
         event.input.clear()
         self.call_later(self._run_query, prompt)
 
-    def _run_query(self, prompt: str) -> None:
-        self.agent.query(prompt)
+    async def _run_query(self, prompt: str) -> None:
+        """Ejecutar query del agente"""
+        await self.agent.query(prompt)
 
 
 if __name__ == "__main__":

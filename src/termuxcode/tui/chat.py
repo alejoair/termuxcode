@@ -17,38 +17,38 @@ class ChatLog(RichLog):
 
     def write_user(self, content: str) -> None:
         """Escribir mensaje del usuario"""
-        self.write_raw(f"[bold cyan]You:[/] {content}\n")
+        self.write(f"[bold cyan]You:[/] {content}\n")
 
     def write_assistant(self, content: str) -> None:
         """Escribir mensaje del asistente con soporte markdown"""
-        self.write_raw(f"[bold green]Claude:[/]\n")
+        self.write(f"[bold green]Claude:[/]\n")
         try:
             md = Markdown(content)
             self.write(md)
         except Exception:
-            self.write_raw(f"{content}\n")
+            self.write(f"{content}\n")
 
     def write_tool(self, tool_name: str, tool_input: str = None) -> None:
         """Escribir herramienta usada (max 2 líneas)"""
-        self.write_raw(f"[dim][yellow]🔧 {tool_name}[/yellow][/dim]")
+        self.write(f"[dim][yellow]🔧 {tool_name}[/yellow][/dim]")
         if tool_input:
             lines = str(tool_input).split('\n')[:2]
             preview = '\n'.join(lines)
             if len(lines) == 2 or len(tool_input) > len(preview):
                 preview = preview + "..."
-            self.write_raw(f"[dim][sub]{preview}[/sub][/dim]")
-        self.write_raw("")
+            self.write(f"[dim][sub]{preview}[/sub][/dim]")
+        self.write("")
 
     def write_result(self, content: str) -> None:
         """Escribir resultado de herramienta (max 2 líneas)"""
-        self.write_raw(f"[dim][sub]✅ Result:[/sub][/dim]")
+        self.write(f"[dim][sub]✅ Result:[/sub][/dim]")
         lines = str(content).split('\n')[:2]
         preview = '\n'.join(lines)
         if len(lines) == 2 or len(content) > len(preview):
             preview = preview + "..."
-        self.write_raw(f"[dim][sub]{preview}[/sub][/dim]")
-        self.write_raw("")
+        self.write(f"[dim][sub]{preview}[/sub][/dim]")
+        self.write("")
 
     def write_error(self, error: str) -> None:
         """Escribir error"""
-        self.write_raw(f"[bold red]❌ Error: {error}[/]\n")
+        self.write(f"[bold red]❌ Error: {error}[/]\n")

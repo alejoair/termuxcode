@@ -27,7 +27,6 @@ class MessageHistory:
 
     def save(self, messages: list[dict]) -> None:
         """Guarda el historial en el archivo JSONL (limitado a max_messages)"""
-        # Mantener solo los últimos max_messages mensajes
         messages_to_save = messages[-self.max_messages:]
         with open(self._history_file, 'w', encoding='utf-8') as f:
             for msg in messages_to_save:
