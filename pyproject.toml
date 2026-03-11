@@ -5,8 +5,8 @@ description = "Python project for Termux development"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "claude-agent-sdk>=0.1.44",
-    "textual>=8.0.0",
+    "claude-agent-sdk==0.1.48",
+    "textual==8.0.0",
 ]
 
 [build-system]
@@ -19,7 +19,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
-    "textual-dev>=1.8.0",
+    "textual-dev==1.8.0",
 ]
 
 [tool.setuptools]
