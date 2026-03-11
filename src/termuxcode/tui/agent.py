@@ -1,10 +1,10 @@
 """Módulo para comunicarse con el agente Claude con historial en JSONL"""
-import json
 import os
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from claude_agent_sdk import query, ClaudeAgentOptions
+
+from .history import MessageHistory
 
 if TYPE_CHECKING:
     from .chat import ChatLog
@@ -21,42 +21,12 @@ class AgentClient:
     ):
         self.chat_log = chat_log
         self.cwd = cwd or os.getcwd()
-        self.max_history = max_history
-        self._history_file = Path.home() / ".claude" / "local_sessions" / "messages.jsonl"
-        self._history_file.parent.mkdir(parents=True, exist_ok=True)
-
-    def _load_history(self) -> list[dict]:
-        """Cargar historial desde JSONL"""
-        if not self._history_file.exists():
-            return []
-        with open(self._history_file, 'r', encoding='utf-8') as f:
-            return [json.loads(line) for line in f if line.strip()]
-
-    def _save_history(self, messages: list[dict]) -> None:
-        """Guardar historial en JSONL (limitado a max_history)"""
-        # Mantener solo los últimos max_history mensajes
-        messages_to_save = messages[-self.max_history:]
-        with open(self._history_file, 'w', encoding='utf-8') as f:
-            for msg in messages_to_save:
-                f.write(json.dumps(msg, ensure_ascii=False) + '\n')
-
-    def _build_prompt(self, history: list[dict], new_message: str) -> str:
-        """Construir el prompt con el historial de conversación"""
-        prompt = ""
-        for msg in history:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-            if role == "user":
-                prompt += f"User: {content}\n\n"
-            elif role == "assistant":
-                prompt += f"Assistant: {content}\n\n"
-        prompt += f"User: {new_message}\n\nAssistant:"
-        return prompt
+        self.history = MessageHistory(filename="messages.jsonl", max_messages=max_history)
 
     async def query(self, prompt: str) -> None:
         """Ejecutar query del agente con historial en JSONL"""
         # Cargar historial existente
-        history = self._load_history()
+        history = self.history.load()
 
         # Mostrar mensaje del usuario en la UI
         self.chat_log.write_user(prompt)
@@ -65,7 +35,7 @@ class AgentClient:
         history.append({"role": "user", "content": prompt})
 
         # Construir prompt con historial
-        full_prompt = self._build_prompt(history[:-1], prompt)
+        full_prompt = self.history.build_prompt(history[:-1], prompt)
 
         # Usar query() del SDK
         options = ClaudeAgentOptions(
@@ -93,8 +63,7 @@ class AgentClient:
 
         # Guardar respuesta del asistente en historial
         if assistant_response:
-            history.append({"role": "assistant", "content": assistant_response})
-            self._save_history(history)
+            self.history.append("assistant", assistant_response)
 
     async def _process_message(self, message) -> None:
         """Procesar mensaje del agente"""
