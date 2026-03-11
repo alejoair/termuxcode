@@ -6,6 +6,16 @@ Screen {
     height: 100%;
 }
 
+/* ChatLog */
+ChatLog {
+    height: 1fr;
+    width: 100%;
+    background: $surface;
+    color: $foreground;
+    overflow-y: scroll;
+    scrollbar-gutter: auto;
+}
+
 /* Header */
 #header {
     height: auto;
@@ -27,7 +37,7 @@ Screen.-small #header {
     width: 100%;
 }
 
-/* Input container - siempre visible abajo */
+/* Input container */
 #input-container {
     height: auto;
     padding: 1 2;

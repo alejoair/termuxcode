@@ -1,10 +1,10 @@
 """App principal - TUI responsive para Claude Agent SDK"""
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
-from textual.widgets import Header, Input, Static
+from textual.widgets import Header, Input
 
 from .chat import ChatLog
-from .agent import AgentClient, RollingWindowConfig
+from .agent import AgentClient
 from .styles import CSS
 
 
@@ -15,94 +15,42 @@ class ClaudeChat(App):
     TITLE = "Claude Chat"
     AUTO_FOCUS = "#message-input"
 
-    def __init__(self, cwd: str = None):
+    def __init__(self, cwd: str = None, max_history: int = 100):
         super().__init__()
         self.cwd = cwd
-        self.agent: AgentClient = None
-        # Configuración de rolling window
-        self.window_config = RollingWindowConfig(
-            max_visible=50,   # 50 mensajes visibles
-            max_session=200,  # 200 mensajes guardados en sesión
-            max_turns=50,    # 50 turnos a Claude
-        )
+        self.max_history = max_history
 
     def compose(self) -> ComposeResult:
-        """Componer la UI responsive"""
-        # Header (oculto en pantallas pequeñas)
         yield Header(id="header")
-
-        # Contenedor del chat - ocupa espacio disponible
         with Vertical(id="chat-container"):
             yield ChatLog(id="messages")
-
-        # Input siempre visible en la parte inferior
         with Vertical(id="input-container"):
-            yield Input(
-                id="message-input",
-                placeholder="Escribe tu mensaje...",
-            )
+            yield Input(id="message-input", placeholder="Escribe tu mensaje...")
 
     def on_mount(self) -> None:
-        """Inicializar componentes"""
         self.chat_log = self.query_one("#messages", ChatLog)
         self.input = self.query_one("#message-input", Input)
-        self.agent = AgentClient(
-            self.chat_log,
-            self.cwd,
-            config=self.window_config,
-        )
-
-        # Detectar tamaño de pantalla para breakpoint
+        self.agent = AgentClient(self.chat_log, self.cwd, self.max_history)
         self._update_breakpoint()
 
-    async def on_mount_async(self) -> None:
-        """Inicializar async - cargar historial y reconstruir UI"""
-        # Cargar historial del archivo de sesión
-        await self.agent.load_history_only()
-        # Reconstruir UI con mensajes del rolling window
-        await self.agent.rebuild_ui()
-        # Conectar al SDK (continúa sesión existente)
-        await self.agent.connect()
-
     def on_resize(self, event) -> None:
-        """Actualizar breakpoint cuando cambia el tamaño"""
         self._update_breakpoint()
 
     def _update_breakpoint(self) -> None:
-        """Actualizar clases de breakpoint según tamaño"""
         width = self.size.width
-
-        # Asignar clase según tamaño usando set_class
-        is_small = width < 60
-        is_medium = width >= 60 and width < 100
-        is_large = width >= 100
-
-        self.screen.set_class(is_small, "-small")
-        self.screen.set_class(is_medium, "-medium")
-        self.screen.set_class(is_large, "-large")
+        self.screen.set_class(width < 60, "-small")
+        self.screen.set_class(60 <= width < 100, "-medium")
+        self.screen.set_class(width >= 100, "-large")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Cuando el usuario presiona Enter"""
         if not event.value.strip():
             return
-
         prompt = event.value
         event.input.clear()
         self.call_later(self._run_query, prompt)
 
-    def on_unmount(self) -> None:
-        """Desconectar agente al cerrar la app"""
-        if self.agent:
-            self.call_later(self._disconnect_agent)
-
-    async def _disconnect_agent(self) -> None:
-        """Desconectar el agente de forma segura"""
-        if self.agent and self.agent.is_connected:
-            await self.agent.disconnect()
-
-    async def _run_query(self, prompt: str) -> None:
-        """Ejecutar query del agente"""
-        await self.agent.query(prompt)
+    def _run_query(self, prompt: str) -> None:
+        self.agent.query(prompt)
 
 
 if __name__ == "__main__":
