@@ -1,0 +1,8 @@
+{"role": "user", "content": "hola"}
+{"role": "assistant", "content": "¡Hola! 👋\n\nHello! How can I help you today? I can assist you with coding tasks, file exploration, documentation, and much more. What would you like to work on?"}
+{"role": "user", "content": "me llamo alejandro"}
+{"role": "assistant", "content": "¡Mucho gusto, Alejandro! 🙌\n\nEs un placer conocerte. ¿En qué puedo ayudarte hoy? Puedo asistirte con tareas de programación, exploración de archivos, documentación y mucho más. ¿Qué te gustaría trabajar?"}
+{"role": "user", "content": "sabes como me llamo"}
+{"role": "assistant", "content": "¡Sí, claro que sí! Te llamas Alejandro. 👍\n\n¿En qué puedo ayudarte hoy, Alejandro? Puedo asistirte con proyectos de programación, explorar tu código, revisar archivos, escribir código, o cualquier otra tarea que necesites. ¿Qué tienes en mente?"}
+{"role": "user", "content": "hola sabea como me llamo?"}
+{"role": "assistant", "content": "¡Sí, Alejandro! Recuerdo perfectamente que te llamas así. 👋\n\n¿En qué puedo ayudarte hoy? Estoy aquí para asistirte con cualquier tarea de programación, análisis de código, u otras necesidades que tengas. ¿Qué te gustaría trabajar?"}

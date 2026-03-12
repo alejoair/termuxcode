@@ -29,14 +29,11 @@ class AgentClient:
         # Mostrar mensaje del usuario en la UI
         self.chat_log.write_user(prompt)
 
-        # Guardar mensaje del usuario en historial INMEDIATAMENTE
-        self.history.append("user", prompt)
-
-        # Cargar historial para construir el prompt
+        # Cargar historial (ya está truncado a max_messages por save())
         history = self.history.load()
 
-        # Construir prompt con todo el historial (excluyendo el mensaje actual que ya se agregó)
-        full_prompt = self.history.build_prompt(history[:-1], prompt)
+        # Construir prompt con el historial y el nuevo mensaje
+        full_prompt = self.history.build_prompt(history, prompt)
 
         # Usar query() del SDK
         options = ClaudeAgentOptions(
@@ -62,7 +59,8 @@ class AgentClient:
             if old_claudecode:
                 os.environ['CLAUDECODE'] = old_claudecode
 
-        # Guardar respuesta del asistente en historial
+        # Guardar mensaje del usuario y respuesta del asistente en historial
+        self.history.append("user", prompt)
         if assistant_response:
             self.history.append("assistant", assistant_response)
 
