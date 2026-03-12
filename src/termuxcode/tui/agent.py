@@ -16,25 +16,26 @@ class AgentClient:
     def __init__(
         self,
         chat_log: 'ChatLog',
+        history: MessageHistory,
         cwd: str = None,
-        max_history: int = 100,
     ):
         self.chat_log = chat_log
+        self.history = history
         self.cwd = cwd or os.getcwd()
-        self.history = MessageHistory(filename="messages.jsonl", max_messages=max_history)
 
     async def query(self, prompt: str) -> None:
         """Ejecutar query del agente con historial en JSONL"""
-        # Cargar historial existente
-        history = self.history.load()
 
         # Mostrar mensaje del usuario en la UI
         self.chat_log.write_user(prompt)
 
-        # Guardar mensaje del usuario en historial
-        history.append({"role": "user", "content": prompt})
+        # Guardar mensaje del usuario en historial INMEDIATAMENTE
+        self.history.append("user", prompt)
 
-        # Construir prompt con historial
+        # Cargar historial para construir el prompt
+        history = self.history.load()
+
+        # Construir prompt con todo el historial (excluyendo el mensaje actual que ya se agregó)
         full_prompt = self.history.build_prompt(history[:-1], prompt)
 
         # Usar query() del SDK

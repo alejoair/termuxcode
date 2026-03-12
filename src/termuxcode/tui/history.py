@@ -1,5 +1,6 @@
 """Módulo para manejo de historial de conversación en JSONL"""
 import json
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -7,16 +8,20 @@ from typing import Optional
 class MessageHistory:
     """Gestiona el historial de mensajes en formato JSONL"""
 
-    def __init__(self, filename: str = "messages.jsonl", max_messages: int = 100):
-        self.filename = filename
+    def __init__(self, filename: str = "messages.jsonl", max_messages: int = 100,
+                 session_id: str = None, cwd: str = None):
         self.max_messages = max_messages
-        self._history_file = self._get_history_dir() / filename
+        self.cwd = Path(cwd) if cwd else Path.cwd()
+        self.base_dir = self._get_history_dir()
+        self.session_id = session_id or str(uuid.uuid4())[:8]
+        self.filename = filename.replace(".jsonl", f"_{self.session_id}.jsonl")
+        self._history_file = self.base_dir / self.filename
 
     def _get_history_dir(self) -> Path:
         """Retorna el directorio donde se guarda el historial"""
-        claude_dir = Path.home() / ".claude" / "local_sessions"
-        claude_dir.mkdir(parents=True, exist_ok=True)
-        return claude_dir
+        sessions_dir = self.cwd / ".sessions"
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        return sessions_dir
 
     def load(self) -> list[dict]:
         """Carga el historial desde el archivo JSONL"""
