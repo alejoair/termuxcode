@@ -2,11 +2,18 @@
 
 BASE_CSS = """
 /* ═══════════════════════════════════════════════════════════════
-   SCREEN - Layout principal vertical
+   SCREEN - Layout principal vertical, sin scroll
    ═══════════════════════════════════════════════════════════════ */
 Screen {
     layout: vertical;
     background: $background;
+    overflow-y: hidden;
+    overflow-x: hidden;
+}
+
+/* Prevenir scroll cuando algún widget está maximizado (sobrescribe CSS de Textual) */
+Screen.-maximized-view {
+    overflow-y: hidden !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -22,14 +29,17 @@ Screen {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   BOTTOM CONTAINER - Tabs + Input (fijo abajo)
+   BOTTOM CONTAINER - Tabs + Input (fijo abajo, visible con teclado)
    ═══════════════════════════════════════════════════════════════ */
 #bottom-container {
     height: auto;
     width: 100%;
+    min-height: 3;
+    max-height: 5;
     background: $panel;
     padding: 0;
     border-top: solid $primary;
+    dock: bottom;
 }
 
 /* Fila de tabs (horizontal) */

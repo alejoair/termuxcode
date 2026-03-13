@@ -2,7 +2,7 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, VerticalScroll, Horizontal
-from textual.widgets import Input, Tabs, Button
+from textual.widgets import Input, Tabs, Button, Footer
 from textual.reactive import reactive
 
 from .chat import ChatLog
@@ -50,7 +50,7 @@ class ClaudeChat(
         with VerticalScroll(id="chat-container"):
             yield ChatLog(id="messages")
         # Input en la parte inferior
-        with Vertical(id="bottom-container"):
+        with Footer(id="bottom-container"):
             with Horizontal(id="tabs-row"):
                 yield Tabs(id="sessions-tabs")
                 yield Button("+", id="new-session-btn")
