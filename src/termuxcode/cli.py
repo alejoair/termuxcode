@@ -24,8 +24,8 @@ def main() -> None:
     parser.add_argument(
         "--host",
         type=str,
-        default="localhost",
-        help="Host para modo web (default: localhost)",
+        default="0.0.0.0",
+        help="Host para modo web (default: 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
@@ -41,12 +41,14 @@ def main() -> None:
 
     if args.serve:
         # Usar servidor personalizado con soporte DPI alto
-        import shlex
-
-        # Construir el comando: python -m termuxcode
-        # termuxcode/__main__.py maneja la ejecución de la TUI
-        exe = shlex.quote(sys.executable)
-        command = f"{exe} -m termuxcode"
+        # Construir el comando para ejecutar la TUI
+        # En Windows, usamos sys.executable directamente
+        if os.name == "nt":
+            command = f'"{sys.executable}" -m termuxcode'
+        else:
+            import shlex
+            exe = shlex.quote(sys.executable)
+            command = f"{exe} -m termuxcode"
 
         run_web_server(
             command=command,
