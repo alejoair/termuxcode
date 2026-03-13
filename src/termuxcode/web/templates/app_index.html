@@ -9,6 +9,20 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css?family=Roboto%20Mono"
     />
+    <script>
+      // Interceptar WebSocket antes de que textual.js lo cree,
+      // para poder enviar stdin directamente (scroll táctil).
+      (function() {
+        const _WS = window.WebSocket;
+        window._textualSocket = null;
+        window.WebSocket = function(...args) {
+          const ws = new _WS(...args);
+          window._textualSocket = ws;
+          return ws;
+        };
+        window.WebSocket.prototype = _WS.prototype;
+      })();
+    </script>
     <script src="/static/js/textual.js"></script>
     <script>
       function getStartUrl() {
@@ -68,20 +82,103 @@
     ></div>
 
     <script>
-      function updateAppHeight() {
-        const vv = window.visualViewport;
-        const vh = vv ? vv.height : window.innerHeight;
-        const offsetTop = vv ? vv.offsetTop : 0;
-        document.documentElement.style.setProperty('--app-height', Math.round(vh) + 'px');
-        document.body.style.top = Math.round(offsetTop) + 'px';
-      }
-      updateAppHeight();
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', updateAppHeight);
-        window.visualViewport.addEventListener('scroll', updateAppHeight);
-      }
-      window.addEventListener('resize', updateAppHeight);
-      window.addEventListener('focusout', updateAppHeight);
+      // Evitar que el teclado Android se abra al tocar el área del chat.
+      // readOnly en el textarea previene el teclado aunque xterm llame focus().
+      // Lo quitamos solo cuando el toque es en la zona del input.
+      (function() {
+        const terminal = document.getElementById('terminal');
+
+        function applyReadOnly(textarea) {
+          textarea.setAttribute('readonly', 'readonly');
+        }
+
+        // Observar cuando xterm crea el textarea y ponerlo readonly por defecto
+        const observer = new MutationObserver(function() {
+          const textarea = document.querySelector('.xterm-helper-textarea');
+          if (textarea && !textarea.hasAttribute('data-managed')) {
+            textarea.setAttribute('data-managed', '1');
+            applyReadOnly(textarea);
+          }
+        });
+        observer.observe(terminal, { childList: true, subtree: true });
+
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let touchStartTime = 0;
+        let isSwiping = false;
+
+        terminal.addEventListener('touchstart', function(e) {
+          const textarea = document.querySelector('.xterm-helper-textarea');
+          if (!textarea) return;
+          const vv = window.visualViewport;
+          const vh = vv ? vv.height : window.innerHeight;
+          const touchY = e.touches[0].clientY;
+          const isInputZone = touchY > (vh * 0.75);
+
+          touchStartY = e.touches[0].clientY;
+          touchStartX = e.touches[0].clientX;
+          touchStartTime = Date.now();
+          isSwiping = false;
+
+          if (isInputZone) {
+            textarea.removeAttribute('readonly');
+            textarea.focus();
+          } else {
+            applyReadOnly(textarea);
+          }
+        }, { passive: true });
+
+        terminal.addEventListener('touchend', function(e) {
+          const vv = window.visualViewport;
+          const vh = vv ? vv.height : window.innerHeight;
+          const endY = e.changedTouches[0].clientY;
+          const endX = e.changedTouches[0].clientX;
+          const deltaY = touchStartY - endY;
+          const deltaX = Math.abs(touchStartX - endX);
+          const elapsed = Date.now() - touchStartTime;
+
+          // Solo scroll si es gesto vertical, no en zona input, y desplazamiento mínimo
+          const isInputZone = touchStartY > (vh * 0.75);
+          if (isInputZone) return;
+          if (Math.abs(deltaY) < 20) return;
+          if (deltaX > Math.abs(deltaY)) return; // más horizontal que vertical
+
+          const ws = window._textualSocket;
+          if (!ws || ws.readyState !== 1) return;
+
+          // Calcular cuántos steps enviar según distancia
+          const steps = Math.min(Math.floor(Math.abs(deltaY) / 15), 20);
+          // Swipe up (deltaY>0) = ver contenido más nuevo = scroll down (ArrowDown)
+          // Swipe down (deltaY<0) = ver contenido más antiguo = scroll up (ArrowUp)
+          const seq = deltaY > 0 ? '\x1b[B' : '\x1b[A';
+          for (let i = 0; i < steps; i++) {
+            ws.send(JSON.stringify(['stdin', seq]));
+          }
+        }, { passive: true });
+      })();
+    </script>
+
+    <script>
+      (function() {
+        let lastVh = 0, lastTop = 0;
+        function updateAppHeight() {
+          const vv = window.visualViewport;
+          const vh = Math.round(vv ? vv.height : window.innerHeight);
+          const offsetTop = Math.round(vv ? vv.offsetTop : 0);
+          if (vh === lastVh && offsetTop === lastTop) return;
+          lastVh = vh;
+          lastTop = offsetTop;
+          document.documentElement.style.setProperty('--app-height', vh + 'px');
+          document.body.style.top = offsetTop + 'px';
+        }
+        updateAppHeight();
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', updateAppHeight);
+          window.visualViewport.addEventListener('scroll', updateAppHeight);
+        }
+        window.addEventListener('resize', updateAppHeight);
+        window.addEventListener('focusout', updateAppHeight);
+      })();
     </script>
 
   </body>

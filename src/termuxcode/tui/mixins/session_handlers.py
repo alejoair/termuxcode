@@ -84,7 +84,7 @@ class SessionHandlersMixin:
         self.chat_log.clear()
         await self._load_history(state)
 
-        # Restaurar scroll position de la sesión
+        # Restaurar scroll position de la sesión (o ir al fondo si es nueva)
         self.call_later(lambda: self._restore_scroll(state))
 
     async def _update_tabs(self: "ClaudeChat") -> None:
@@ -109,7 +109,6 @@ class SessionHandlersMixin:
         """Crear nueva sesión (Ctrl+N)"""
         session = self.session_manager.create_session()
         await self._switch_to_session(session.id)
-        self.input.focus()
 
     async def action_close_session(self: "ClaudeChat") -> None:
         """Cerrar sesión actual (Ctrl+W)"""
@@ -144,3 +143,5 @@ class SessionHandlersMixin:
         """Restaurar posición de scroll de una sesión"""
         if state.scroll_position > 0:
             self.chat_log.scroll_to(y=state.scroll_position, x=state.scroll_x, animate=False)
+        else:
+            self.chat_log.scroll_end(animate=False)

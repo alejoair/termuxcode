@@ -1,7 +1,7 @@
 """App principal - TUI optimizada para móvil/Termux"""
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.containers import Vertical, VerticalScroll, Horizontal, Container
+from textual.containers import Vertical, Horizontal
 from textual.widgets import Input, Tabs, Button, Static
 from textual.reactive import reactive
 
@@ -21,7 +21,6 @@ class ClaudeChat(
     """TUI optimizada para móvil: sin header, compacta, touch-friendly"""
 
     CSS = CSS
-    AUTO_FOCUS = "#message-input"
 
     is_thinking = reactive(False)
 
@@ -47,8 +46,7 @@ class ClaudeChat(
         # XPBar en el top
         yield XPBar(id="xp-bar")
         # Chat en el medio (ocupa el espacio restante)
-        with VerticalScroll(id="chat-container", can_focus=True):
-            yield ChatLog(id="messages")
+        yield ChatLog(id="messages")
         # Input en la parte inferior
         with Vertical(id="bottom-container"):
             with Horizontal(id="tabs-row"):
@@ -78,11 +76,8 @@ class ClaudeChat(
         self.call_later(self._load_first_session)
 
     def on_click(self, event) -> None:
-        """Capturar clicks en la pantalla para manejar el foco"""
-        # Si el click fue en el chat, mover el foco al chat-container
-        if event.widget == self.chat_log or event.widget.id == "chat-container":
-            chat_container = self.query_one("#chat-container", VerticalScroll)
-            chat_container.focus()
+        if isinstance(event.widget, ChatLog):
+            event.widget.focus()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Manejar click en botón nueva sesión"""

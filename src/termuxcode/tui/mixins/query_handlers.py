@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 import asyncio
 
 from textual.widgets import Input
-from textual import events
 
 if TYPE_CHECKING:
     from ..app import ClaudeChat
@@ -28,16 +27,9 @@ class QueryHandlersMixin:
 
         prompt = event.value
         event.input.clear()
-        # Forzar re-enfoque para Termux muestre el teclado nuevamente
-        self.call_later(self.input.focus)
 
         # Procesar la query
         self._handle_query(prompt)
-
-    def on_input_mouse_down(self: "ClaudeChat", event: events.MouseDown) -> None:
-        """Forzar foco al tocar el input (para Termux)"""
-        if event.widget.id == "message-input":
-            event.widget.focus()
 
     def _handle_query(self: "ClaudeChat", prompt: str) -> None:
         """Procesar la query"""

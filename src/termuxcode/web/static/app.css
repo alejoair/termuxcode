@@ -8,6 +8,10 @@
     user-scalable: no;
 }
 
+html {
+    overscroll-behavior: none;
+}
+
 /* Variable dinámica de altura - actualizada por JS con visualViewport.height */
 :root {
     --app-height: 100vh;
@@ -18,8 +22,8 @@ body {
     background: #0c181f;
     position: fixed;
     width: 100%;
+    overscroll-behavior: none;
     height: var(--app-height);
-    overflow: hidden;
     overscroll-behavior-y: contain;
 }
 
@@ -27,6 +31,7 @@ body {
 #terminal {
     height: var(--app-height);
 }
+
 
 /* Dialog containers - splash screen y diálogo de sesión terminada */
 .dialog-container {

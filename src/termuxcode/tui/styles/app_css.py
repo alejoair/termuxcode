@@ -22,19 +22,9 @@ Screen {
     content-align: left middle;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   CHAT CONTAINER - Solo este tiene scroll
-   ═══════════════════════════════════════════════════════════════ */
-#chat-container {
-    height: 1fr;
-    overflow-y: scroll;
-    overflow-x: hidden;
-    scrollbar-gutter: stable;
-    scrollbar-size: 1 1;
-}
-
-/* ChatLog widget */
+/* ChatLog - ocupa el espacio restante y scrollea */
 #messages {
+    height: 1fr;
     padding: 0 1;
 }
 
