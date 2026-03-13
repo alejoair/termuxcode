@@ -1,8 +1,9 @@
 """App principal - TUI responsive para Claude Agent SDK"""
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.containers import Vertical, VerticalScroll
-from textual.widgets import Header, Input, Tabs, Tab
+from textual.containers import Vertical, VerticalScroll, Horizontal
+from textual.widgets import Header, Input, Tabs, Tab, Button
+from textual import work
 
 from .chat import ChatLog
 from .agent import AgentClient
@@ -38,7 +39,9 @@ class ClaudeChat(App):
         with VerticalScroll(id="chat-container"):
             yield ChatLog(id="messages")
         with Vertical(id="bottom-container"):
-            yield Tabs(id="sessions-tabs")
+            with Horizontal(id="tabs-list"):
+                yield Tabs(id="sessions-tabs")
+                yield Button("+", id="new-session-btn", variant="primary")
             with Vertical(id="input-container"):
                 yield Input(id="message-input", placeholder="Escribe tu mensaje...")
 
@@ -46,7 +49,6 @@ class ClaudeChat(App):
         self.chat_log = self.query_one("#messages", ChatLog)
         self.tabs = self.query_one("#sessions-tabs", Tabs)
         self.input = self.query_one("#message-input", Input)
-        self.query_one("#chat-container").anchor()  # Auto-scroll al final
         self.call_later(self._load_first_session)  # Cargar sesión inicial
 
     async def _load_first_session(self) -> None:
@@ -71,7 +73,7 @@ class ClaudeChat(App):
             elif role == "assistant":
                 self.chat_log.write_assistant(content)
 
-    async def _switch_to_session(self, session_id: str) -> None:
+    async def _switch_to_session(self, session_id: str, update_tabs: bool = True) -> None:
         """Cambiar a una sesión específica"""
         session = self.session_manager.get_session(session_id)
         if not session:
@@ -89,10 +91,19 @@ class ClaudeChat(App):
             )
 
         self.history = self._sessions[session_id]
-        self.agent = AgentClient(self.chat_log, self.history, self.cwd)
+        # Crear callback para verificar si esta sesión sigue activa
+        is_active = lambda: self._current_session_id == session_id
+        self.agent = AgentClient(
+            self.chat_log,
+            self.history,
+            self.cwd,
+            session_id=session_id,
+            is_active_session=is_active,
+        )
 
-        # Actualizar tabs
-        self._update_tabs()
+        # Solo actualizar tabs cuando sea necesario (no al cambiar por click)
+        if update_tabs:
+            self.call_later(self._update_tabs)
 
         # Guardar última sesión activa
         self.session_manager.set_last_active(session_id)
@@ -101,40 +112,41 @@ class ClaudeChat(App):
         self.chat_log.clear()
         await self._load_history()
 
-    def _update_tabs(self) -> None:
+    async def _update_tabs(self) -> None:
         """Actualizar los tabs basado en sesiones existentes"""
-        self.tabs.clear()
+        # Limpiar todos los tabs existentes
+        await self.tabs.clear()
 
+        # Agregar nuevos tabs y esperar a que se monten
         for session in self.session_manager.list_sessions():
             tab_id = f"tab-{session.id}"
-            self.tabs.add(Tab(session.name, id=tab_id))
+            await self.tabs.add_tab(Tab(session.name, id=tab_id))
 
         # Activar tab actual
         if self._current_session_id:
-            for tab in self.tabs.children:
-                if tab.id == f"tab-{self._current_session_id}":
-                    self.tabs.active_tab = tab
-                    break
+            self.tabs.active = f"tab-{self._current_session_id}"
 
-    def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
-        """Cambio de sesión al hacer clic o presionar Enter en un tab"""
+    async def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
+        """Cambio de sesión al hacer clic en un tab"""
         tab_id = event.tab.id
         if tab_id and tab_id.startswith("tab-"):
             session_id = tab_id[4:]  # Remover prefijo "tab-"
-            self.call_later(self._run_switch_session, session_id)
+            # Evitar bucle: solo cambiar si es una sesión diferente
+            if session_id != self._current_session_id:
+                await self._switch_to_session(session_id, update_tabs=False)
 
-    def _run_switch_session(self, session_id: str) -> None:
-        """Wrapper async para cambiar de sesión"""
-        import asyncio
-        asyncio.create_task(self._switch_to_session(session_id))
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Manejar click en botón de nueva sesión"""
+        if event.button.id == "new-session-btn":
+            await self.action_new_session()
 
-    def action_new_session(self) -> None:
+    async def action_new_session(self) -> None:
         """Crear nueva sesión (Ctrl+N)"""
         session = self.session_manager.create_session()
-        self.call_later(self._run_switch_session, session.id)
+        await self._switch_to_session(session.id)
         self.input.focus()
 
-    def action_close_session(self) -> None:
+    async def action_close_session(self) -> None:
         """Cerrar sesión actual (Ctrl+W)"""
         sessions = self.session_manager.list_sessions()
         if len(sessions) <= 1:
@@ -146,17 +158,18 @@ class ClaudeChat(App):
 
             # Cambiar a la primera sesión disponible
             sessions = self.session_manager.list_sessions()
-            self.call_later(self._run_switch_session, sessions[0].id)
+            await self._switch_to_session(sessions[0].id)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if not event.value.strip():
             return
         prompt = event.value
         event.input.clear()
-        self.call_later(self._run_query, prompt)
+        self._run_query(prompt)
 
+    @work(exclusive=True)
     async def _run_query(self, prompt: str) -> None:
-        """Ejecutar query del agente"""
+        """Ejecutar query del agente en un worker para no bloquear la UI"""
         if self.agent is None:
             self.chat_log.write_error("No session loaded. Please wait...")
             return

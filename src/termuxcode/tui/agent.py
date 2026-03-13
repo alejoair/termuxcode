@@ -1,6 +1,6 @@
 """Módulo para comunicarse con el agente Claude con historial en JSONL"""
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from claude_agent_sdk import query, ClaudeAgentOptions
 
@@ -18,16 +18,21 @@ class AgentClient:
         chat_log: 'ChatLog',
         history: MessageHistory,
         cwd: str = None,
+        session_id: str = None,
+        is_active_session: Callable[[], bool] = None,
     ):
         self.chat_log = chat_log
         self.history = history
         self.cwd = cwd or os.getcwd()
+        self.session_id = session_id
+        self.is_active_session = is_active_session or (lambda: True)
 
     async def query(self, prompt: str) -> None:
         """Ejecutar query del agente con historial en JSONL"""
 
-        # Mostrar mensaje del usuario en la UI
-        self.chat_log.write_user(prompt)
+        # Mostrar mensaje del usuario en la UI (solo si la sesión sigue activa)
+        if self.is_active_session():
+            self.chat_log.write_user(prompt)
 
         # Cargar historial (ya está truncado a max_messages por save())
         history = self.history.load()
@@ -40,7 +45,6 @@ class AgentClient:
             permission_mode="bypassPermissions",
             cwd=self.cwd,
             include_partial_messages=False,
-            cli_path="/data/data/com.termux/files/home/.claude/local/claude",
             max_budget_usd=0.10,
         )
 
@@ -49,7 +53,9 @@ class AgentClient:
 
         try:
             async for message in query(prompt=full_prompt, options=options):
-                await self._process_message(message)
+                # Solo procesar si la sesión sigue activa
+                if self.is_active_session():
+                    await self._process_message(message)
                 # Acumular la respuesta del asistente
                 if hasattr(message, 'content') and isinstance(message.content, list):
                     for block in message.content:
@@ -60,6 +66,7 @@ class AgentClient:
                 os.environ['CLAUDECODE'] = old_claudecode
 
         # Guardar mensaje del usuario y respuesta del asistente en historial
+        # (siempre guardar aunque la sesión ya no esté activa)
         self.history.append("user", prompt)
         if assistant_response:
             self.history.append("assistant", assistant_response)

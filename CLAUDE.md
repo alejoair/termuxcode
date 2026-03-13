@@ -47,6 +47,15 @@ agent.query(prompt)
 | `sessions.py` | Multi-sesión (crear/borrar/listar) |
 | `history.py` | Persistencia JSONL + rolling window |
 | `chat.py` | Visualización de mensajes |
+| `styles.py` | CSS de la UI |
+
+## Bindings
+- `Ctrl+N`: Nueva sesión
+- `Ctrl+W`: Cerrar sesión (no borra la última)
+
+## SDK Config
+- `max_budget_usd`: 0.10
+- `permission_mode`: bypassPermissions
 
 ## Comandos
 
