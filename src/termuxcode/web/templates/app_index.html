@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <link rel="stylesheet" href="{{ config.static.url }}css/xterm.css" />
-    <link rel="stylesheet" href="{{ config.static.url }}custom.css" />
+    <link rel="stylesheet" href="/static/css/xterm.css" />
+    <link rel="stylesheet" href="/static/custom.css" />
 
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css?family=Roboto%20Mono"
     />
-    <script src="{{ config.static.url }}js/textual.js"></script>
+    <script src="/static/js/textual.js"></script>
     <style>
       body {
         background: #0c181f;
@@ -29,7 +29,7 @@
         width: 100%;
         height: 100%;
         background: #0c181f;
-        background-image: url("{{ config.static.url }}images/background.png");
+        background-image: url("/static/images/background.png");
       }
       .intro {
         width: 640px;
@@ -158,6 +158,6 @@
       data-font-size="{{ font_size }}"
     ></div>
 
-    <script src="{{ config.static.url }}custom.js"></script>
+    <script src="/static/custom.js"></script>
   </body>
 </html>
