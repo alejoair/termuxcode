@@ -1,8 +1,8 @@
 """App principal - TUI optimizada para móvil/Termux"""
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.containers import Vertical, VerticalScroll, Horizontal
-from textual.widgets import Input, Tabs, Button, Footer
+from textual.containers import Vertical, VerticalScroll, Horizontal, Container
+from textual.widgets import Input, Tabs, Button, Static
 from textual.reactive import reactive
 
 from .chat import ChatLog
@@ -47,14 +47,16 @@ class ClaudeChat(
         # XPBar en el top
         yield XPBar(id="xp-bar")
         # Chat en el medio (ocupa el espacio restante)
-        with VerticalScroll(id="chat-container"):
+        with VerticalScroll(id="chat-container", can_focus=True):
             yield ChatLog(id="messages")
         # Input en la parte inferior
-        with Footer(id="bottom-container"):
+        with Vertical(id="bottom-container"):
             with Horizontal(id="tabs-row"):
                 yield Tabs(id="sessions-tabs")
                 yield Button("+", id="new-session-btn")
             yield Input(id="message-input", placeholder="Mensaje...", classes="-textual-compact")
+            # Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación
+            yield Static(id="bottom-spacer")
         # Popups de gamificación al final (overlays, no afectan layout)
         yield AchievementPopup()
         yield LevelUpBanner()
@@ -74,6 +76,13 @@ class ClaudeChat(
 
         self.chat_log.write("[dim]TermuxCode listo. Ctrl+N = nueva sesión[/dim]")
         self.call_later(self._load_first_session)
+
+    def on_click(self, event) -> None:
+        """Capturar clicks en la pantalla para manejar el foco"""
+        # Si el click fue en el chat, mover el foco al chat-container
+        if event.widget == self.chat_log or event.widget.id == "chat-container":
+            chat_container = self.query_one("#chat-container", VerticalScroll)
+            chat_container.focus()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Manejar click en botón nueva sesión"""

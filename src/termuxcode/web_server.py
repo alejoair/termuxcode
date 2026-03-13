@@ -2,7 +2,6 @@
 import asyncio
 import logging
 import os
-import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -51,7 +50,7 @@ class WebServer:
         port: int = 8000,
         title: str | None = None,
         public_url: str | None = None,
-        font_size: int = 16,
+        font_size: int = 32,
         statics_path: str | os.PathLike = "./static",
         templates_path: str | os.PathLike = "./templates",
     ):
@@ -112,13 +111,28 @@ class WebServer:
             web.get("/", self.handle_index, name="index"),
             web.get("/ws", self.handle_websocket, name="websocket"),
             web.get("/download/{key}", self.handle_download, name="download"),
-            web.static("/static", self.statics_path, show_index=True, name="static"),
+            web.get(r"/static/{path:.*}", self.handle_static, name="static"),
         ]
         app.add_routes(ROUTES)
 
         app.on_startup.append(self.on_startup)
         app.on_shutdown.append(self.on_shutdown)
         return app
+
+    async def handle_static(self, request: web.Request) -> web.FileResponse:
+        """Handler personalizado para archivos estáticos sin caché."""
+        path = request.match_info["path"]
+        file_path = self.statics_path / path
+
+        if not file_path.exists() or not file_path.is_file():
+            raise web.HTTPNotFound()
+
+        response = web.FileResponse(file_path)
+        # Deshabilitar caché para archivos estáticos
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 
     async def handle_download(self, request: web.Request) -> web.StreamResponse:
         """Handle a download request."""
@@ -168,16 +182,6 @@ class WebServer:
         self.debug = debug
         self.initialize_logging()
 
-        try:
-            loop = asyncio.get_event_loop()
-        except Exception:
-            loop = asyncio.new_event_loop()
-        try:
-            loop.add_signal_handler(signal.SIGINT, self.request_exit)
-            loop.add_signal_handler(signal.SIGTERM, self.request_exit)
-        except NotImplementedError:
-            pass
-
         if self.debug:
             log.info("Running in debug mode. You may use textual dev tools.")
 
@@ -185,8 +189,6 @@ class WebServer:
             self._make_app(),
             host=self.host,
             port=self.port,
-            handle_signals=False,
-            loop=loop,
             print=lambda *args: None,
         )
 
@@ -198,19 +200,38 @@ class WebServer:
         # Usar el font_size configurado, pero permitir override por query param
         font_size = to_int(request.query.get("fontsize", str(self.font_size)), self.font_size)
 
+        # Usar el host de la request para evitar 0.0.0.0 en las URLs
+        request_scheme = request.scheme
+        request_port = request.url.port or (443 if request_scheme == "https" else 80)
+
+        # Separar host y puerto (request.host puede incluir el puerto)
+        if ":" in request.host:
+            request_host, request_host_port = request.host.split(":", 1)
+            request_port = int(request_host_port)
+        else:
+            request_host = request.host
+
+        # Construir la URL base usando el host de la request
+        if request_port == 80 and request_scheme == "http":
+            base_url = f"{request_scheme}://{request_host}"
+        elif request_port == 443 and request_scheme == "https":
+            base_url = f"{request_scheme}://{request_host}"
+        else:
+            base_url = f"{request_scheme}://{request_host}:{request_port}"
+
         def get_url(route: str, **kwargs) -> str:
             """Get a URL from the aiohttp router."""
             path = router[route].url_for(**kwargs)
-            return f"{self.public_url}{path}"
+            return f"{base_url}{path}"
 
         def get_websocket_url(route: str, **kwargs) -> str:
             """Get a URL with a websocket prefix."""
-            url = get_url(route, **kwargs)
+            path = router[route].url_for(**kwargs)
 
-            if self.public_url.startswith("https"):
-                return "wss:" + url.split(":", 1)[1]
+            if request_scheme == "https":
+                return f"wss://{request_host}:{request_port}{path}"
             else:
-                return "ws:" + url.split(":", 1)[1]
+                return f"ws://{request_host}:{request_port}{path}"
 
         context = {
             "font_size": font_size,
@@ -218,7 +239,7 @@ class WebServer:
         }
         context["config"] = {
             "static": {
-                "url": get_url("static", filename="/").rstrip("/") + "/",
+                "url": f"{base_url}/static/",
             },
         }
         context["application"] = {

@@ -18,8 +18,8 @@ def main() -> None:
         "--font-size",
         "--fs",
         type=int,
-        default=16,
-        help="Tamaño de fuente en px para modo web (default: 16). Aumentar para pantallas de alto DPI",
+        default=32,
+        help="Tamaño de fuente en px para modo web (default: 32). Aumentar para pantallas de alto DPI",
     )
     parser.add_argument(
         "--host",
@@ -30,8 +30,8 @@ def main() -> None:
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Puerto para modo web (default: 8000)",
+        default=8001,
+        help="Puerto para modo web (default: 8001)",
     )
     args = parser.parse_args()
 

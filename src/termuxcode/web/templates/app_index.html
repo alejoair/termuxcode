@@ -1,106 +1,15 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="/static/css/xterm.css" />
-    <link rel="stylesheet" href="/static/custom.css" />
+    <link rel="stylesheet" href="/static/app.css" />
 
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css?family=Roboto%20Mono"
     />
     <script src="/static/js/textual.js"></script>
-    <style>
-      body {
-        background: #0c181f;
-      }
-
-      .dialog-container {
-        position: absolute;
-        width: 100vw;
-        height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10;
-        box-shadow: var(--shadow-elevation-high);
-      }
-      .shade {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        background: #0c181f;
-        background-image: url("/static/images/background.png");
-      }
-      .intro {
-        width: 640px;
-        height: 240px;
-        font-size: 16px;
-        z-index: 20;
-        font-family: "Roboto Mono", menlo, monospace;
-        text-align: center;
-        opacity: 1;
-        color: rgba(255, 255, 255, 0.95);
-        background-color: #12232d;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 32px;
-      }
-
-      body.-first-byte .intro-dialog,
-      body.-first-byte .intro-dialog .shade {
-        opacity: 0;
-        transition: opacity 0.3s ease-out;
-        display: none;
-      }
-
-      body .textual-terminal {
-        opacity: 0;
-        transition: opacity 0.3s ease-out;
-      }
-
-      body.-first-byte .textual-terminal {
-        opacity: 1;
-        transition: opacity 0.3s ease-out;
-      }
-
-      .intro svg {
-        padding-right: 16px;
-      }
-
-      body Button {
-        padding: 16px 32px;
-        background-color: #5e0ba7;
-        color: rgba(255, 255, 255, 0.95);
-        border: none;
-        font-family: "Roboto Mono", menlo, monospace;
-        margin: 16px;
-        display: block;
-      }
-
-      Button:hover {
-        background: #ac5af4;
-        cursor: pointer;
-      }
-
-      .closed-dialog {
-        opacity: 0;
-        display: none;
-      }
-
-      body.-closed .closed-dialog {
-        opacity: 1;
-        display: flex;
-      }
-
-      #start {
-        display: none;
-      }
-
-      #start.-delay {
-        display: flex;
-      }
-    </style>
     <script>
       function getStartUrl() {
         const url = new URL(window.location.href);
@@ -158,6 +67,22 @@
       data-font-size="{{ font_size }}"
     ></div>
 
-    <script src="/static/custom.js"></script>
+    <script>
+      function updateAppHeight() {
+        const vv = window.visualViewport;
+        const vh = vv ? vv.height : window.innerHeight;
+        const offsetTop = vv ? vv.offsetTop : 0;
+        document.documentElement.style.setProperty('--app-height', Math.round(vh) + 'px');
+        document.body.style.top = Math.round(offsetTop) + 'px';
+      }
+      updateAppHeight();
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateAppHeight);
+        window.visualViewport.addEventListener('scroll', updateAppHeight);
+      }
+      window.addEventListener('resize', updateAppHeight);
+      window.addEventListener('focusout', updateAppHeight);
+    </script>
+
   </body>
 </html>

@@ -71,7 +71,12 @@ agent.query(prompt)
 | `sessions.py` | Multi-sesión (crear/borrar/listar) |
 | `history.py` | Persistencia JSONL + rolling window |
 | `chat.py` | Visualización de mensajes |
-| `styles.py` | CSS de la UI |
+
+### CSS por modo
+| Modo | Archivo CSS |
+|------|-------------|
+| **TUI** (terminal local) | `src/termuxcode/tui/styles/app_css.py` |
+| **Web** (Termux/Android) | `src/termuxcode/web/static/app.css` |
 
 ## Bindings
 - `Ctrl+N`: Nueva sesión
@@ -103,20 +108,39 @@ ruff format .
 ruff check .
 ```
 
-## Modo Web (Custom CSS/JS para Android)
+## Modo Web (Template Custom)
 
-El modo web usa templates y archivos estáticos customizados ubicados en:
-- `src/termuxcode/web/templates/app_index.html` - Template HTML con CSS/JS custom
-- `src/termuxcode/web/static/custom.css` - CSS para controlar scroll y teclado Android
-- `src/termuxcode/web/static/custom.js` - JS para manejar eventos del teclado
+### Archivos
+- `src/termuxcode/web/templates/app_index.html` - Template HTML
+- `src/termuxcode/web/static/app.css` - Estilos splash/diálogos (viewport, body, dialogs, terminal fade-in)
+- `src/termuxcode/web/static/css/xterm.css` - Estilos de xterm.js (terminal emulado)
 
-### Características:
-- Evita scroll en toda la página (solo el terminal tiene scroll)
-- Controla el comportamiento responsive cuando el teclado de Android se despliega
-- El input se mantiene fijo sin desplazarse con el teclado
+### Flujo de carga
+1. **Splash screen** visible con botón "Start"
+2. Click → Conexión WebSocket → `textual.js` inicializa xterm
+3. Primer byte recibido → Body obtiene clase `-first-byte`
+4. Splash oculto (`display: none`), terminal visible (`opacity: 1`)
 
-### Actualizar archivos estáticos:
+### Estructura HTML
+```
+body
+├── .dialog-container.intro-dialog (splash)
+│   └── .intro (caja con logo + botón)
+├── .dialog-container.closed-dialog (sesión terminada)
+└── #terminal (donde xterm.js se monta)
+    └── .xterm (terminal xterm.js)
+        ├── .xterm-viewport (scrollable)
+        ├── .xterm-screen (canvas)
+        └── .xterm-helpers
+            └── .xterm-helper-textarea (input oculto en left: -9999em)
+```
+
+### Problema teclado Android
+El input real `.xterm-helper-textarea` está oculto fuera de pantalla (`left: -9999em`).
+Cuando el teclado sale, el browser no sabe hacia dónde hacer scroll.
+
+### Comandos
 ```bash
-# Ejecutar script para copiar archivos de textual_serve
-python scripts/copy_web_static.py
+# Ejecutar modo web
+python -m termuxcode --serve
 ```

@@ -1,0 +1,128 @@
+/* Estilos para el template de app_index.html */
+
+/* Viewport - prevención de zoom en móvil */
+@viewport {
+    width: device-width;
+    initial-scale: 1.0;
+    maximum-scale: 1.0;
+    user-scalable: no;
+}
+
+/* Variable dinámica de altura - actualizada por JS con visualViewport.height */
+:root {
+    --app-height: 100vh;
+}
+
+/* Body y fondo */
+body {
+    background: #0c181f;
+    position: fixed;
+    width: 100%;
+    height: var(--app-height);
+    overflow: hidden;
+    overscroll-behavior-y: contain;
+}
+
+/* Terminal - ocupa exactamente el visual viewport */
+#terminal {
+    height: var(--app-height);
+}
+
+/* Dialog containers - splash screen y diálogo de sesión terminada */
+.dialog-container {
+    position: fixed;
+    width: 100%;
+    height: var(--app-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    box-shadow: var(--shadow-elevation-high);
+}
+
+/* Shade - overlay de fondo de los diálogos */
+.shade {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: #0c181f;
+    background-image: url("/static/images/background.png");
+}
+
+/* Intro - caja del splash screen */
+.intro {
+    width: 640px;
+    height: 240px;
+    font-size: 16px;
+    z-index: 20;
+    font-family: "Roboto Mono", menlo, monospace;
+    text-align: center;
+    opacity: 1;
+    color: rgba(255, 255, 255, 0.95);
+    background-color: #12232d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 32px;
+}
+
+/* Ocultar splash cuando el terminal conecta (body tiene clase -first-byte) */
+body.-first-byte .intro-dialog,
+body.-first-byte .intro-dialog .shade {
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+    display: none;
+}
+
+/* Terminal - invisible al inicio, visible cuando conecta */
+body .textual-terminal {
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+}
+
+body.-first-byte .textual-terminal {
+    opacity: 1;
+    transition: opacity 0.3s ease-out;
+}
+
+/* SVG del logo en el splash */
+.intro svg {
+    padding-right: 16px;
+}
+
+/* Botones */
+body Button {
+    padding: 16px 32px;
+    background-color: #5e0ba7;
+    color: rgba(255, 255, 255, 0.95);
+    border: none;
+    font-family: "Roboto Mono", menlo, monospace;
+    margin: 16px;
+    display: block;
+}
+
+Button:hover {
+    background: #ac5af4;
+    cursor: pointer;
+}
+
+/* Diálogo de sesión terminada - oculto por defecto */
+.closed-dialog {
+    opacity: 0;
+    display: none;
+}
+
+/* Mostrar diálogo de sesión terminada cuando body tiene clase -closed */
+body.-closed .closed-dialog {
+    opacity: 1;
+    display: flex;
+}
+
+/* Botón Start - oculto inicialmente */
+#start {
+    display: none;
+}
+
+#start.-delay {
+    display: flex;
+}
