@@ -2,14 +2,16 @@
 
 CHAT_CSS = """
 /* ═══════════════════════════════════════════════════════════════
-   CHAT CONTAINER - Ocupa todo el espacio disponible
+   CHAT CONTAINER - Solo este tiene scroll
    ═══════════════════════════════════════════════════════════════ */
 #chat-container {
     height: 1fr;
     width: 100%;
     background: $background;
+    overflow-y: scroll;
     overflow-x: hidden;
-    overflow-y: auto;
+    scrollbar-gutter: stable;
+    scrollbar-size: 1 1;
 }
 
 /* ChatLog widget */
