@@ -1,5 +1,29 @@
 # CLAUDE.md
 
+## Instrucciones para Claude
+
+### USO OBLIGATORIO de Retrieval Tool
+**ANTES de responder o generar código**, Claude DEBE usar la tool de retrieval (`mcp__docs-retrieve__rag_search`) para:
+
+1. Verificar la API correcta de cualquier librería/framework usado (Textual, etc.)
+2. Confirmar signatures de funciones, métodos y clases
+3. Revisar patrones de uso recomendados en el código fuente oficial
+
+**Esto es CRÍTICO para evitar errores que puedan dañar el trabajo del usuario.**
+
+```bash
+# Ejemplo de uso de retrieval:
+mcp__docs-retrieve__rag_search(params={
+    "query": "Textual App class methods and lifecycle",
+    "folder_name": "textual",
+    "k": 3
+})
+```
+
+**Nunca asumas** cómo funciona una API. **Siempre verifica** con retrieval primero.
+
+---
+
 ## Flujo de la Aplicación
 
 ### 1. Inicio

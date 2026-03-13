@@ -1,27 +1,34 @@
-"""App principal - TUI responsive para Claude Agent SDK"""
+"""App principal - TUI optimizada para móvil/Termux"""
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, VerticalScroll, Horizontal
-from textual.widgets import Header, Input, Tabs, Tab, Button
-from textual import work
+from textual.widgets import Input, Tabs, Button
+from textual.reactive import reactive
 
 from .chat import ChatLog
-from .agent import AgentClient
-from .history import MessageHistory
 from .sessions import SessionManager
 from .styles import CSS
+from .game import StatsManager, XPBar, AchievementPopup, LevelUpBanner
+from .mixins import SessionHandlersMixin, QueryHandlersMixin, GamificationMixin, SessionState
 
 
-class ClaudeChat(App):
-    """TUI responsive para chat con Claude Agent SDK"""
+class ClaudeChat(
+    SessionHandlersMixin,
+    QueryHandlersMixin,
+    GamificationMixin,
+    App
+):
+    """TUI optimizada para móvil: sin header, compacta, touch-friendly"""
 
     CSS = CSS
-    TITLE = "Claude Chat"
     AUTO_FOCUS = "#message-input"
 
+    is_thinking = reactive(False)
+
     BINDINGS = [
-        ("ctrl+n", "new_session", "Nueva sesión"),
-        ("ctrl+w", "close_session", "Cerrar sesión"),
+        ("ctrl+n", "new_session", "Nuevo"),
+        ("ctrl+w", "close_session", "Cerrar"),
+        ("ctrl+s", "toggle_sessions", "Sesiones"),
     ]
 
     def __init__(self, cwd: str = None, max_history: int = 100):
@@ -30,160 +37,50 @@ class ClaudeChat(App):
         self.max_history = max_history
         self.session_manager = SessionManager(Path(self.cwd) / ".sessions")
         self._current_session_id: str | None = None
-        self._sessions: dict[str, MessageHistory] = {}
-        self.history: MessageHistory | None = None
-        self.agent: AgentClient | None = None
+        self._session_states: dict[str, SessionState] = {}
+
+        # Sistema de gamificación
+        self.stats_manager = StatsManager(Path(self.cwd) / ".sessions")
 
     def compose(self) -> ComposeResult:
-        yield Header(id="header")
+        """Layout minimalista: solo chat + input compacto"""
+        # XPBar en el top
+        yield XPBar(id="xp-bar")
+        # Chat en el medio (ocupa el espacio restante)
         with VerticalScroll(id="chat-container"):
             yield ChatLog(id="messages")
+        # Input en la parte inferior
         with Vertical(id="bottom-container"):
-            with Horizontal(id="tabs-list"):
+            with Horizontal(id="tabs-row"):
                 yield Tabs(id="sessions-tabs")
-                yield Button("+", id="new-session-btn", variant="primary")
-            with Vertical(id="input-container"):
-                yield Input(id="message-input", placeholder="Escribe tu mensaje...")
+                yield Button("+", id="new-session-btn")
+            yield Input(id="message-input", placeholder="Mensaje...", classes="-textual-compact")
+        # Popups de gamificación al final (overlays, no afectan layout)
+        yield AchievementPopup()
+        yield LevelUpBanner()
 
     def on_mount(self) -> None:
         self.chat_log = self.query_one("#messages", ChatLog)
         self.tabs = self.query_one("#sessions-tabs", Tabs)
         self.input = self.query_one("#message-input", Input)
-        self.call_later(self._load_first_session)  # Cargar sesión inicial
+        self.xp_bar = self.query_one("#xp-bar", XPBar)
 
-    async def _load_first_session(self) -> None:
-        """Cargar sesiones existentes o crear la primera al iniciar la app"""
-        sessions = self.session_manager.list_sessions()
-        if not sessions:
-            session = self.session_manager.create_session("Nueva sesión")
-        else:
-            last_id = self.session_manager.get_last_active()
-            session = self.session_manager.get_session(last_id) or sessions[0]
+        # Configurar callbacks de gamificación
+        self.stats_manager.on_achievement(self._show_achievement)
+        self.stats_manager.on_level_up(self._show_level_up)
 
-        await self._switch_to_session(session.id)
+        # Actualizar XP bar con stats actuales
+        self._update_xp_bar()
 
-    async def _load_history(self) -> None:
-        """Cargar y mostrar el historial de mensajes"""
-        history = self.history.load()
-        for msg in history:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-            if role == "user":
-                self.chat_log.write_user(content)
-            elif role == "assistant":
-                self.chat_log.write_assistant(content)
-
-    async def _switch_to_session(self, session_id: str, update_tabs: bool = True) -> None:
-        """Cambiar a una sesión específica"""
-        session = self.session_manager.get_session(session_id)
-        if not session:
-            return
-
-        self._current_session_id = session_id
-
-        # Obtener o crear MessageHistory para esta sesión
-        if session_id not in self._sessions:
-            self._sessions[session_id] = MessageHistory(
-                filename="messages.jsonl",
-                max_messages=self.max_history,
-                session_id=session_id,
-                cwd=self.cwd
-            )
-
-        self.history = self._sessions[session_id]
-        # Crear callback para verificar si esta sesión sigue activa
-        is_active = lambda: self._current_session_id == session_id
-        self.agent = AgentClient(
-            self.chat_log,
-            self.history,
-            self.cwd,
-            session_id=session_id,
-            is_active_session=is_active,
-        )
-
-        # Solo actualizar tabs cuando sea necesario (no al cambiar por click)
-        if update_tabs:
-            self.call_later(self._update_tabs)
-
-        # Guardar última sesión activa
-        self.session_manager.set_last_active(session_id)
-
-        # Recargar historial en ChatLog
-        self.chat_log.clear()
-        await self._load_history()
-
-    async def _update_tabs(self) -> None:
-        """Actualizar los tabs basado en sesiones existentes"""
-        # Limpiar todos los tabs existentes
-        await self.tabs.clear()
-
-        # Agregar nuevos tabs y esperar a que se monten
-        for session in self.session_manager.list_sessions():
-            tab_id = f"tab-{session.id}"
-            await self.tabs.add_tab(Tab(session.name, id=tab_id))
-
-        # Activar tab actual
-        if self._current_session_id:
-            self.tabs.active = f"tab-{self._current_session_id}"
-
-    async def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
-        """Cambio de sesión al hacer clic en un tab"""
-        tab_id = event.tab.id
-        if tab_id and tab_id.startswith("tab-"):
-            session_id = tab_id[4:]  # Remover prefijo "tab-"
-            # Evitar bucle: solo cambiar si es una sesión diferente
-            if session_id != self._current_session_id:
-                await self._switch_to_session(session_id, update_tabs=False)
+        self.chat_log.write("[dim]TermuxCode listo. Ctrl+N = nueva sesión[/dim]")
+        self.call_later(self._load_first_session)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Manejar click en botón de nueva sesión"""
+        """Manejar click en botón nueva sesión"""
         if event.button.id == "new-session-btn":
             await self.action_new_session()
 
-    async def action_new_session(self) -> None:
-        """Crear nueva sesión (Ctrl+N)"""
-        session = self.session_manager.create_session()
-        await self._switch_to_session(session.id)
-        self.input.focus()
-
-    async def action_close_session(self) -> None:
-        """Cerrar sesión actual (Ctrl+W)"""
-        sessions = self.session_manager.list_sessions()
-        if len(sessions) <= 1:
-            return  # No cerrar la última sesión
-
-        if self._current_session_id:
-            self.session_manager.delete_session(self._current_session_id)
-            del self._sessions[self._current_session_id]
-
-            # Cambiar a la primera sesión disponible
-            sessions = self.session_manager.list_sessions()
-            await self._switch_to_session(sessions[0].id)
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if not event.value.strip():
-            return
-        prompt = event.value
-        event.input.clear()
-        self._run_query(prompt)
-
-    @work(exclusive=True)
-    async def _run_query(self, prompt: str) -> None:
-        """Ejecutar query del agente en un worker para no bloquear la UI"""
-        if self.agent is None:
-            self.chat_log.write_error("No session loaded. Please wait...")
-            return
-        await self.agent.query(prompt)
-
 
 if __name__ == "__main__":
-    from pathlib import Path
-    import sys
-
-    project_root = Path(__file__).parent.parent.parent
-    src_path = project_root / "src"
-    if str(src_path) not in sys.path:
-        sys.path.insert(0, str(src_path))
-
     app = ClaudeChat()
     app.run()
