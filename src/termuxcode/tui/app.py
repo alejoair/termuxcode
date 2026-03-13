@@ -79,6 +79,14 @@ class ClaudeChat(
         if isinstance(event.widget, ChatLog):
             event.widget.focus()
 
+    def on_key(self, event) -> None:
+        if event.key == "up":
+            self.chat_log.scroll_relative(y=-1, animate=False)
+            event.stop()
+        elif event.key == "down":
+            self.chat_log.scroll_relative(y=1, animate=False)
+            event.stop()
+
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Manejar click en botón nueva sesión"""
         if event.button.id == "new-session-btn":

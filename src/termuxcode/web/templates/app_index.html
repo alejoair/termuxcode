@@ -97,6 +97,7 @@
           const textarea = document.querySelector('.xterm-helper-textarea');
           if (textarea && !textarea.hasAttribute('data-managed')) {
             textarea.setAttribute('data-managed', '1');
+            textarea.style.fontSize = '16px';
             applyReadOnly(textarea);
           }
         });
@@ -104,21 +105,29 @@
 
         let touchStartY = 0;
         let touchStartX = 0;
-        let touchStartTime = 0;
-        let isSwiping = false;
+        let lastTouchY = 0;
+        let touchIsInChatZone = false;
+        // Acumulador de píxeles para no enviar demasiados mensajes
+        let scrollAccum = 0;
+        const SCROLL_PX_PER_LINE = 55; // píxeles de dedo por línea de scroll
 
         terminal.addEventListener('touchstart', function(e) {
-          const textarea = document.querySelector('.xterm-helper-textarea');
-          if (!textarea) return;
-          const vv = window.visualViewport;
-          const vh = vv ? vv.height : window.innerHeight;
           const touchY = e.touches[0].clientY;
-          const isInputZone = touchY > (vh * 0.75);
-
-          touchStartY = e.touches[0].clientY;
+          touchStartY = touchY;
           touchStartX = e.touches[0].clientX;
-          touchStartTime = Date.now();
-          isSwiping = false;
+          lastTouchY = touchY;
+          scrollAccum = 0;
+
+          const textarea = document.querySelector('.xterm-helper-textarea');
+          if (!textarea) { touchIsInChatZone = true; return; }
+
+          // xterm mueve el textarea a la posición del cursor en pantalla.
+          // Usamos eso para saber exactamente dónde está la fila del Input de Textual.
+          const rect = textarea.getBoundingClientRect();
+          const rowHeight = rect.height || 20;
+          const isInputZone = Math.abs(touchY - rect.top) < rowHeight * 2;
+
+          touchIsInChatZone = !isInputZone;
 
           if (isInputZone) {
             textarea.removeAttribute('readonly');
@@ -128,31 +137,25 @@
           }
         }, { passive: true });
 
-        terminal.addEventListener('touchend', function(e) {
-          const vv = window.visualViewport;
-          const vh = vv ? vv.height : window.innerHeight;
-          const endY = e.changedTouches[0].clientY;
-          const endX = e.changedTouches[0].clientX;
-          const deltaY = touchStartY - endY;
-          const deltaX = Math.abs(touchStartX - endX);
-          const elapsed = Date.now() - touchStartTime;
-
-          // Solo scroll si es gesto vertical, no en zona input, y desplazamiento mínimo
-          const isInputZone = touchStartY > (vh * 0.75);
-          if (isInputZone) return;
-          if (Math.abs(deltaY) < 20) return;
-          if (deltaX > Math.abs(deltaY)) return; // más horizontal que vertical
-
+        terminal.addEventListener('touchmove', function(e) {
+          if (!touchIsInChatZone) return;
           const ws = window._textualSocket;
           if (!ws || ws.readyState !== 1) return;
 
-          // Calcular cuántos steps enviar según distancia
-          const steps = Math.min(Math.floor(Math.abs(deltaY) / 15), 20);
-          // Swipe up (deltaY>0) = ver contenido más nuevo = scroll down (ArrowDown)
-          // Swipe down (deltaY<0) = ver contenido más antiguo = scroll up (ArrowUp)
-          const seq = deltaY > 0 ? '\x1b[B' : '\x1b[A';
-          for (let i = 0; i < steps; i++) {
+          const currentY = e.touches[0].clientY;
+          const deltaX = Math.abs(e.touches[0].clientX - touchStartX);
+          const totalDeltaY = Math.abs(currentY - touchStartY);
+          // Ignorar si el gesto es más horizontal que vertical
+          if (deltaX > totalDeltaY) return;
+
+          const moveDelta = lastTouchY - currentY; // positivo = dedo sube = scroll down
+          lastTouchY = currentY;
+          scrollAccum += moveDelta;
+
+          while (Math.abs(scrollAccum) >= SCROLL_PX_PER_LINE) {
+            const seq = scrollAccum > 0 ? '\x1b[B' : '\x1b[A';
             ws.send(JSON.stringify(['stdin', seq]));
+            scrollAccum -= scrollAccum > 0 ? SCROLL_PX_PER_LINE : -SCROLL_PX_PER_LINE;
           }
         }, { passive: true });
       })();
@@ -178,6 +181,14 @@
         }
         window.addEventListener('resize', updateAppHeight);
         window.addEventListener('focusout', updateAppHeight);
+      })();
+    </script>
+
+    <script>
+      // Font size proporcional al viewport: ~vw/30, entre 10px y 22px
+      (function() {
+        const size = Math.max(10, Math.min(28, Math.floor(window.innerWidth / 22)));
+        document.getElementById('terminal').dataset.fontSize = size;
       })();
     </script>
 

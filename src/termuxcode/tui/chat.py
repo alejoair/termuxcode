@@ -9,10 +9,10 @@ class ChatLog(RichLog):
     """Widget de chat con mensajes claramente diferenciados"""
 
     def action_scroll_up(self) -> None:
-        self.scroll_relative(y=-3, animate=False)
+        self.scroll_relative(y=-1, animate=False)
 
     def action_scroll_down(self) -> None:
-        self.scroll_relative(y=3, animate=False)
+        self.scroll_relative(y=1, animate=False)
 
     def __init__(self, **kwargs):
         super().__init__(

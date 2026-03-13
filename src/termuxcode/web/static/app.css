@@ -30,6 +30,12 @@ body {
 /* Terminal - ocupa exactamente el visual viewport */
 #terminal {
     height: var(--app-height);
+    touch-action: manipulation;
+}
+
+/* Prevenir zoom automático de Android al enfocar el textarea de xterm */
+.xterm-helper-textarea {
+    font-size: 16px !important;
 }
 
 
