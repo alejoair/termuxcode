@@ -30,9 +30,8 @@ class AgentClient:
     async def query(self, prompt: str) -> None:
         """Ejecutar query del agente con historial en JSONL"""
 
-        # Mostrar mensaje del usuario en la UI (solo si la sesión sigue activa)
-        if self.is_active_session():
-            self.chat_log.write_user(prompt)
+        # NOTA: El mensaje del usuario ya se mostró en on_input_submitted
+        # No lo duplicamos aquí
 
         # Cargar historial (ya está truncado a max_messages por save())
         history = self.history.load()
