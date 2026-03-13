@@ -87,6 +87,9 @@ agent.query(prompt)
 # Ejecutar TUI
 textual run src/termuxcode/tui.py
 
+# Ejecutar en modo web (con custom CSS/JS para Android)
+python -m termuxcode --serve
+
 # Instalar dependencias
 pip install -e ".[dev]"
 
@@ -98,4 +101,22 @@ ruff format .
 
 # Lint
 ruff check .
+```
+
+## Modo Web (Custom CSS/JS para Android)
+
+El modo web usa templates y archivos estáticos customizados ubicados en:
+- `src/termuxcode/web/templates/app_index.html` - Template HTML con CSS/JS custom
+- `src/termuxcode/web/static/custom.css` - CSS para controlar scroll y teclado Android
+- `src/termuxcode/web/static/custom.js` - JS para manejar eventos del teclado
+
+### Características:
+- Evita scroll en toda la página (solo el terminal tiene scroll)
+- Controla el comportamiento responsive cuando el teclado de Android se despliega
+- El input se mantiene fijo sin desplazarse con el teclado
+
+### Actualizar archivos estáticos:
+```bash
+# Ejecutar script para copiar archivos de textual_serve
+python scripts/copy_web_static.py
 ```

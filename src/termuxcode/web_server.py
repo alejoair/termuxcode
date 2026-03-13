@@ -47,7 +47,7 @@ class WebServer:
     def __init__(
         self,
         command: str,
-        host: str = "localhost",
+        host: str = "0.0.0.0",
         port: int = 8000,
         title: str | None = None,
         public_url: str | None = None,
@@ -72,10 +72,10 @@ class WebServer:
         else:
             self.public_url = public_url
 
-        # Usar los paths de textual_serve
-        base_path = Path(textual_serve.__file__).parent.parent.resolve().absolute()
-        self.statics_path = base_path / "textual_serve" / "static"
-        self.templates_path = base_path / "textual_serve" / "templates"
+        # Usar paths customizados en lugar de los de textual_serve
+        base_path = Path(__file__).parent.resolve().absolute()
+        self.statics_path = base_path / "web" / "static"  # Usar nuestros estáticos
+        self.templates_path = base_path / "web" / "templates"  # Usar nuestros templates
         self.console = Console()
         self.download_manager = DownloadManager()
 
