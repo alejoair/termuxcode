@@ -54,8 +54,7 @@ class ExtendedGameStats(GameStats):
     current_confidence_history: list[float] = field(default_factory=list)  # Últimas 20 confianzas
 
     def process_metadata(self, advances_task: bool, phase: str, saved_to_history: bool,
-                         has_suggestion: bool, confidence: float | None = None,
-                         requires_refresh: bool = False) -> tuple[int, list]:
+                         has_suggestion: bool) -> tuple[int, list]:
         """
         Procesar metadata de una respuesta estructurada
 
@@ -70,13 +69,6 @@ class ExtendedGameStats(GameStats):
 
         # Guardar metadata actual
         self.current_advances_task = advances_task
-        self.current_confidence = confidence or self.current_confidence
-
-        # Guardar en historial de confianzas (últimas 20)
-        if confidence:
-            self.current_confidence_history.append(confidence)
-            if len(self.current_confidence_history) > 20:
-                self.current_confidence_history = self.current_confidence_history[-20:]
 
         # Actualizar contadores
         if saved_to_history:
@@ -101,14 +93,6 @@ class ExtendedGameStats(GameStats):
         # Sugerencias
         if has_suggestion:
             self.suggestions_made += 1
-
-        # Confianza
-        if confidence and confidence >= 0.9:
-            self.high_confidence_responses += 1
-
-        # Context refresh
-        if requires_refresh:
-            self.context_refreshes += 1
 
         # Calcular ratios
         self._calculate_ratios()
@@ -414,9 +398,7 @@ class ExtendedStatsManager:
         return unlocked
 
     def process_structured_response(self, advances_task: bool, phase: str,
-                                    saved_to_history: bool, has_suggestion: bool,
-                                    confidence: float | None = None,
-                                    requires_refresh: bool = False) -> tuple[int, list]:
+                                    saved_to_history: bool, has_suggestion: bool) -> tuple[int, list]:
         """
         Procesar una respuesta estructurada
 
@@ -432,9 +414,7 @@ class ExtendedStatsManager:
             advances_task=advances_task,
             phase=phase,
             saved_to_history=saved_to_history,
-            has_suggestion=has_suggestion,
-            confidence=confidence,
-            requires_refresh=requires_refresh
+            has_suggestion=has_suggestion
         )
 
         # Verificar subida de nivel
@@ -515,9 +495,7 @@ class ExtendedStatsManager:
     def process_reflection_and_goal(
         self,
         reflection: str,
-        personal_goal: str,
-        long_term_goal: str = "",
-        long_term_progress: int = 0
+        personal_goal: str
     ) -> tuple[int, list]:
         """
         Procesar reflexión y objetivos personales del agente
@@ -533,10 +511,6 @@ class ExtendedStatsManager:
 
         # Establecer nuevo objetivo personal
         self.stats.set_personal_goal(personal_goal)
-
-        # Actualizar objetivo a largo plazo
-        if long_term_goal:
-            self.stats.update_long_term_goal(long_term_goal, long_term_progress)
 
         # Verificar logros de reflexiones
         achievements.extend(self._check_reflection_achievements())
@@ -596,8 +570,7 @@ class ExtendedStatsManager:
 
         Returns:
             Dict con: last_reflection, personal_goal, goal_achieved,
-                     goal_streak, long_term_goal, long_term_progress,
-                     recent_achievements
+                     goal_streak, recent_achievements
         """
         stats = self.stats
 
@@ -606,8 +579,6 @@ class ExtendedStatsManager:
             "personal_goal": stats.personal_goal,
             "goal_achieved": stats.personal_goal_achieved,
             "goal_streak": stats.personal_goal_streak,
-            "long_term_goal": stats.long_term_goal,
-            "long_term_progress": stats.long_term_goal_progress,
             "recent_achievements": [a for a in stats.achievements if a.unlocked][-5:]  # Últimos 5
         }
 

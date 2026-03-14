@@ -121,18 +121,14 @@ class GamificationMixin:
                 advances_task=metadata.advances_current_task,
                 phase=metadata.task_phase,
                 saved_to_history=metadata.is_useful_to_record_in_history,
-                has_suggestion=bool(metadata.next_suggested_immediate_action),
-                confidence=metadata.confidence,
-                requires_refresh=metadata.requires_context_refresh
+                has_suggestion=bool(metadata.next_suggested_immediate_action)
             )
 
             # Procesar reflexión y objetivos personales del agente
-            if metadata.self_reflection or metadata.personal_goal or metadata.long_term_goal:
+            if metadata.self_reflection or metadata.personal_goal:
                 ref_xp, ref_achievements = self.extended_stats_manager.process_reflection_and_goal(
                     reflection=metadata.self_reflection,
-                    personal_goal=metadata.personal_goal,
-                    long_term_goal=metadata.long_term_goal,
-                    long_term_progress=metadata.long_term_goal_progress
+                    personal_goal=metadata.personal_goal
                 )
                 xp_gained += ref_xp
                 achievements.extend(ref_achievements)
