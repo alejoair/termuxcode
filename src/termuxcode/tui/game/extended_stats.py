@@ -34,24 +34,16 @@ class ExtendedGameStats(GameStats):
     current_streak: int = 0  # mensajes consecutivos avanzando
     longest_streak: int = 0
 
-    # Otros
-    high_confidence_responses: int = 0
-    context_refreshes: int = 0
-
     # NUEVOS: Objetivos personales y reflexiones del agente
     personal_goal: str = ""
     personal_goal_achieved: bool = False
     personal_goal_streak: int = 0
-    long_term_goal: str = ""
-    long_term_goal_progress: int = 0
     reflections_count: int = 0
     recent_reflections: list[str] = field(default_factory=list)
 
     # Metadata persistente de la respuesta actual
     current_phase: str = "otro"
     current_advances_task: bool = False
-    current_confidence: float = 0.5
-    current_confidence_history: list[float] = field(default_factory=list)  # Últimas 20 confianzas
 
     def process_metadata(self, advances_task: bool, phase: str, saved_to_history: bool,
                          has_suggestion: bool) -> tuple[int, list]:
@@ -151,13 +143,6 @@ class ExtendedGameStats(GameStats):
             self.personal_goal_streak = 0
 
         return xp_gained, achievements
-
-    def update_long_term_goal(self, goal: str, progress: int) -> None:
-        """Actualizar objetivo a largo plazo y su progreso"""
-        if goal != self.long_term_goal:
-            # Nuevo objetivo a largo plazo
-            self.long_term_goal = goal
-        self.long_term_goal_progress = max(0, min(100, progress))
 
     def add_reflection(self, reflection: str) -> int:
         """
@@ -283,21 +268,15 @@ class ExtendedGameStats(GameStats):
             "history_efficiency": self.history_efficiency,
             "current_streak": self.current_streak,
             "longest_streak": self.longest_streak,
-            "high_confidence_responses": self.high_confidence_responses,
-            "context_refreshes": self.context_refreshes,
             # NUEVOS CAMPOS
             "personal_goal": self.personal_goal,
             "personal_goal_achieved": self.personal_goal_achieved,
             "personal_goal_streak": self.personal_goal_streak,
-            "long_term_goal": self.long_term_goal,
-            "long_term_goal_progress": self.long_term_goal_progress,
             "reflections_count": self.reflections_count,
             "recent_reflections": self.recent_reflections,
             # Metadata persistente actual
             "current_phase": self.current_phase,
             "current_advances_task": self.current_advances_task,
-            "current_confidence": self.current_confidence,
-            "current_confidence_history": self.current_confidence_history,
         })
         return base_dict
 
@@ -320,21 +299,15 @@ class ExtendedGameStats(GameStats):
             history_efficiency=data.get("history_efficiency", 0.0),
             current_streak=data.get("current_streak", 0),
             longest_streak=data.get("longest_streak", 0),
-            high_confidence_responses=data.get("high_confidence_responses", 0),
-            context_refreshes=data.get("context_refreshes", 0),
             # NUEVOS CAMPOS
             personal_goal=data.get("personal_goal", ""),
             personal_goal_achieved=data.get("personal_goal_achieved", False),
             personal_goal_streak=data.get("personal_goal_streak", 0),
-            long_term_goal=data.get("long_term_goal", ""),
-            long_term_goal_progress=data.get("long_term_goal_progress", 0),
             reflections_count=data.get("reflections_count", 0),
             recent_reflections=data.get("recent_reflections", []),
             # Metadata persistente actual
             current_phase=data.get("current_phase", "otro"),
-            current_advances_task=data.get("current_advances_task", False),
-            current_confidence=data.get("current_confidence", 0.5),
-            current_confidence_history=data.get("current_confidence_history", [])
+            current_advances_task=data.get("current_advances_task", False)
         )
 
         # Restaurar estado de logros

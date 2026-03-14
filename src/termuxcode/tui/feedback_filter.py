@@ -15,14 +15,11 @@ class FeedbackFilterConfig:
         max_reflections: Cantidad máxima de reflexiones a incluir (default: 3).
         max_achievements: Cantidad máxima de logros a mostrar (default: 1).
         include_goal_streak: Si incluir el streak de objetivos cumplidos.
-        long_term_progress_turns_ago: Cuántos turnos atrás mostrar el progreso
-            del objetivo a largo plazo (default: 15).
         include_achievement_icons: Si incluir emojis de logros.
     """
     max_reflections: int = 3
     max_achievements: int = 1
     include_goal_streak: bool = True
-    long_term_progress_turns_ago: int = 15
     include_achievement_icons: bool = True
 
 
@@ -30,15 +27,13 @@ class FeedbackFilterConfig:
 class FeedbackHistory:
     """Historial de feedback para filtrar por tiempo.
 
-    Esta clase mantiene un registro de las reflexiones, objetivos y progreso
+    Esta clase mantiene un registro de las reflexiones y logros
     a lo largo del tiempo, permitiendo filtrar por "turnos atrás".
     """
     # Registro de reflexiones con timestamp (turno)
     reflections: list[tuple[int, str]] = field(default_factory=list)
     # Registro de logros desbloqueados con timestamp
     achievements: list[tuple[int, dict]] = field(default_factory=list)
-    # Registro de progreso del objetivo a largo plazo con timestamp
-    long_term_progress: list[tuple[int, int]] = field(default_factory=list)
 
     def add_reflection(self, turn: int, reflection: str) -> None:
         """Agregar una reflexión al historial"""
@@ -48,10 +43,6 @@ class FeedbackHistory:
     def add_achievement(self, turn: int, achievement: dict) -> None:
         """Agregar un logro al historial"""
         self.achievements.append((turn, achievement))
-
-    def add_long_term_progress(self, turn: int, progress: int) -> None:
-        """Agregar progreso del objetivo a largo plazo"""
-        self.long_term_progress.append((turn, progress))
 
     def get_recent_reflections(self, count: int) -> list[str]:
         """Obtener las últimas N reflexiones"""
@@ -73,36 +64,8 @@ class FeedbackHistory:
             return [ach for _, ach in self.achievements[-count:]]
 
         # Filtrar por turnos atrás (implementación básica)
-        # Nota: Necesitamos el turno actual para esto
         # Por ahora retornamos los más recientes
         return [ach for _, ach in self.achievements[-count:]]
-
-    def get_long_term_progress_turns_ago(self, turns_ago: int) -> int | None:
-        """
-        Obtener el progreso del objetivo a largo plazo de hace X turnos.
-
-        Args:
-            turns_ago: Cuántos turnos atrás buscar
-
-        Returns:
-            Progreso (0-100) o None si no hay registro
-        """
-        if not self.long_term_progress or turns_ago < 0:
-            return None
-
-        # Buscar el registro más cercano al turno solicitado
-        current_turn = self.long_term_progress[-1][0] if self.long_term_progress else 0
-        target_turn = current_turn - turns_ago
-
-        for turn, progress in reversed(self.long_term_progress):
-            if turn <= target_turn:
-                return progress
-
-        # Si no encontramos exactamente, retornar el más antiguo disponible
-        if self.long_term_progress:
-            return self.long_term_progress[0][1]
-
-        return None
 
 
 @dataclass
@@ -123,15 +86,6 @@ class FilteredAgentFeedback:
 
     goal_streak: int | None
     """Streak de objetivos cumplidos (None si no incluir)"""
-
-    long_term_goal: str
-    """Objetivo a largo plazo actual"""
-
-    long_term_progress: int
-    """Progreso actual del objetivo a largo plazo"""
-
-    long_term_progress_turns_ago: int | None
-    """Progreso de hace X turnos (para comparación)"""
 
     achievements: list[dict]
     """Logros a mostrar (ya filtrados por cantidad)"""
@@ -161,15 +115,13 @@ class FeedbackFilter:
 
     def filter_feedback(
         self,
-        raw_feedback: dict[str, Any],
-        current_long_term_progress: int
+        raw_feedback: dict[str, Any]
     ) -> FilteredAgentFeedback:
         """
         Filtrar feedback crudo según la configuración.
 
         Args:
             raw_feedback: Dict retornado por get_feedback_for_agent()
-            current_long_term_progress: Progreso actual del objetivo a largo plazo
 
         Returns:
             FilteredAgentFeedback con la información filtrada
@@ -185,18 +137,12 @@ class FeedbackFilter:
                     "icon": getattr(ach, "icon", "🏆"),
                     "description": getattr(ach, "description", "")
                 })
-        self.history.add_long_term_progress(self._turn_counter, current_long_term_progress)
 
         # Filtrar reflexiones (últimas N)
         all_reflections = self.history.get_recent_reflections(self.config.max_reflections)
 
         # Filtrar logros (últimos N)
         achievements_to_show = self.history.get_recent_achievements(self.config.max_achievements)
-
-        # Obtener progreso de hace X turnos
-        progress_turns_ago = self.history.get_long_term_progress_turns_ago(
-            self.config.long_term_progress_turns_ago
-        )
 
         # Filtrar goal_streak
         goal_streak = raw_feedback.get("goal_streak", 0) if self.config.include_goal_streak else None
@@ -206,9 +152,6 @@ class FeedbackFilter:
             personal_goal=raw_feedback.get("personal_goal", ""),
             goal_achieved=raw_feedback.get("goal_achieved", False),
             goal_streak=goal_streak,
-            long_term_goal=raw_feedback.get("long_term_goal", ""),
-            long_term_progress=current_long_term_progress,
-            long_term_progress_turns_ago=progress_turns_ago,
             achievements=achievements_to_show,
             include_icons=self.config.include_achievement_icons
         )
@@ -246,24 +189,6 @@ def format_filtered_feedback(feedback: FilteredAgentFeedback) -> str:
 
         if feedback.goal_streak is not None and feedback.goal_streak > 0:
             lines.append(f"   🔥 Streak: {feedback.goal_streak} objetivos cumplidos consecutivamente")
-
-        lines.append("")
-
-    # Objetivo a largo plazo
-    if feedback.long_term_goal:
-        lines.append(f"🚀 Objetivo a largo plazo ({feedback.long_term_progress}%):")
-        lines.append(f"   {feedback.long_term_goal}")
-
-        # Mostrar comparación con hace X turnos
-        if feedback.long_term_progress_turns_ago is not None:
-            diff = feedback.long_term_progress - feedback.long_term_progress_turns_ago
-            turns_ago = 15  # Configuración por defecto
-            if diff > 0:
-                lines.append(f"   📈 +{diff}% en los últimos {turns_ago} turnos")
-            elif diff < 0:
-                lines.append(f"   📉 {diff}% en los últimos {turns_ago} turnos")
-            else:
-                lines.append(f"   📊 Sin cambio en los últimos {turns_ago} turnos")
 
         lines.append("")
 
