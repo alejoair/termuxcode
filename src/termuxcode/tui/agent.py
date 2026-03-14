@@ -55,13 +55,11 @@ class AgentClient:
             agent_feedback = self.get_agent_feedback()
 
         # Construir prompt con el historial, feedback y el nuevo mensaje
-        # (con prompt template de respuestas estructuradas)
-        from .structured_response import STRUCTURED_RESPONSE_PROMPT_TEMPLATE
         full_prompt = self.history.build_prompt_with_feedback(
             history, prompt,
             apply_filters=True,
             agent_feedback=agent_feedback
-        ) + "\n\n" + STRUCTURED_RESPONSE_PROMPT_TEMPLATE
+        )
 
         # Usar query() del SDK con output_format
         options = ClaudeAgentOptions(

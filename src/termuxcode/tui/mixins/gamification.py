@@ -76,7 +76,7 @@ class GamificationMixin:
 
     def _on_structured_response(self: "ClaudeChat", structured: StructuredResponse) -> None:
         """Callback cuando se recibe una respuesta estructurada"""
-        from ..structured_response import format_phase_badge, format_advances_badge, format_suggestion_box
+        from ..structured_response import format_phase_badge, format_advances_badge, format_suggestion_box, format_classification_badge
         from ..game import get_all_metadata_achievements
 
         # Obtener metadata
@@ -88,6 +88,13 @@ class GamificationMixin:
 
         # Mostrar badges en el chat
         badges = []
+
+        # Badge de clasificación del prompt del usuario
+        if metadata.user_prompt_classification:
+            class_badge = format_classification_badge(metadata.user_prompt_classification)
+            if class_badge:
+                badges.append(class_badge)
+
         phase_badge = format_phase_badge(metadata.task_phase)
         if phase_badge:
             badges.append(phase_badge)
@@ -99,6 +106,10 @@ class GamificationMixin:
 
         if badges:
             self.chat_log.write(" ".join(badges))
+
+        # Mostrar el objetivo entendido del usuario si está disponible
+        if metadata.user_prompt_objective:
+            self.chat_log.write(f"[dim italic]Objetivo entendido: {metadata.user_prompt_objective}[/dim italic]")
 
         # Mostrar sugerencia si existe
         if metadata.next_suggested_immediate_action:
@@ -126,6 +137,11 @@ class GamificationMixin:
                 xp_gained += ref_xp
                 achievements.extend(ref_achievements)
 
+            # Programar procesamiento de cambios genérico (async)
+            if hasattr(self, 'extended_stats_manager') and self.extended_stats_manager.change_manager:
+                # Programar task asíncrono para detectar cambios
+                self.call_later(self._process_all_changes)
+
             # Mostrar XP ganada
             if xp_gained > 0:
                 self.chat_log.write(f"[dim]+{xp_gained} XP por respuesta estructurada[/dim]")
@@ -138,6 +154,46 @@ class GamificationMixin:
 
             # Verificar si hubo cambio de fase y programar validación
             self._check_phase_change_after_response()
+
+    async def _process_all_changes(self: "ClaudeChat") -> None:
+        """Procesar todos los cambios detectados usando el sistema genérico"""
+        if not hasattr(self, 'extended_stats_manager'):
+            return
+
+        stats = self.extended_stats_manager.stats
+
+        # Valores actuales para monitorear cambios
+        current_values = {
+            "current_phase": stats.current_phase,
+            "current_confidence": stats.current_confidence,
+            "personal_goal": stats.personal_goal,
+            "long_term_goal": stats.long_term_goal,
+        }
+
+        # Obtener historial actual para contexto
+        state = self._session_states.get(self._current_session_id)
+        if not state:
+            return
+        history = state.history.load()
+
+        # Procesar cambios de forma asíncrona
+        xp_gained, achievements = await self.extended_stats_manager.process_changes_async(
+            current_values,
+            context={
+                "history": history,
+                "stats": stats.to_dict()
+            }
+        )
+
+        # Mostrar XP por cambios
+        if xp_gained > 0:
+            self.chat_log.write(f"[dim]+{xp_gained} XP por cambios detectados[/dim]")
+
+        # Mostrar logros
+        for ach in achievements:
+            self._show_achievement(ach)
+
+        self._update_xp_bar()
 
     def _on_suggestion_followed(self: "ClaudeChat") -> None:
         """Callback cuando usuario sigue una sugerencia"""
@@ -152,7 +208,7 @@ class GamificationMixin:
             self._update_xp_bar()
 
     async def _validate_phase_change(self: "ClaudeChat") -> None:
-        """Validar el último cambio de fase con otro LLM"""
+        """Validar el último cambio de fase con otro LLM usando SimpleAgent"""
         if not hasattr(self, 'extended_stats_manager'):
             return
 
@@ -160,8 +216,11 @@ class GamificationMixin:
         if not change_info:
             return
 
-        # Obtener historial actual
-        state = self._get_current_state()
+        # Obtener historial actual desde el estado de la sesión
+        state = self._session_states.get(self._current_session_id)
+        if not state:
+            return
+
         history = state.history.load()
 
         # Generar prompt de validación
@@ -179,11 +238,26 @@ class GamificationMixin:
             "[dim]Generando validación con auditor de calidad...[/dim]"
         )
 
-        # TODO: Llamar a otro LLM para validar el cambio
-        # Por ahora solo mostramos el prompt
-        # from claude_agent_sdk import query
-        # response = await query(validation_prompt, model="sonnet")
-        # self.chat_log.write(f"[bold]🔍 Validación:[/bold]\n{response}")
+        # Usar SimpleAgent para validar el cambio (stateless, sin historial)
+        from .simple_agent import SimpleAgent
+
+        simple_agent = SimpleAgent(
+            chat_log=self.chat_log,
+            cwd=self.cwd,
+            default_model="sonnet",  # Usar sonnet para auditoría
+            permission_mode="bypassPermissions",
+        )
+
+        try:
+            # Validar con el agente stateless
+            await simple_agent.validate_phase_change(
+                validation_prompt,
+                model="sonnet"
+            )
+        except Exception as e:
+            self.chat_log.write(
+                f"[red]Error en validación de fase: {e}[/red]"
+            )
 
         # Guardar validación en el historial (opcional)
         # state.history.append("system", validation_prompt, metadata={"type": "phase_validation"})
