@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .filters import FilterConfig, preprocess_history, estimate_prompt_size
+from .feedback_filter import FeedbackFilter, FeedbackFilterConfig, format_filtered_feedback
 
 
 class MessageHistory:
@@ -12,7 +13,8 @@ class MessageHistory:
 
     def __init__(self, filename: str = "messages.jsonl", max_messages: int = 100,
                  session_id: str = None, cwd: str = None,
-                 filter_config: FilterConfig = None):
+                 filter_config: FilterConfig = None,
+                 feedback_filter_config: FeedbackFilterConfig = None):
         self.max_messages = max_messages
         self.cwd = Path(cwd) if cwd else Path.cwd()
         self.base_dir = self._get_history_dir()
@@ -21,6 +23,8 @@ class MessageHistory:
         self._history_file = self.base_dir / self.filename
         # Configuración de filtros para preprocesamiento
         self.filter_config = filter_config or FilterConfig()
+        # Filtro de feedback del agente
+        self.feedback_filter = FeedbackFilter(feedback_filter_config or FeedbackFilterConfig())
 
     def _get_history_dir(self) -> Path:
         """Retorna el directorio donde se guarda el historial"""
@@ -142,22 +146,19 @@ class MessageHistory:
         Returns:
             Prompt completo con feedback incluido
         """
-        from .structured_response import format_agent_feedback
-
         # Construir prompt base
         prompt = self.build_prompt(history, new_message, apply_filters=apply_filters)
 
-        # Agregar feedback si existe
+        # Agregar feedback filtrado si existe
         if agent_feedback:
-            feedback = format_agent_feedback(
-                last_reflection=agent_feedback.get("last_reflection", ""),
-                personal_goal=agent_feedback.get("personal_goal", ""),
-                goal_achieved=agent_feedback.get("goal_achieved", False),
-                goal_streak=agent_feedback.get("goal_streak", 0),
-                long_term_goal=agent_feedback.get("long_term_goal", ""),
-                long_term_progress=agent_feedback.get("long_term_progress", 0),
-                recent_achievements=agent_feedback.get("recent_achievements", [])
+            # Aplicar filtros al feedback (últimas 3 reflexiones, 1 logro, etc.)
+            filtered_feedback = self.feedback_filter.filter_feedback(
+                raw_feedback=agent_feedback,
+                current_long_term_progress=agent_feedback.get("long_term_progress", 0)
             )
-            prompt += "\n" + feedback
+
+            # Formatear el feedback filtrado
+            feedback_text = format_filtered_feedback(filtered_feedback)
+            prompt += "\n" + feedback_text
 
         return prompt

@@ -47,6 +47,15 @@ class ExtendedGameStats(GameStats):
     reflections_count: int = 0
     recent_reflections: list[str] = field(default_factory=list)
 
+    # Metadata persistente de la respuesta actual
+    current_phase: str = "otro"
+    current_advances_task: bool = False
+    current_confidence: float = 0.5
+    current_confidence_history: list[float] = field(default_factory=list)  # Últimas 20 confianzas
+
+    # Historial de fases (para detectar cambios de fase)
+    phase_history: list[dict] = field(default_factory=list)  # [{"phase": "planificacion", "timestamp": "..."}]
+
     def process_metadata(self, advances_task: bool, phase: str, saved_to_history: bool,
                          has_suggestion: bool, confidence: float | None = None,
                          requires_refresh: bool = False) -> tuple[int, list]:
@@ -58,6 +67,34 @@ class ExtendedGameStats(GameStats):
         """
         xp_gained = 0
         achievements = []
+        phase_changed = False
+
+        # Detectar cambio de fase
+        previous_phase = self.current_phase
+        if phase != self.current_phase:
+            phase_changed = True
+            self.current_phase = phase
+
+            # Agregar al historial de fases
+            from datetime import datetime
+            self.phase_history.append({
+                "phase": phase,
+                "from_phase": previous_phase,
+                "timestamp": datetime.now().isoformat()
+            })
+            # Mantener solo los últimos 50 cambios de fase
+            if len(self.phase_history) > 50:
+                self.phase_history = self.phase_history[-50:]
+
+        # Guardar metadata actual
+        self.current_advances_task = advances_task
+        self.current_confidence = confidence or self.current_confidence
+
+        # Guardar en historial de confianzas (últimas 20)
+        if confidence:
+            self.current_confidence_history.append(confidence)
+            if len(self.current_confidence_history) > 20:
+                self.current_confidence_history = self.current_confidence_history[-20:]
 
         # Actualizar contadores
         if saved_to_history:
@@ -108,6 +145,10 @@ class ExtendedGameStats(GameStats):
             "otro": 1
         }
         xp_gained += phase_bonus.get(phase, 1)
+
+        # XP bonus por cambio de fase
+        if phase_changed:
+            xp_gained += 15
 
         # Verificar logros
         achievements.extend(self._check_metadata_achievements())
@@ -289,9 +330,21 @@ class ExtendedGameStats(GameStats):
             "long_term_goal": self.long_term_goal,
             "long_term_goal_progress": self.long_term_goal_progress,
             "reflections_count": self.reflections_count,
-            "recent_reflections": self.recent_reflections
+            "recent_reflections": self.recent_reflections,
+            # Metadata persistente actual
+            "current_phase": self.current_phase,
+            "current_advances_task": self.current_advances_task,
+            "current_confidence": self.current_confidence,
+            "current_confidence_history": self.current_confidence_history,
+            "phase_history": self.phase_history
         })
         return base_dict
+
+    def get_latest_phase_change(self) -> dict | None:
+        """Retorna el último cambio de fase"""
+        if not self.phase_history:
+            return None
+        return self.phase_history[-1]
 
     @classmethod
     def from_dict(cls, data: dict) -> ExtendedGameStats:
@@ -321,7 +374,13 @@ class ExtendedGameStats(GameStats):
             long_term_goal=data.get("long_term_goal", ""),
             long_term_goal_progress=data.get("long_term_goal_progress", 0),
             reflections_count=data.get("reflections_count", 0),
-            recent_reflections=data.get("recent_reflections", [])
+            recent_reflections=data.get("recent_reflections", []),
+            # Metadata persistente actual
+            current_phase=data.get("current_phase", "otro"),
+            current_advances_task=data.get("current_advances_task", False),
+            current_confidence=data.get("current_confidence", 0.5),
+            current_confidence_history=data.get("current_confidence_history", []),
+            phase_history=data.get("phase_history", [])
         )
 
         # Restaurar estado de logros
@@ -581,6 +640,88 @@ class ExtendedStatsManager:
             "long_term_progress": stats.long_term_goal_progress,
             "recent_achievements": [a for a in stats.achievements if a.unlocked][-5:]  # Últimos 5
         }
+
+    def get_phase_change_info(self) -> dict | None:
+        """
+        Obtener información del último cambio de fase
+
+        Returns:
+            Dict con: from_phase, to_phase, timestamp, context
+            o None si no hubo cambios
+        """
+        change = self.stats.get_latest_phase_change()
+        if not change:
+            return None
+
+        stats = self.stats
+
+        return {
+            "from_phase": change.get("from_phase", "desconocido"),
+            "to_phase": change.get("phase", "desconocido"),
+            "timestamp": change.get("timestamp", ""),
+            "context": {
+                "current_confidence": stats.current_confidence,
+                "avg_confidence": sum(stats.current_confidence_history) / len(stats.current_confidence_history) if stats.current_confidence_history else 0,
+                "advances_task_count": stats.advances_task_count,
+                "total_messages": stats.total_messages,
+                "phase_counts": stats.phases_count
+            }
+        }
+
+    def generate_phase_validation_prompt(self, change_info: dict, history: list[dict]) -> str:
+        """
+        Generar prompt para validar un cambio de fase con otro LLM
+
+        Args:
+            change_info: Información del cambio de fase
+            history: Historial de conversación
+
+        Returns:
+            Prompt completo para el LLM validador
+        """
+        from_phase = change_info["from_phase"]
+        to_phase = change_info["to_phase"]
+        context = change_info["context"]
+
+        prompt = f"""# VALIDACIÓN DE CAMBIO DE FASE
+
+## Cambio Detectado
+- **Desde**: {from_phase}
+- **Hacia**: {to_phase}
+- **Timestamp**: {change_info['timestamp']}
+
+## Contexto de la Sesión
+- **Confianza actual**: {context['current_confidence']:.2f}
+- **Confianza promedio**: {context['avg_confidence']:.2f}
+- **Mensajes que avanzan la tarea**: {context['advances_task_count']}
+- **Total de mensajes**: {context['total_messages']}
+- **Contador por fase**: {context['phase_counts']}
+
+## Instrucciones
+Eres un auditor de calidad de código y procesos. Tu tarea es validar que el cambio de fase es correcto.
+
+Responde a estas 3 preguntas:
+
+1. **¿Se completó correctamente la fase {from_phase}?**
+   - ¿Qué se hizo en esta fase?
+   - ¿Hay evidencia de que se completó?
+   - ¿Faltó algo importante?
+
+2. **¿Es apropiado pasar a la fase {to_phase}?**
+   - ¿Es el siguiente paso lógico?
+   - ¿Hay dependencias no resueltas?
+   - ¿Debería volver a una fase anterior?
+
+3. **¿Qué se debe mejorar?**
+   - ¿Hay riesgos o problemas identificados?
+   - ¿Qué se debe corregir antes de continuar?
+   - ¿Recomendaciones para el futuro?
+
+## Tu Respuesta
+Proporciona una respuesta clara y concisa. Si detectas problemas, sé específico sobre qué debe corregirse.
+"""
+
+        return prompt
 
     def _check_reflection_achievements(self) -> list:
         """Verificar logros de reflexiones"""

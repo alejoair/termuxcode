@@ -191,3 +191,118 @@ Cuando el teclado sale, el browser no sabe hacia dónde hacer scroll.
 # Ejecutar modo web
 python -m termuxcode --serve
 ```
+
+## Sistema de Validación de Fases (Phase Validation)
+
+### Propósito
+Detectar cambios de fase y validar que el avance es correcto usando otro LLM como auditor.
+
+### Campos Persistente en ExtendedGameStats
+
+| Campo | Descripción |
+|-------|-------------|
+| `current_phase` | Fase actual (planificacion, implementacion, testing, debugging, analisis, otro) |
+| `current_advances_task` | Si la respuesta actual avanza la tarea |
+| `current_confidence` | Confianza de la respuesta actual |
+| `current_confidence_history` | Últimas 20 confianzas |
+| `phase_history` | Historial de cambios de fase (últimos 50) |
+
+### Flujo de Validación
+
+```
+Turno N: Agente responde con metadata
+├── phase: "planificacion"
+└── advances_current_task: true
+
+Turno N+1: Agente responde con metadata
+├── phase: "implementacion"  ← CAMBIO DE FASE
+└── advances_current_task: true
+
+ExtendedStatsManager.detecta_cambio:
+├── phase_history.append({
+│     "phase": "implementacion",
+│     "from_phase": "planificacion",
+│     "timestamp": "2025-01-15T10:30:00"
+│   })
+└── +15 XP por cambio de fase
+
+Validación (automática):
+├── get_phase_change_info()
+├── generate_phase_validation_prompt()
+└── TODO: Llamar a otro LLM para validar
+    ├── ¿Se completó correctamente la fase planificacion?
+    ├── ¿Es apropiado pasar a implementacion?
+    └── ¿Qué se debe mejorar?
+```
+
+### Prompt de Validación
+
+El sistema genera un prompt estructurado para el LLM validador:
+
+```
+# VALIDACIÓN DE CAMBIO DE FASE
+
+## Cambio Detectado
+- Desde: planificacion
+- Hacia: implementacion
+- Timestamp: 2025-01-15T10:30:00
+
+## Contexto de la Sesión
+- Confianza actual: 0.98
+- Confianza promedio: 0.92
+- Mensajes que avanzan la tarea: 23
+- Total de mensajes: 45
+- Contador por fase: {
+    "planificacion": 12,
+    "implementacion": 1,
+    ...
+}
+
+## Instrucciones
+Responde a estas 3 preguntas:
+
+1. ¿Se completó correctamente la fase planificacion?
+2. ¿Es apropiado pasar a la fase implementacion?
+3. ¿Qué se debe mejorar?
+
+## Tu Respuesta
+Proporciona una respuesta clara y concisa.
+```
+
+### Métodos en ExtendedStatsManager
+
+| Método | Descripción |
+|--------|-------------|
+| `get_phase_change_info()` | Retorna información del último cambio de fase |
+| `generate_phase_validation_prompt()` | Genera prompt para el LLM validador |
+| `get_latest_phase_change()` | Retorna el último cambio de fase |
+
+### Métodos en GamificationMixin
+
+| Método | Descripción |
+|--------|-------------|
+| `_validate_phase_change()` | Valida el cambio de fase con otro LLM |
+| `_check_phase_change_after_response()` | Verifica si hubo cambio y programa validación |
+
+### Archivos Modificados
+
+| Archivo | Cambios |
+|----------|---------|
+| `src/termuxcode/tui/game/extended_stats.py` | + campos persistentes de fase, métodos de validación |
+| `src/termuxcode/tui/mixins/gamification.py` | + método de validación de fases |
+
+### TODO
+
+Implementar la llamada al LLM validador en `_validate_phase_change()`:
+
+```python
+from claude_agent_sdk import query
+
+response = await query(
+    validation_prompt,
+    model="sonnet"  # Usar modelo diferente para auditoría
+)
+
+self.chat_log.write(f"[bold]🔍 Validación:[/bold]\n{response}")
+```
+

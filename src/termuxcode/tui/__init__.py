@@ -14,6 +14,13 @@ from .structured_response import (
     format_suggestion_box,
     format_agent_feedback,
 )
+from .feedback_filter import (
+    FeedbackFilter,
+    FeedbackFilterConfig,
+    FeedbackHistory,
+    FilteredAgentFeedback,
+    format_filtered_feedback,
+)
 
 __all__ = [
     'ClaudeChat',
@@ -31,4 +38,10 @@ __all__ = [
     'format_advances_badge',
     'format_suggestion_box',
     'format_agent_feedback',
+    # Feedback filter
+    'FeedbackFilter',
+    'FeedbackFilterConfig',
+    'FeedbackHistory',
+    'FilteredAgentFeedback',
+    'format_filtered_feedback',
 ]

@@ -136,6 +136,9 @@ class GamificationMixin:
 
             self._update_xp_bar()
 
+            # Verificar si hubo cambio de fase y programar validación
+            self._check_phase_change_after_response()
+
     def _on_suggestion_followed(self: "ClaudeChat") -> None:
         """Callback cuando usuario sigue una sugerencia"""
         if hasattr(self, 'extended_stats_manager'):
@@ -147,4 +150,53 @@ class GamificationMixin:
                 self._show_achievement(ach)
 
             self._update_xp_bar()
+
+    async def _validate_phase_change(self: "ClaudeChat") -> None:
+        """Validar el último cambio de fase con otro LLM"""
+        if not hasattr(self, 'extended_stats_manager'):
+            return
+
+        change_info = self.extended_stats_manager.get_phase_change_info()
+        if not change_info:
+            return
+
+        # Obtener historial actual
+        state = self._get_current_state()
+        history = state.history.load()
+
+        # Generar prompt de validación
+        validation_prompt = self.extended_stats_manager.generate_phase_validation_prompt(
+            change_info, history
+        )
+
+        # Mostrar notificación en el chat
+        self.chat_log.write(
+            f"[bold yellow]⚡ CAMBIO DE FASE DETECTADO:[/bold yellow] "
+            f"{change_info['from_phase'].title()} → {change_info['to_phase'].title()}"
+        )
+
+        self.chat_log.write(
+            "[dim]Generando validación con auditor de calidad...[/dim]"
+        )
+
+        # TODO: Llamar a otro LLM para validar el cambio
+        # Por ahora solo mostramos el prompt
+        # from claude_agent_sdk import query
+        # response = await query(validation_prompt, model="sonnet")
+        # self.chat_log.write(f"[bold]🔍 Validación:[/bold]\n{response}")
+
+        # Guardar validación en el historial (opcional)
+        # state.history.append("system", validation_prompt, metadata={"type": "phase_validation"})
+
+    def _check_phase_change_after_response(self: "ClaudeChat") -> None:
+        """Verificar si hubo un cambio de fase después de la respuesta"""
+        if not hasattr(self, 'extended_stats_manager'):
+            return
+
+        change_info = self.extended_stats_manager.get_phase_change_info()
+        if change_info:
+            # Programar la validación como async task
+            # Esto se ejecutará después de completar el mensaje actual
+            self.call_later(self._validate_phase_change)
+
 
