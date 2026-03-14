@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from .filters import FilterManager, estimate_prompt_size
-from .feedback_filter import FeedbackFilter, FeedbackFilterConfig, format_filtered_feedback
 
 
 class MessageHistory:
@@ -17,9 +16,7 @@ class MessageHistory:
                  filter_by_useful: Literal[None, False, True] = True,
                  max_tool_result_length: int | None = 500,
                  max_assistant_length: int | None = None,
-                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis",
-                 # Configuración de feedback
-                 feedback_filter_config: FeedbackFilterConfig = None):
+                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis"):
         self.max_messages = max_messages
         self.cwd = Path(cwd) if cwd else Path.cwd()
         self.base_dir = self._get_history_dir()
@@ -32,9 +29,6 @@ class MessageHistory:
         self.max_tool_result_length = max_tool_result_length
         self.max_assistant_length = max_assistant_length
         self.truncate_strategy = truncate_strategy
-
-        # Filtro de feedback del agente
-        self.feedback_filter = FeedbackFilter(feedback_filter_config or FeedbackFilterConfig())
 
     def _get_history_dir(self) -> Path:
         """Retorna el directorio donde se guarda el historial"""
@@ -189,37 +183,3 @@ class MessageHistory:
     def filepath(self) -> Path:
         """Retorna la ruta del archivo de historial"""
         return self._history_file
-
-    def build_prompt_with_feedback(
-        self,
-        history: list[dict],
-        new_message: str,
-        apply_filters: bool = True,
-        agent_feedback: dict = None
-    ) -> str:
-        """Construir prompt incluyendo feedback personalizado para el agente.
-
-        Args:
-            history: Historial de mensajes
-            new_message: Nuevo mensaje del usuario
-            apply_filters: Si True, aplica los filtros configurados
-            agent_feedback: Dict con feedback para el agente (reflexiones, objetivos, etc.)
-
-        Returns:
-            Prompt completo con feedback incluido
-        """
-        # Construir prompt base
-        prompt = self.build_prompt(history, new_message, apply_filters=apply_filters)
-
-        # Agregar feedback filtrado si existe
-        if agent_feedback:
-            # Aplicar filtros al feedback (últimas 3 reflexiones, 1 logro, etc.)
-            filtered_feedback = self.feedback_filter.filter_feedback(
-                raw_feedback=agent_feedback
-            )
-
-            # Formatear el feedback filtrado
-            feedback_text = format_filtered_feedback(filtered_feedback)
-            prompt += "\n" + feedback_text
-
-        return prompt

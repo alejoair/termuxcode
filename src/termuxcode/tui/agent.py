@@ -1,14 +1,20 @@
 """Módulo para comunicarse con el agente Claude con historial en JSONL"""
-import os
 from typing import TYPE_CHECKING, Callable, Optional
 
 from claude_agent_sdk import query, ClaudeAgentOptions
 
 from .history import MessageHistory
-from .structured_response import parse_structured_output, STRUCTURED_RESPONSE_SCHEMA
+from .schemas import STRUCTURED_RESPONSE_SCHEMA
 
 if TYPE_CHECKING:
     from .chat import ChatLog
+
+
+def _get_metadata(structured: dict | None, key: str, default=None):
+    """Obtener un campo de metadata con valor por defecto."""
+    if not structured or "metadata" not in structured:
+        return default
+    return structured["metadata"].get(key, default)
 
 
 class AgentClient:
@@ -21,20 +27,12 @@ class AgentClient:
         cwd: str = None,
         session_id: str = None,
         is_active_session: Callable[[], bool] = None,
-        # Callbacks para gamificación
-        on_structured_response: Optional[Callable] = None,
-        on_tool_used: Optional[Callable] = None,
-        # Callback para obtener feedback del agente
-        get_agent_feedback: Optional[Callable[[], dict]] = None,
     ):
         self.chat_log = chat_log
         self.history = history
         self.cwd = cwd or os.getcwd()
         self.session_id = session_id
         self.is_active_session = is_active_session or (lambda: True)
-        self.on_structured_response = on_structured_response
-        self.on_tool_used = on_tool_used
-        self.get_agent_feedback = get_agent_feedback
 
         # Estado de la respuesta estructurada actual
         self.current_structured_response = None
@@ -49,17 +47,8 @@ class AgentClient:
         # Cargar historial (ya está truncado a max_messages por save())
         history = self.history.load()
 
-        # Obtener feedback para el agente (si está disponible)
-        agent_feedback = None
-        if self.get_agent_feedback:
-            agent_feedback = self.get_agent_feedback()
-
-        # Construir prompt con el historial, feedback y el nuevo mensaje
-        full_prompt = self.history.build_prompt_with_feedback(
-            history, prompt,
-            apply_filters=True,
-            agent_feedback=agent_feedback
-        )
+        # Construir prompt con el historial y el nuevo mensaje
+        full_prompt = self.history.build_prompt(history, prompt, apply_filters=True)
 
         # Usar query() del SDK con output_format
         options = ClaudeAgentOptions(
@@ -112,10 +101,6 @@ class AgentClient:
                                 "input": str(block.input) if hasattr(block, 'input') else "",
                             }, is_useful=True)
 
-                            # Callback de tool used
-                            if self.on_tool_used:
-                                self.on_tool_used()
-
                         elif block_type == "ToolResultBlock":
                             # Guardar tool_result inmediatamente
                             self.history.append_single("tool_result", str(block.content), is_useful=True)
@@ -131,7 +116,7 @@ class AgentClient:
         # Si es así, actualizar todos los mensajes del turno actual
         is_useful_to_record = True
         if self.current_structured_response:
-            is_useful_to_record = self.current_structured_response.is_useful_to_record_in_history
+            is_useful_to_record = _get_metadata(self.current_structured_response, "is_useful_to_record_in_history", True)
 
         if not is_useful_to_record:
             # Marcar todos los mensajes del turno actual como no útiles
@@ -178,12 +163,30 @@ class AgentClient:
     async def _process_result(self, message) -> None:
         """Procesar ResultMessage - extraer structured_output"""
         if hasattr(message, 'structured_output'):
-            structured = parse_structured_output(message.structured_output)
+            # Debug: imprimir el structured output crudo
+            import sys
+            import json
+            sys.stderr.write(f"[DEBUG] Raw structured_output: {json.dumps(message.structured_output, indent=2)}\n")
+            sys.stderr.flush()
+
+            # Usar el dict directamente del SDK
+            structured = message.structured_output
             self.current_structured_response = structured
 
-            # Callback de respuesta estructurada para gamificación
-            if structured and self.on_structured_response:
-                self.on_structured_response(structured)
+            # Debug: imprimir los campos obtenidos
+            if structured:
+                tag = _get_metadata(structured, "tag", "INFO")
+                sys.stderr.write(f"[DEBUG] Got tag: {tag}\n")
+                sys.stderr.write(f"[DEBUG] Got metadata keys: {list(structured.get('metadata', {}).keys())}\n")
+            sys.stderr.flush()
+
+            # Renderizar el texto acumulado del asistente con el tag del structured output
+            if self.current_assistant_text:
+                tag = _get_metadata(structured, "tag", "INFO")
+                # Debug: imprimir el tag
+                sys.stderr.write(f"[DEBUG] Tag from structured output: {tag}\n")
+                sys.stderr.flush()
+                self.chat_log.write_assistant(self.current_assistant_text, structured_tag=tag)
 
     async def _process_assistant(self, message) -> None:
         """Procesar AssistantMessage"""
@@ -192,7 +195,9 @@ class AgentClient:
                 block_type = block.__class__.__name__
 
                 if block_type == "TextBlock":
-                    self.chat_log.write_assistant(block.text)
+                    # Guardar texto en memoria, NO renderizar todavía
+                    # Se renderizará cuando recibamos el structured_output
+                    self.chat_log.write_streaming(block.text)
 
                 elif block_type == "ToolUseBlock":
                     tool_input = str(block.input) if hasattr(block, 'input') else None

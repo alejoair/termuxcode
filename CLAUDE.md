@@ -45,7 +45,7 @@ Input → on_input_submitted → _run_query
 agent.query(prompt)
     ├── 1. Mostrar en ChatLog
     ├── 2. Guardar en historial (append)
-    ├── 3. build_prompt() con historial completo
+    ├── 3. build_prompt() con historial filtrado
     ├── 4. SDK.query() → streaming
     ├── 5. Procesar mensajes (Assistant/User/Result)
     └── 6. Guardar respuesta en historial
@@ -67,9 +67,9 @@ agent.query(prompt)
 | Módulo | Función |
 |--------|---------|
 | `app.py` | TUI, gestión de sesiones |
-| `agent.py` | Comunicación con Claude SDK |
+| `agent.py` | Comunicación con Claude SDK + structured response schema |
 | `sessions.py` | Multi-sesión (crear/borrar/listar) |
-| `history.py` | Persistencia JSONL + rolling window |
+| `history.py` | Persistencia JSONL + rolling window + filtros |
 | `chat.py` | Visualización de mensajes |
 
 ### CSS por modo
@@ -85,6 +85,8 @@ agent.query(prompt)
 ## SDK Config
 - `max_budget_usd`: 0.10
 - `permission_mode`: bypassPermissions
+- `model`: opus
+- `output_format`: json_schema con STRUCTURED_RESPONSE_SCHEMA
 
 ## Comandos
 
@@ -108,38 +110,84 @@ ruff format .
 ruff check .
 ```
 
-## Módulo de Filtros (filters.py)
+---
+
+## Sistema de Filtros (filters/)
 
 ### Propósito
 Preprocesamiento de mensajes del historial para controlar el tamaño del prompt reconstruido.
 
-### Funciones principales
-| Función | Descripción |
-|----------|-------------|
-| `FilterConfig` | Configuración de filtros (límites, estrategia de truncado) |
-| `preprocess_history()` | Aplica filtros a todo el historial |
-| `estimate_prompt_size()` | Estima tamaño del prompt reconstruido |
-| `suggest_config()` | Sugiere configuración basada en estadísticas |
-| `HistoryPreprocessor` | Clase para preprocesar con configuración persistente |
+### Arquitectura Modular
+
+```
+src/termuxcode/tui/filters/
+├── __init__.py          # Exporta FilterManager, estimate_prompt_size
+├── manager.py           # FilterManager - ejecuta todos los filtros
+├── base.py              # MessageFilter - clase base abstracta
+├── estimator.py         # estimate_prompt_size() - estima tokens
+├── preprocessor.py      # HistoryPreprocessor - preprocesamiento avanzado
+└── impl/
+    ├── useful_filter.py      # UsefulFilter - elimina no útiles
+    └── truncate_filter.py    # TruncateFilter - trunca contenido
+```
+
+### Filtros disponibles
+
+| Filtro | Parámetro | Valor default | Efecto |
+|--------|-----------|---------------|--------|
+| **UsefulFilter** | `filter_by_useful` | `True` | Elimina mensajes con `is_useful=False` |
+| **TruncateFilter** | `max_tool_result_length` | `500` | Trunca resultados de herramientas |
+| **TruncateFilter** | `max_assistant_length` | `None` | No trunca mensajes del asistente |
+| **Rolling window** | `max_messages` | `100` | Mantiene solo 100 mensajes en disco |
 
 ### Estrategias de truncado
 - `"ellipsis"`: Corta y agrega "..." (default)
 - `"cut"`: Corta directamente
 - `"summary"`: Corta y agrega "[truncado de X caracteres]"
 
+### Flujo de filtrado
+
+```
+history.load() → Carga últimos 100 mensajes
+    ↓
+FilterManager.apply(history)
+    ├── UsefulFilter → elimina is_useful=False
+    └── TruncateFilter → trunca tool_result a 500 chars
+    ↓
+Prompt construido → SDK → LLM
+```
+
+### Ejemplo de prompt enviado al LLM
+
+```
+User: Hola, ayúdame con este código
+
+Assistant: Claro, déjame leer el archivo...
+
+[Used tool: Read, input: {'file_path': '/path/to/file.py'}]
+
+[Tool result: #!/usr/bin/env python3
+import sys
+from pathlib import Path
+...
+]
+
+User: Ahora explícame la función main()
+
+Assistant:
+```
+
 ### Uso en MessageHistory
+
 ```python
-from termuxcode.tui import MessageHistory, FilterConfig
+from termuxcode.tui import MessageHistory
 
-# Configurar límites
-config = FilterConfig(
-    max_tool_result_length=500,  # Truncar tool_result a 500 caracteres
-    truncate_strategy="ellipsis"
-)
-
+# Configurar límites (opcional, ya están por default)
 history = MessageHistory(
     session_id="abc123",
-    filter_config=config
+    max_messages=100,
+    max_tool_result_length=500,
+    truncate_strategy="ellipsis"
 )
 
 # build_prompt() aplica filtros automáticamente
@@ -152,164 +200,94 @@ prompt = history.build_prompt(history.load(), "Nuevo mensaje")
 prompt = history.build_prompt(history, "msg", apply_filters=False)
 ```
 
-### Ver `EXAMPLES_FILTERS.md`
-Documentación completa de ejemplos de uso.
+---
 
-## Modo Web (Template Custom)
-
-### Archivos
-- `src/termuxcode/web/templates/app_index.html` - Template HTML
-- `src/termuxcode/web/static/app.css` - Estilos splash/diálogos (viewport, body, dialogs, terminal fade-in)
-- `src/termuxcode/web/static/css/xterm.css` - Estilos de xterm.js (terminal emulado)
-
-### Flujo de carga
-1. **Splash screen** visible con botón "Start"
-2. Click → Conexión WebSocket → `textual.js` inicializa xterm
-3. Primer byte recibido → Body obtiene clase `-first-byte`
-4. Splash oculto (`display: none`), terminal visible (`opacity: 1`)
-
-### Estructura HTML
-```
-body
-├── .dialog-container.intro-dialog (splash)
-│   └── .intro (caja con logo + botón)
-├── .dialog-container.closed-dialog (sesión terminada)
-└── #terminal (donde xterm.js se monta)
-    └── .xterm (terminal xterm.js)
-        ├── .xterm-viewport (scrollable)
-        ├── .xterm-screen (canvas)
-        └── .xterm-helpers
-            └── .xterm-helper-textarea (input oculto en left: -9999em)
-```
-
-### Problema teclado Android
-El input real `.xterm-helper-textarea` está oculto fuera de pantalla (`left: -9999em`).
-Cuando el teclado sale, el browser no sabe hacia dónde hacer scroll.
-
-### Comandos
-```bash
-# Ejecutar modo web
-python -m termuxcode --serve
-```
-
-## Sistema de Validación de Fases (Phase Validation)
+## Sistema de Respuestas Estructuradas
 
 ### Propósito
-Detectar cambios de fase y validar que el avance es correcto usando otro LLM como auditor.
+El SDK devuelve un structured output con metadata que la aplicación usa para controlar el flujo y mostrar información al usuario.
 
-### Campos Persistente en ExtendedGameStats
-
-| Campo | Descripción |
-|-------|-------------|
-| `current_phase` | Fase actual (planificacion, implementacion, testing, debugging, analisis, otro) |
-| `current_advances_task` | Si la respuesta actual avanza la tarea |
-| `current_confidence` | Confianza de la respuesta actual |
-| `current_confidence_history` | Últimas 20 confianzas |
-| `phase_history` | Historial de cambios de fase (últimos 50) |
-
-### Flujo de Validación
-
-```
-Turno N: Agente responde con metadata
-├── phase: "planificacion"
-└── advances_current_task: true
-
-Turno N+1: Agente responde con metadata
-├── phase: "implementacion"  ← CAMBIO DE FASE
-└── advances_current_task: true
-
-ExtendedStatsManager.detecta_cambio:
-├── phase_history.append({
-│     "phase": "implementacion",
-│     "from_phase": "planificacion",
-│     "timestamp": "2025-01-15T10:30:00"
-│   })
-└── +15 XP por cambio de fase
-
-Validación (automática):
-├── get_phase_change_info()
-├── generate_phase_validation_prompt()
-└── TODO: Llamar a otro LLM para validar
-    ├── ¿Se completó correctamente la fase planificacion?
-    ├── ¿Es apropiado pasar a implementacion?
-    └── ¿Qué se debe mejorar?
-```
-
-### Prompt de Validación
-
-El sistema genera un prompt estructurado para el LLM validador:
-
-```
-# VALIDACIÓN DE CAMBIO DE FASE
-
-## Cambio Detectado
-- Desde: planificacion
-- Hacia: implementacion
-- Timestamp: 2025-01-15T10:30:00
-
-## Contexto de la Sesión
-- Confianza actual: 0.98
-- Confianza promedio: 0.92
-- Mensajes que avanzan la tarea: 23
-- Total de mensajes: 45
-- Contador por fase: {
-    "planificacion": 12,
-    "implementacion": 1,
-    ...
-}
-
-## Instrucciones
-Responde a estas 3 preguntas:
-
-1. ¿Se completó correctamente la fase planificacion?
-2. ¿Es apropiado pasar a la fase implementacion?
-3. ¿Qué se debe mejorar?
-
-## Tu Respuesta
-Proporciona una respuesta clara y concisa.
-```
-
-### Métodos en ExtendedStatsManager
-
-| Método | Descripción |
-|--------|-------------|
-| `get_phase_change_info()` | Retorna información del último cambio de fase |
-| `generate_phase_validation_prompt()` | Genera prompt para el LLM validador |
-| `get_latest_phase_change()` | Retorna el último cambio de fase |
-
-### Métodos en GamificationMixin
-
-| Método | Descripción |
-|--------|-------------|
-| `_validate_phase_change()` | Valida el cambio de fase con otro LLM |
-| `_check_phase_change_after_response()` | Verifica si hubo cambio y programa validación |
-
-### Archivos Modificados
-
-| Archivo | Cambios |
-|----------|---------|
-| `src/termuxcode/tui/game/extended_stats.py` | + campos persistentes de fase, métodos de validación |
-| `src/termuxcode/tui/mixins/gamification.py` | + método de validación de fases |
-
-### TODO
-
-Implementar la llamada al LLM validador en `_validate_phase_change()`:
+### Schema (definido en agent.py)
 
 ```python
-from claude_agent_sdk import query
-
-response = await query(
-    validation_prompt,
-    model="sonnet"  # Usar modelo diferente para auditoría
-)
-
-self.chat_log.write(f"[bold]🔍 Validación:[/bold]\n{response}")
+STRUCTURED_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "response": {"type": "string"},
+        "metadata": {
+            "type": "object",
+            "properties": {
+                "user_prompt_objective": {"type": "string"},
+                "user_prompt_classification": {
+                    "type": "string",
+                    "enum": ["single_task", "research", "plan", "implementation",
+                            "debugging", "testing", "code_review", "documentation",
+                            "refactoring", "explanation", "offtopic", "meta"]
+                },
+                "next_suggested_immediate_action": {"type": "string"},
+                "is_useful_to_record_in_history": {"type": "boolean"},
+                "advances_current_task": {"type": "boolean"},
+                "task_phase": {
+                    "type": "string",
+                    "enum": ["planificacion", "implementacion", "testing", "debugging",
+                            "analisis", "otro"]
+                },
+                "related_files": {"type": "array", "items": {"type": "string"}},
+                "tag": {
+                    "type": "string",
+                    "enum": ["WARNING", "ERROR", "INFO", "SUCCESS"],
+                    "default": "INFO"
+                },
+                "self_reflection": {"type": "string"},
+                "personal_goal": {"type": "string"},
+            },
+            "required": [
+                "user_prompt_objective",
+                "user_prompt_classification",
+                "next_suggested_immediate_action",
+                "is_useful_to_record_in_history",
+                "advances_current_task",
+                "task_phase",
+            ]
+        }
+    },
+    "required": ["response", "metadata"]
+}
 ```
 
-## Módulo Memory (memory.py)
+### Uso en agent.py
+
+```python
+# Función helper para acceder a campos con defaults
+def _get_metadata(structured: dict | None, key: str, default=None):
+    if not structured or "metadata" not in structured:
+        return default
+    return structured["metadata"].get(key, default)
+
+# En _process_result
+structured = message.structured_output  # dict del SDK
+tag = _get_metadata(structured, "tag", "INFO")
+
+# Si is_useful_to_record_in_history = False,
+# marca todos los mensajes del turno como no útiles
+is_useful = _get_metadata(structured, "is_useful_to_record_in_history", True)
+if not is_useful:
+    _mark_turn_as_not_useful(initial_count)
+```
+
+---
+
+## Módulo Memory (memory/)
 
 ### Propósito
 Persistencia en disco simplificada con dos estructuras de datos: Fifo (cola) y Blackboard (key-value anidado).
+
+### Estructura
+```
+src/termuxcode/tui/memory/
+├── __init__.py       # Exporta Fifo, Blackboard, Storage, Initializer
+└── memory.py         # Implementación completa
+```
 
 ### Uso básico
 ```python
@@ -369,13 +347,104 @@ bb.update({"a": {"z": 3}, "c": 4})
 └── board_name.json   # Blackboard: JSON anidado
 ```
 
-### Storage (uso interno)
-Clase interna para persistencia JSON/CSV. No se usa directamente en código normal, pero está disponible:
-```python
-from termuxcode.tui.memory import Storage
+### Initializer - Carga inicial de datos
+Inicializa Fifo y Blackboard desde archivos al iniciar la app.
 
-s = Storage("/path")
-s.save("file.json", {"key": "value"})
-s.save("file.csv", [["a", "b"], ["c", "d"]])
+**Métodos:**
+| Método | Descripción |
+|--------|-------------|
+| `load_claude_md(board="app", path=None)` | Lee CLAUDE.md → blackboard |
+| `load_config_json(board="app", path=None, path="config")` | Lee config.json → blackboard |
+| `initialize_fifo(name, items)` | Inicializa Fifo con lista |
+| `initialize_fifo_from_file(name, path, format)` | Desde archivo (json/txt) |
+| `initialize_all()` | Ejecuta todas por defecto |
+
+**Uso:**
+```python
+from termuxcode.tui.memory import Initializer
+
+init = Initializer()
+init.initialize_all()  # Carga CLAUDE.md y config.json
+
+# Acceder a datos cargados
+from termuxcode.tui.memory import Blackboard
+bb = Blackboard("app")
+claude_md = bb.get("docs.claude_md")
+config = bb.get("config")
 ```
 
+**Integración:** Se llama automáticamente en `ClaudeChat.on_mount()` via `_initialize_memory()`.
+
+---
+
+## Modo Web (Template Custom)
+
+### Archivos
+- `src/termuxcode/web/templates/app_index.html` - Template HTML
+- `src/termuxcode/web/static/app.css` - Estilos splash/diálogos (viewport, body, dialogs, terminal fade-in)
+- `src/termuxcode/web/static/css/xterm.css` - Estilos de xterm.js (terminal emulado)
+
+### Flujo de carga
+1. **Splash screen** visible con botón "Start"
+2. Click → Conexión WebSocket → `textual.js` inicializa xterm
+3. Primer byte recibido → Body obtiene clase `-first-byte`
+4. Splash oculto (`display: none`), terminal visible (`opacity: 1`)
+
+### Estructura HTML
+```
+body
+├── .dialog-container.intro-dialog (splash)
+│   └── .intro (caja con logo + botón)
+├── .dialog-container.closed-dialog (sesión terminada)
+└── #terminal (donde xterm.js se monta)
+    └── .xterm (terminal xterm.js)
+        ├── .xterm-viewport (scrollable)
+        ├── .xterm-screen (canvas)
+        └── .xterm-helpers
+            └── .xterm-helper-textarea (input oculto en left: -9999em)
+```
+
+### Problema teclado Android
+El input real `.xterm-helper-textarea` está oculto fuera de pantalla (`left: -9999em`).
+Cuando el teclado sale, el browser no sabe hacia dónde hacer scroll.
+
+### Comandos
+```bash
+# Ejecutar modo web
+python -m termuxcode --serve
+```
+
+---
+
+## Arquitectura Simplificada (cambios recientes)
+
+### Archivos eliminados en refactorización
+- `src/termuxcode/tui/structured_response.py` - Schema movido a `agent.py`, usa dict directamente
+- `src/termuxcode/tui/filters.py` - Refactorizado a paquete modular `filters/`
+- `src/termuxcode/tui/game/change_detector.py` - Sistema de gamificación simplificado
+- `src/termuxcode/tui/simple_agent.py` - Removido, trigger system simplificado
+- `src/termuxcode/tui/styles/` - Módulo de estilos simplificado
+
+### Principios actuales
+1. **Simplicidad**: Usar `dict` directo del SDK sin capas de abstracción innecesarias
+2. **Modularidad**: Filtros como paquete separado con clases base
+3. **Configuración por default**: Valores sensibles en código, no en archivos
+4. **Estado mínimo**: Solo persistir lo necesario (historial, sesiones)
+
+---
+
+## Historial de Cambios Recientes
+
+| Commit | Fecha | Cambio principal |
+|--------|-------|------------------|
+| 5e55818 | 2026-03-14 | feat: Add memory module and refactor filters system |
+| 84e9fdf | - | refactor: Clean up feedback_filter and extended_stats after schema simplification |
+| e427223 | - | refactor: Simplify structured response schema |
+| 1fa2052 | - | refactor: Simplify gamification system - remove overengineered phase validation |
+| 8568934 | - | refactor: Replace specific SimpleAgent methods with generic trigger system |
+| 90c165e | - | feat: Add user prompt classification and phase validation schema |
+| 532ac1f | - | fix: Fix phase validation system and remove structured output prompt template |
+| d8338d4 | - | feat: Add persistent metadata storage and phase change validation system |
+| 42a26fe | - | feat: Add agent self-reflection and personal goals with feedback system |
+| b07c4fa | - | feat: Add structured responses with metadata for gamification |
+| c812d3e | - | feat: Add preprocesamiento module for conversation history filters |
