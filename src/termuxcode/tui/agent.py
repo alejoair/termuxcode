@@ -49,6 +49,8 @@ class AgentClient:
         )
 
         old_claudecode = os.environ.pop('CLAUDECODE', None)
+        # Acumular todos los mensajes del turno para guardar en historial
+        turn_messages = [{"role": "user", "content": prompt}]
         assistant_response = ""
 
         try:
@@ -56,20 +58,44 @@ class AgentClient:
                 # Solo procesar si la sesión sigue activa
                 if self.is_active_session():
                     await self._process_message(message)
-                # Acumular la respuesta del asistente
+                # Acumular mensajes para el historial
                 if hasattr(message, 'content') and isinstance(message.content, list):
+                    msg_type = message.__class__.__name__
                     for block in message.content:
-                        if block.__class__.__name__ == "TextBlock":
+                        block_type = block.__class__.__name__
+
+                        if block_type == "TextBlock":
                             assistant_response += block.text
+
+                        elif block_type == "ToolUseBlock":
+                            # Guardar el text acumulado antes del tool_use
+                            if assistant_response:
+                                turn_messages.append({"role": "assistant", "content": assistant_response})
+                                assistant_response = ""
+                            turn_messages.append({
+                                "role": "tool_use",
+                                "content": {
+                                    "name": block.name,
+                                    "input": str(block.input) if hasattr(block, 'input') else "",
+                                }
+                            })
+
+                        elif block_type == "ToolResultBlock":
+                            turn_messages.append({
+                                "role": "tool_result",
+                                "content": str(block.content),
+                            })
         finally:
             if old_claudecode:
                 os.environ['CLAUDECODE'] = old_claudecode
 
-        # Guardar mensaje del usuario y respuesta del asistente en historial
-        # (siempre guardar aunque la sesión ya no esté activa)
-        self.history.append("user", prompt)
+        # Guardar texto final del asistente si queda algo pendiente
         if assistant_response:
-            self.history.append("assistant", assistant_response)
+            turn_messages.append({"role": "assistant", "content": assistant_response})
+
+        # Guardar todos los mensajes del turno en historial
+        # (siempre guardar aunque la sesión ya no esté activa)
+        self.history.append_batch(turn_messages)
 
     async def _process_message(self, message) -> None:
         """Procesar mensaje del agente"""

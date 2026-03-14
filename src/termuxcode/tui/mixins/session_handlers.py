@@ -59,6 +59,12 @@ class SessionHandlersMixin:
                 self.chat_log.write_user(content)
             elif role == "assistant":
                 self.chat_log.write_assistant(content)
+            elif role == "tool_use":
+                tool_name = content.get("name", "unknown") if isinstance(content, dict) else "unknown"
+                tool_input = content.get("input", "") if isinstance(content, dict) else str(content)
+                self.chat_log.write_tool(tool_name, str(tool_input) if tool_input else None)
+            elif role == "tool_result":
+                self.chat_log.write_result(str(content))
 
     async def _switch_to_session(self: "ClaudeChat", session_id: str, update_tabs: bool = True) -> None:
         """Cambiar a una sesión específica"""

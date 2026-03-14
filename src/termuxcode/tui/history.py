@@ -44,6 +44,19 @@ class MessageHistory:
         self.save(history)
         return history
 
+    def append_batch(self, messages: list[dict]) -> list[dict]:
+        """Agrega múltiples mensajes al historial y lo guarda.
+
+        Cada mensaje debe tener 'role' y 'content'.
+        Roles soportados: 'user', 'assistant', 'tool_use', 'tool_result'.
+        Para 'tool_use': content es dict con 'name' e 'input'.
+        Para 'tool_result': content es string con el resultado.
+        """
+        history = self.load()
+        history.extend(messages)
+        self.save(history)
+        return history
+
     def build_prompt(self, history: list[dict], new_message: str) -> str:
         """Construye el prompt con el historial de conversación"""
         prompt = ""
@@ -54,6 +67,12 @@ class MessageHistory:
                 prompt += f"User: {content}\n\n"
             elif role == "assistant":
                 prompt += f"Assistant: {content}\n\n"
+            elif role == "tool_use":
+                tool_name = content.get("name", "unknown") if isinstance(content, dict) else "unknown"
+                tool_input = content.get("input", "") if isinstance(content, dict) else str(content)
+                prompt += f"Assistant: [Used tool: {tool_name}, input: {tool_input}]\n\n"
+            elif role == "tool_result":
+                prompt += f"[Tool result: {content}]\n\n"
         prompt += f"User: {new_message}\n\nAssistant:"
         return prompt
 
