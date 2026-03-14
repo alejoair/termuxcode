@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..app import ClaudeChat
+    from ..structured_response import StructuredResponse
 
 
 class GamificationMixin:
@@ -72,3 +73,67 @@ class GamificationMixin:
         for ach in unlocked:
             self._show_achievement(ach)
         self._update_xp_bar()
+
+    def _on_structured_response(self: "ClaudeChat", structured: StructuredResponse) -> None:
+        """Callback cuando se recibe una respuesta estructurada"""
+        from ..structured_response import format_phase_badge, format_advances_badge, format_suggestion_box
+        from ..game import get_all_metadata_achievements
+
+        # Obtener metadata
+        metadata = structured.metadata
+
+        # Guardar última sugerencia para ejecutar con Tab
+        if metadata.next_suggested_immediate_action:
+            self._last_suggestion = metadata.next_suggested_immediate_action
+
+        # Mostrar badges en el chat
+        badges = []
+        phase_badge = format_phase_badge(metadata.task_phase)
+        if phase_badge:
+            badges.append(phase_badge)
+        adv_badge = format_advances_badge(metadata.advances_current_task)
+        if adv_badge:
+            badges.append(adv_badge)
+        if not metadata.is_useful_to_record_in_history:
+            badges.append("[dim]ℹ️ NO GUARDADO[/dim]")
+
+        if badges:
+            self.chat_log.write(" ".join(badges))
+
+        # Mostrar sugerencia si existe
+        if metadata.next_suggested_immediate_action:
+            self.chat_log.write(format_suggestion_box(metadata.next_suggested_immediate_action))
+
+        # Notificar al ExtendedStatsManager si está disponible
+        if hasattr(self, 'extended_stats_manager'):
+            xp_gained, achievements = self.extended_stats_manager.process_structured_response(
+                advances_task=metadata.advances_current_task,
+                phase=metadata.task_phase,
+                saved_to_history=metadata.is_useful_to_record_in_history,
+                has_suggestion=bool(metadata.next_suggested_immediate_action),
+                confidence=metadata.confidence,
+                requires_refresh=metadata.requires_context_refresh
+            )
+
+            # Mostrar XP ganada
+            if xp_gained > 0:
+                self.chat_log.write(f"[dim]+{xp_gained} XP por respuesta estructurada[/dim]")
+
+            # Mostrar logros desbloqueados
+            for ach in achievements:
+                self._show_achievement(ach)
+
+            self._update_xp_bar()
+
+    def _on_suggestion_followed(self: "ClaudeChat") -> None:
+        """Callback cuando usuario sigue una sugerencia"""
+        if hasattr(self, 'extended_stats_manager'):
+            xp_gained, achievements = self.extended_stats_manager.follow_suggestion()
+
+            self.chat_log.write(f"[dim]+{xp_gained} XP por seguir sugerencia[/dim]")
+
+            for ach in achievements:
+                self._show_achievement(ach)
+
+            self._update_xp_bar()
+

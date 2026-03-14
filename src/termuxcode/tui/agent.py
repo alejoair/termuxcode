@@ -1,10 +1,11 @@
 """Módulo para comunicarse con el agente Claude con historial en JSONL"""
 import os
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Optional
 
 from claude_agent_sdk import query, ClaudeAgentOptions
 
 from .history import MessageHistory
+from .structured_response import parse_structured_output, STRUCTURED_RESPONSE_SCHEMA
 
 if TYPE_CHECKING:
     from .chat import ChatLog
@@ -20,12 +21,21 @@ class AgentClient:
         cwd: str = None,
         session_id: str = None,
         is_active_session: Callable[[], bool] = None,
+        # Callbacks para gamificación
+        on_structured_response: Optional[Callable] = None,
+        on_tool_used: Optional[Callable] = None,
     ):
         self.chat_log = chat_log
         self.history = history
         self.cwd = cwd or os.getcwd()
         self.session_id = session_id
         self.is_active_session = is_active_session or (lambda: True)
+        self.on_structured_response = on_structured_response
+        self.on_tool_used = on_tool_used
+
+        # Estado de la respuesta estructurada actual
+        self.current_structured_response = None
+        self.current_assistant_text = ""
 
     async def query(self, prompt: str) -> None:
         """Ejecutar query del agente con historial en JSONL"""
@@ -37,21 +47,29 @@ class AgentClient:
         history = self.history.load()
 
         # Construir prompt con el historial y el nuevo mensaje
-        full_prompt = self.history.build_prompt(history, prompt)
+        # (con prompt template de respuestas estructuradas)
+        from .structured_response import STRUCTURED_RESPONSE_PROMPT_TEMPLATE
+        full_prompt = self.history.build_prompt(history, prompt) + "\n\n" + STRUCTURED_RESPONSE_PROMPT_TEMPLATE
 
-        # Usar query() del SDK
+        # Usar query() del SDK con output_format
         options = ClaudeAgentOptions(
             permission_mode="bypassPermissions",
             cwd=self.cwd,
             include_partial_messages=False,
             model="opus",
             setting_sources=["project"],
+            output_format={
+                "type": "json_schema",
+                "schema": STRUCTURED_RESPONSE_SCHEMA
+            }
         )
 
         old_claudecode = os.environ.pop('CLAUDECODE', None)
         # Acumular todos los mensajes del turno para guardar en historial
         turn_messages = [{"role": "user", "content": prompt}]
         assistant_response = ""
+        self.current_assistant_text = ""
+        self.current_structured_response = None
 
         try:
             async for message in query(prompt=full_prompt, options=options):
@@ -66,6 +84,7 @@ class AgentClient:
 
                         if block_type == "TextBlock":
                             assistant_response += block.text
+                            self.current_assistant_text += block.text
 
                         elif block_type == "ToolUseBlock":
                             # Guardar el text acumulado antes del tool_use
@@ -79,6 +98,9 @@ class AgentClient:
                                     "input": str(block.input) if hasattr(block, 'input') else "",
                                 }
                             })
+                            # Callback de tool used
+                            if self.on_tool_used:
+                                self.on_tool_used()
 
                         elif block_type == "ToolResultBlock":
                             turn_messages.append({
@@ -93,20 +115,39 @@ class AgentClient:
         if assistant_response:
             turn_messages.append({"role": "assistant", "content": assistant_response})
 
+        # Determinar si guardar en historial basado en metadata
+        should_save = True
+        if self.current_structured_response:
+            should_save = self.current_structured_response.should_save_to_history
+
         # Guardar todos los mensajes del turno en historial
         # (siempre guardar aunque la sesión ya no esté activa)
-        self.history.append_batch(turn_messages)
+        if should_save:
+            self.history.append_batch(turn_messages)
+        else:
+            # No guardar en historial, pero guardar en un buffer temporal si es necesario
+            pass
 
     async def _process_message(self, message) -> None:
         """Procesar mensaje del agente"""
         msg_type = message.__class__.__name__
 
         if msg_type == "ResultMessage":
-            return
+            await self._process_result(message)
         elif msg_type == "AssistantMessage":
             await self._process_assistant(message)
         elif msg_type == "UserMessage":
             await self._process_user(message)
+
+    async def _process_result(self, message) -> None:
+        """Procesar ResultMessage - extraer structured_output"""
+        if hasattr(message, 'structured_output'):
+            structured = parse_structured_output(message.structured_output)
+            self.current_structured_response = structured
+
+            # Callback de respuesta estructurada para gamificación
+            if structured and self.on_structured_response:
+                self.on_structured_response(structured)
 
     async def _process_assistant(self, message) -> None:
         """Procesar AssistantMessage"""

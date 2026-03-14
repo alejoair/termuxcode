@@ -8,7 +8,8 @@ from textual.reactive import reactive
 from .chat import ChatLog
 from .sessions import SessionManager
 from .styles import CSS
-from .game import StatsManager, XPBar, AchievementPopup, LevelUpBanner
+from .game import StatsManager, XPBar, AchievementPopup, LevelUpBanner, ExtendedStatsManager
+from .game.metadata_achievements import get_all_metadata_achievements
 from .mixins import SessionHandlersMixin, QueryHandlersMixin, GamificationMixin, SessionState
 
 
@@ -28,6 +29,7 @@ class ClaudeChat(
         ("ctrl+n", "new_session", "Nuevo"),
         ("ctrl+w", "close_session", "Cerrar"),
         ("ctrl+s", "toggle_sessions", "Sesiones"),
+        ("tab", "execute_suggestion", "Ejecutar sugerencia"),
     ]
 
     def __init__(self, cwd: str = None, max_history: int = 100):
@@ -40,6 +42,12 @@ class ClaudeChat(
 
         # Sistema de gamificación
         self.stats_manager = StatsManager(Path(self.cwd) / ".sessions")
+
+        # Sistema de gamificación extendido (respuestas estructuradas)
+        self.extended_stats_manager = ExtendedStatsManager(Path(self.cwd) / ".sessions")
+
+        # Guardar última sugerencia para ejecutar con Tab
+        self._last_suggestion: str | None = None
 
     def compose(self) -> ComposeResult:
         """Layout minimalista: solo chat + input compacto"""
@@ -91,6 +99,21 @@ class ClaudeChat(
         """Manejar click en botón nueva sesión"""
         if event.button.id == "new-session-btn":
             await self.action_new_session()
+
+    async def action_execute_suggestion(self) -> None:
+        """Ejecutar la última sugerencia (Tab)"""
+        if not self._last_suggestion:
+            self.chat_log.write("[dim]No hay sugerencia para ejecutar[/dim]")
+            return
+
+        self.chat_log.write(f"[dim]Ejecutando: {self._last_suggestion}[/dim]")
+
+        # Envíar la sugerencia como si fuera un mensaje del usuario
+        self._handle_query(self._last_suggestion)
+
+        # Marcar que el usuario siguió la sugerencia (gamificación)
+        self._on_suggestion_followed()
+        self._last_suggestion = None
 
 
 if __name__ == "__main__":
