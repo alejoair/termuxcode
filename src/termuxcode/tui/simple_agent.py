@@ -1,11 +1,6 @@
 """Agente stateless para consultas simples sin historial ni contexto
 
-Este módulo proporciona un agente simple para consultas puntuales como:
-- Validaciones de cambios de fase
-- Preguntas rápidas sin contexto
-- Auditorías de código
-- Cualquier consulta que no requiera historial ni persistencia
-
+Este módulo proporciona un agente simple para consultas puntuales.
 El agente es "stateless": no mantiene ningún estado entre llamadas,
 no tiene historial, y no se integra con el sistema de sesiones.
 """
@@ -54,21 +49,25 @@ class SimpleAgent:
         self,
         prompt: str,
         model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
         include_tools: bool = False,
-        max_tokens: Optional[int] = None,
     ) -> str:
         """Ejecutar una consulta simple sin historial
 
         Args:
             prompt: Texto de la consulta
             model: Modelo a usar (sonnet, opus, haiku). Si es None, usa default_model
+            system_prompt: Prompt del sistema opcional
             include_tools: Si incluir herramientas en el query
-            max_tokens: Máximo de tokens de respuesta
 
         Returns:
             Respuesta del agente como texto
         """
         model = model or self.default_model
+
+        # Prepend system prompt si se proporciona
+        if system_prompt:
+            prompt = f"{system_prompt}\n\n{prompt}"
 
         # Opciones del agente
         options = ClaudeAgentOptions(
@@ -91,114 +90,69 @@ class SimpleAgent:
 
         return "".join(response_parts)
 
-    async def query_with_validation(
+    async def query_structured(
         self,
         prompt: str,
+        output_schema: dict,
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        include_tools: bool = False,
-    ) -> str:
-        """Ejecutar consulta con prompt del sistema personalizado
+    ) -> dict:
+        """Ejecutar query con structured output (JSON schema)
 
         Args:
-            prompt: Texto de la consulta
-            model: Modelo a usar
-            system_prompt: Prompt del sistema (rol/instrucciones)
-            include_tools: Si incluir herramientas
+            prompt: Prompt principal
+            output_schema: JSON schema para la salida estructurada
+            model: Modelo a usar (por defecto usa default_model)
+            system_prompt: System prompt opcional
 
         Returns:
-            Respuesta del agente
+            Dict con la respuesta estructurada
+
+        Raises:
+            Exception: Si hay error en el query o parsing de respuesta
         """
+        model = model or self.default_model
+
+        # Prepend system prompt si se proporciona
         if system_prompt:
-            full_prompt = f"{system_prompt}\n\n{prompt}"
-        else:
-            full_prompt = prompt
+            prompt = f"{system_prompt}\n\n{prompt}"
 
-        return await self.query(full_prompt, model=model, include_tools=include_tools)
-
-    async def validate_phase_change(
-        self,
-        validation_prompt: str,
-        model: str = MODEL_SONNET,
-    ) -> str:
-        """Validar un cambio de fase (caso de uso específico)
-
-        Args:
-            validation_prompt: Prompt de validación generado por el sistema
-            model: Modelo a usar (por defecto sonnet para auditoría)
-
-        Returns:
-            Respuesta de validación
-        """
-        # Agregar contexto adicional para la validación
-        system_prompt = """Eres un auditor de calidad de código y procesos.
-Tu tarea es validar cambios de fase y proporcionar feedback constructivo."""
-
-        result = await self.query_with_validation(
-            prompt=validation_prompt,
+        # Opciones del agente con output format
+        options = ClaudeAgentOptions(
+            permission_mode=self.permission_mode,
+            cwd=self.cwd,
+            include_partial_messages=False,
             model=model,
-            system_prompt=system_prompt,
-            include_tools=False,
+            setting_sources=[],
+            output_format={
+                "type": "json_schema",
+                "json_schema": output_schema,
+            },
         )
 
-        if self.chat_log:
-            self.chat_log.write(f"[bold yellow]🔍 Validación:[/bold yellow]")
-            self.chat_log.write(result)
+        # Ejecutar query y extraer structured_output
+        structured_result = None
+        text_parts = []
+        try:
+            async for message in query(prompt=prompt, options=options):
+                # Procesar para mostrar en chat log
+                await self._process_message(message, text_parts, include_tools=False)
 
-        return result
+                # Extraer structured_output de ResultMessage
+                msg_type = message.__class__.__name__
+                if msg_type == "ResultMessage":
+                    if hasattr(message, 'structured_output'):
+                        structured_result = message.structured_output
 
-    async def code_review(
-        self,
-        code: str,
-        language: Optional[str] = None,
-        focus: Optional[str] = None,
-    ) -> str:
-        """Hacer un code review rápido
+        except Exception as e:
+            if self.chat_log:
+                self.chat_log.write(f"[red]Error en query_structured: {e}[/red]")
+            raise
 
-        Args:
-            code: Código a revisar
-            language: Lenguaje de programación (opcional)
-            focus: Foco de la revisión (ej. "seguridad", "performance", "estilo")
+        if not structured_result:
+            raise ValueError("No se recibió structured_output en la respuesta")
 
-        Returns:
-            Review del código
-        """
-        lang_suffix = f" en {language}" if language else ""
-        focus_suffix = f". Enfócate en: {focus}" if focus else "."
-
-        prompt = f"""Revisa este código{lang_suffix}{focus_suffix}
-
-```{language or ''}
-{code}
-```
-
-Proporciona:
-1. Problemas encontrados (si hay)
-2. Sugerencias de mejora
-3. Calificación general (1-10)
-"""
-
-        return await self.query(prompt, model=self.MODEL_SONNET, include_tools=False)
-
-    async def ask_question(
-        self,
-        question: str,
-        context: Optional[str] = None,
-    ) -> str:
-        """Hacer una pregunta rápida
-
-        Args:
-            question: Pregunta
-            context: Contexto adicional (opcional)
-
-        Returns:
-            Respuesta
-        """
-        prompt = question
-        if context:
-            prompt = f"{context}\n\nPregunta: {question}"
-
-        return await self.query(prompt, model=self.MODEL_HAIKU, include_tools=False)
+        return structured_result
 
     async def _process_message(
         self,

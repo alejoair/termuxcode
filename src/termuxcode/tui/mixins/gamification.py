@@ -208,7 +208,7 @@ class GamificationMixin:
             self._update_xp_bar()
 
     async def _validate_phase_change(self: "ClaudeChat") -> None:
-        """Validar el último cambio de fase con otro LLM usando SimpleAgent"""
+        """Validar el último cambio de fase con otro LLM usando SimpleAgent genérico"""
         if not hasattr(self, 'extended_stats_manager'):
             return
 
@@ -238,29 +238,52 @@ class GamificationMixin:
             "[dim]Generando validación con auditor de calidad...[/dim]"
         )
 
-        # Usar SimpleAgent para validar el cambio (stateless, sin historial)
+        # Usar SimpleAgent genérico con el trigger de validación
         from ..simple_agent import SimpleAgent
+        from ..simple_agent_triggers import PHASE_VALIDATION_TRIGGER
 
         simple_agent = SimpleAgent(
             chat_log=self.chat_log,
             cwd=self.cwd,
-            default_model="sonnet",  # Usar sonnet para auditoría
+            default_model="sonnet",
             permission_mode="bypassPermissions",
         )
 
         try:
-            # Validar con el agente stateless
-            await simple_agent.validate_phase_change(
-                validation_prompt,
-                model="sonnet"
+            # Validar con el agente genérico usando el trigger
+            result = await simple_agent.query_structured(
+                prompt=PHASE_VALIDATION_TRIGGER.build_prompt(validation_prompt=validation_prompt),
+                output_schema=PHASE_VALIDATION_TRIGGER.output_schema,
+                system_prompt=PHASE_VALIDATION_TRIGGER.system_prompt,
+                model="sonnet",
             )
+
+            # Mostrar el feedback de validación
+            feedback_text = result.get("feedback_text", "")
+            if feedback_text:
+                self.chat_log.write(f"[bold yellow]🔍 Validación:[/bold yellow] {feedback_text}")
+
+            # Mostrar detalles adicionales
+            validation_score = result.get("validation_score", 0)
+            self.chat_log.write(f"[dim]Puntuación de validación: {validation_score:.1%}[/dim]")
+
+            recommendation = result.get("recommendation", "continue")
+            rec_icons = {
+                "continue": "✅",
+                "return_to_previous": "⏪",
+                "pause": "⏸️",
+            }
+            rec_text = {
+                "continue": "Continuar con la nueva fase",
+                "return_to_previous": "Volver a la fase anterior",
+                "pause": "Pausar y revisar antes de continuar",
+            }
+            self.chat_log.write(f"[{rec_icons.get(recommendation, '❓')}] {rec_text.get(recommendation, 'Revisar')}")
+
         except Exception as e:
             self.chat_log.write(
                 f"[red]Error en validación de fase: {e}[/red]"
             )
-
-        # Guardar validación en el historial (opcional)
-        # state.history.append("system", validation_prompt, metadata={"type": "phase_validation"})
 
     def _check_phase_change_after_response(self: "ClaudeChat") -> None:
         """Verificar si hubo un cambio de fase después de la respuesta"""
@@ -272,5 +295,3 @@ class GamificationMixin:
             # Programar la validación como async task
             # Esto se ejecutará después de completar el mensaje actual
             self.call_later(self._validate_phase_change)
-
-
