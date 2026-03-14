@@ -44,7 +44,8 @@ class AgentClient:
             permission_mode="bypassPermissions",
             cwd=self.cwd,
             include_partial_messages=False,
-            max_budget_usd=0.10,
+            model="opus",
+            setting_sources=["project"],
         )
 
         old_claudecode = os.environ.pop('CLAUDECODE', None)
