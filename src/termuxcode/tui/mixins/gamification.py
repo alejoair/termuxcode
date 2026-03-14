@@ -239,7 +239,7 @@ class GamificationMixin:
         )
 
         # Usar SimpleAgent para validar el cambio (stateless, sin historial)
-        from .simple_agent import SimpleAgent
+        from ..simple_agent import SimpleAgent
 
         simple_agent = SimpleAgent(
             chat_log=self.chat_log,

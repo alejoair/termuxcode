@@ -21,6 +21,7 @@ from .feedback_filter import (
     FilteredAgentFeedback,
     format_filtered_feedback,
 )
+from .simple_agent import SimpleAgent
 
 __all__ = [
     'ClaudeChat',
@@ -44,4 +45,6 @@ __all__ = [
     'FeedbackHistory',
     'FilteredAgentFeedback',
     'format_filtered_feedback',
+    # Simple agent
+    'SimpleAgent',
 ]

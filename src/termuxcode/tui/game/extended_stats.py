@@ -6,6 +6,7 @@ import json
 from typing import Callable
 
 from .stats import GameStats
+from .change_detector import ChangeManager
 
 
 @dataclass
@@ -401,6 +402,24 @@ class ExtendedStatsManager:
         self._stats: ExtendedGameStats | None = None
         self._on_achievement: Callable[[object], None] | None = None
         self._on_level_up: Callable[[int], None] | None = None
+        self._change_manager: ChangeManager | None = None
+
+    @property
+    def change_manager(self) -> ChangeManager:
+        """Obtener el ChangeManager (crear si no existe)"""
+        if self._change_manager is None:
+            # Configurar ChangeManager sin LLM por defecto
+            self._change_manager = ChangeManager()
+        return self._change_manager
+
+    def set_llm_validator(self, llm_query_func: Callable) -> None:
+        """
+        Configurar función LLM para validación
+
+        Args:
+            llm_query_func: Función async para consultar LLM
+        """
+        self._change_manager = ChangeManager(llm_query_func=llm_query_func)
 
     @property
     def stats(self) -> ExtendedGameStats:
@@ -739,3 +758,51 @@ Proporciona una respuesta clara y concisa. Si detectas problemas, sé específic
                 unlocked.append(ach)
 
         return unlocked
+
+    async def process_changes_async(
+        self,
+        current_values: dict[str, Any],
+        context: dict | None = None
+    ) -> tuple[int, list]:
+        """
+        Procesar cambios de forma asíncrona usando ChangeManager
+
+        Args:
+            current_values: Valores actuales a monitorear
+            context: Contexto adicional para validación
+
+        Returns:
+            (xp_gained, achievements)
+        """
+        xp_gained = 0
+        achievements = []
+
+        if not self._change_manager:
+            return xp_gained, achievements
+
+        # Detectar y validar cambios
+        changes, validations = await self._change_manager.process_changes(
+            current_values,
+            context=context
+        )
+
+        # XP bonus por cambios detectados
+        xp_gained += len(changes) * 5
+
+        # XP bonus por validaciones exitosas
+        passed_validations = [v for v in validations if v.passed]
+        xp_gained += len(passed_validations) * 3
+
+        # Notificar validaciones fallidas
+        failed_validations = [v for v in validations if not v.passed]
+        if failed_validations and self._on_achievement:
+            # Notificar como "warning" en lugar de logro
+            for validation in failed_validations:
+                self._on_achievement({
+                    "type": "validation_warning",
+                    "message": validation.message,
+                    "recommendations": validation.recommendations,
+                    "field": validation.change.field_path
+                })
+
+        return xp_gained, achievements

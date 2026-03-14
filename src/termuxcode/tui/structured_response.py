@@ -22,6 +22,25 @@ STRUCTURED_RESPONSE_SCHEMA = {
                 "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                 "requires_context_refresh": {"type": "boolean"},
                 "related_files": {"type": "array", "items": {"type": "string"}},
+                # CAMPOS DE CLASIFICACIÓN DEL PROMPT DEL USUARIO
+                "user_prompt_objective": {"type": "string"},
+                "user_prompt_classification": {
+                    "type": "string",
+                    "enum": [
+                        "single_task",       # Tarea única específica (ej. "crear un archivo", "ejecutar un comando")
+                        "research",          # Investigación/análisis (ej. "cómo funciona X", "buscar patrones")
+                        "plan",             # Planificación/estrategia (ej. "diseñar arquitectura", "crear plan de implementación")
+                        "implementation",   # Implementación de código complejo (múltiples archivos, cambios grandes)
+                        "debugging",        # Corrección de errores (ej. "fix bug X", "investigar error")
+                        "testing",          # Escribir/pruebas (ej. "agregar tests", "verificar funcionalidad")
+                        "code_review",      # Revisión de código (ej. "revisar PR", "mejorar código existente")
+                        "documentation",    # Escribir documentación (ej. "agregar comentarios", "crear README")
+                        "refactoring",      # Refactorización de código (mejorar estructura, performance)
+                        "explanation",      # Explicación de conceptos (ej. "explicar X", "cómo funciona Y")
+                        "offtopic",         # Small talk, saludos, conversación casual
+                        "meta"              # Metadiscusión sobre el trabajo (ej. "qué hice bien", "mejorar feedback")
+                    ]
+                },
                 # NUEVOS CAMPOS: Reflexión y objetivos personales
                 "self_reflection": {"type": "string"},
                 "personal_goal": {"type": "string"},
@@ -43,6 +62,29 @@ IMPORTANTE: Tu respuesta debe ser estructurada con la siguiente información:
 1. **response**: Tu respuesta principal (texto claro y útil)
 
 2. **metadata**: Información adicional sobre tu respuesta:
+
+   **CLASIFICACIÓN DEL PROMPT DEL USUARIO:**
+   - **user_prompt_objective**: Qué entiendes que es el objetivo del usuario con su prompt. Sé específico.
+     Ejemplos:
+     - "El usuario quiere crear un nuevo archivo de configuración"
+     - "El usuario necesita entender cómo funciona el sistema de sesiones"
+     - "El usuario está investigando un bug en la función X"
+
+   - **user_prompt_classification**: Clasificación del tipo de prompt (DEBE ser una de estas opciones EXACTAS):
+     • **single_task**: Tarea única específica (ej. "crear un archivo", "ejecutar un comando", "editar una función")
+     • **research**: Investigación/análisis (ej. "cómo funciona X", "buscar patrones", "explicar arquitectura")
+     • **plan**: Planificación/estrategia (ej. "diseñar arquitectura", "crear plan de implementación")
+     • **implementation**: Implementación de código complejo (múltiples archivos, cambios grandes)
+     • **debugging**: Corrección de errores (ej. "fix bug X", "investigar error")
+     • **testing**: Escribir/pruebas (ej. "agregar tests", "verificar funcionalidad")
+     • **code_review**: Revisión de código (ej. "revisar PR", "mejorar código existente")
+     • **documentation**: Escribir documentación (ej. "agregar comentarios", "crear README")
+     • **refactoring**: Refactorización de código (mejorar estructura, performance, limpiar código)
+     • **explanation**: Explicación de conceptos (ej. "explicar X", "cómo funciona Y")
+     • **offtopic**: Small talk, saludos, conversación casual (no relacionada con trabajo)
+     • **meta**: Metadiscusión sobre el trabajo (ej. "qué hice bien", "mejorar feedback", "preguntar sobre progreso")
+
+   **METADATA DE TU RESPUESTA:**
    - **next_suggested_immediate_action**: Qué acción debe realizar el usuario a continuación (ej. "leer archivo X", "ejecutar comando Y", "revisar documentación")
    - **is_useful_to_record_in_history**: true si este mensaje es útil guardar en el historial, false si es solo small talk
    - **advances_current_task**: true si esta respuesta aporta progreso real a la tarea actual
@@ -51,6 +93,7 @@ IMPORTANTE: Tu respuesta debe ser estructurada con la siguiente información:
    - **requires_context_refresh** (opcional): true si se necesita recargar archivos del proyecto
    - **related_files** (opcional): Lista de archivos relevantes mencionados
 
+   **REFLEXIÓN Y OBJETIVOS PERSONALES:**
    - **self_reflection** (opcional): Reflexiona sobre TU trabajo en este turno. Sé honesto:
      - ¿Qué hiciste bien?
      - ¿Qué podrías mejorar?
@@ -78,6 +121,7 @@ IMPORTANTE: Tu respuesta debe ser estructurada con la siguiente información:
      Actualiza este valor cada turno basado en tu progreso.
 
 El sistema usará esta metadata para:
+- Clasificar los prompts del usuario para optimizar el historial (ej. no pasar mucho historial para offtopic)
 - Filtrar mensajes que no aportan valor (ahorrar espacio en historial)
 - Sugerir próximas acciones automáticamente
 - Rastrear progreso por fases de tarea
@@ -106,6 +150,22 @@ class ResponseMetadata:
     confidence: float | None = None
     requires_context_refresh: bool = False
     related_files: list[str] = field(default_factory=list)
+    # CAMPOS DE CLASIFICACIÓN DEL PROMPT DEL USUARIO
+    user_prompt_objective: str = ""
+    user_prompt_classification: Literal[
+        "single_task",
+        "research",
+        "plan",
+        "implementation",
+        "debugging",
+        "testing",
+        "code_review",
+        "documentation",
+        "refactoring",
+        "explanation",
+        "offtopic",
+        "meta"
+    ] = "single_task"
     # NUEVOS CAMPOS: Reflexión y objetivos personales
     self_reflection: str = ""
     personal_goal: str = ""
@@ -185,7 +245,10 @@ def parse_structured_output(data: dict[str, Any] | None) -> StructuredResponse |
             confidence=metadata_data.get("confidence"),
             requires_context_refresh=metadata_data.get("requires_context_refresh", False),
             related_files=metadata_data.get("related_files", []),
-            # NUEVOS CAMPOS
+            # CAMPOS DE CLASIFICACIÓN DEL PROMPT DEL USUARIO
+            user_prompt_objective=metadata_data.get("user_prompt_objective", ""),
+            user_prompt_classification=metadata_data.get("user_prompt_classification", "single_task"),
+            # NUEVOS CAMPOS: Reflexión y objetivos personales
             self_reflection=metadata_data.get("self_reflection", ""),
             personal_goal=metadata_data.get("personal_goal", ""),
             long_term_goal=metadata_data.get("long_term_goal", ""),
@@ -216,6 +279,26 @@ def format_advances_badge(advances: bool) -> str | None:
     if advances:
         return "[✓ AVANZA TAREA]"
     return None
+
+
+def format_classification_badge(classification: str) -> str | None:
+    """Formato de badge para clasificación del prompt del usuario"""
+    icons = {
+        "single_task": "🔧",
+        "research": "🔍",
+        "plan": "📋",
+        "implementation": "🏗️",
+        "debugging": "🐛",
+        "testing": "✅",
+        "code_review": "👀",
+        "documentation": "📝",
+        "refactoring": "♻️",
+        "explanation": "💬",
+        "offtopic": "💭",
+        "meta": "🔄"
+    }
+    icon = icons.get(classification, "❓")
+    return f"[{icon} {classification.upper()}]"
 
 
 def format_suggestion_box(suggestion: str) -> str:
@@ -284,3 +367,120 @@ def format_agent_feedback(
     feedback += "════════════════════════════════════════════════════\n"
 
     return feedback
+
+
+# =============================================================================
+# NUEVO: Schema para Validación de Fases
+# =============================================================================
+
+# Schema JSON para validación de fases
+PHASE_VALIDATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "from_phase_completed_correctly": {
+            "type": "boolean",
+            "description": "¿Se completó correctamente la fase anterior?"
+        },
+        "from_phase_summary": {
+            "type": "string",
+            "description": "Resumen de lo que se hizo en la fase anterior"
+        },
+        "from_phase_missing": {
+            "type": "string",
+            "description": "Qué faltó en la fase anterior (si algo faltó)"
+        },
+        "phase_change_appropriate": {
+            "type": "boolean",
+            "description": "¿Es apropiado pasar a la nueva fase?"
+        },
+        "phase_change_justification": {
+            "type": "string",
+            "description": "Justificación de por qué es (o no es) apropiado el cambio"
+        },
+        "unresolved_dependencies": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Dependencias no resueltas (si hay alguna)"
+        },
+        "suggested_improvements": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Sugerencias de mejora para el futuro"
+        },
+        "risks_identified": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Riesgos identificados"
+        },
+        "recommendation": {
+            "type": "string",
+            "enum": ["continue", "return_to_previous", "pause"],
+            "description": "Recomendación: continue (seguir), return_to_previous (volver a fase anterior), pause (pausar y revisar)"
+        },
+        "validation_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Puntuación de validación (0.0 - 1.0)"
+        },
+        "feedback_text": {
+            "type": "string",
+            "description": "Texto de feedback completo para mostrar en el chat"
+        }
+    },
+    "required": [
+        "from_phase_completed_correctly",
+        "from_phase_summary",
+        "phase_change_appropriate",
+        "recommendation",
+        "validation_score",
+        "feedback_text"
+    ],
+    "additionalProperties": False
+}
+
+
+# Prompt template para validación de fases
+PHASE_VALIDATION_PROMPT_TEMPLATE = """
+IMPORTANTE: Tu respuesta debe ser estructurada con el siguiente formato JSON:
+
+1. **from_phase_completed_correctly** (boolean): ¿Se completó correctamente la fase anterior?
+
+2. **from_phase_summary** (string): Resumen breve de lo que se hizo en la fase anterior
+
+3. **from_phase_missing** (string, opcional): Qué faltó en la fase anterior (si algo faltó)
+
+4. **phase_change_appropriate** (boolean): ¿Es apropiado pasar a la nueva fase?
+
+5. **phase_change_justification** (string): Justificación de por qué es (o no es) apropiado el cambio
+
+6. **unresolved_dependencies** (array of strings, opcional): Dependencias no resueltas (si hay alguna)
+
+7. **suggested_improvements** (array of strings, opcional): Sugerencias de mejora para el futuro
+
+8. **risks_identified** (array of strings, opcional): Riesgos identificados
+
+9. **recommendation** (enum): Una de:
+   - "continue": Seguir adelante con la nueva fase
+   - "return_to_previous": Volver a la fase anterior
+   - "pause": Pausar y revisar antes de continuar
+
+10. **validation_score** (number, 0.0-1.0): Puntuación de validación del cambio de fase
+
+11. **feedback_text** (string): Texto de feedback completo para mostrar en el chat
+
+Ejemplo de respuesta JSON:
+{
+    "from_phase_completed_correctly": true,
+    "from_phase_summary": "Se definió la arquitectura del sistema y se crearon los modelos de datos básicos",
+    "from_phase_missing": "",
+    "phase_change_appropriate": true,
+    "phase_change_justification": "La arquitectura está bien definida y los requisitos están claros",
+    "unresolved_dependencies": [],
+    "suggested_improvements": ["Agregar más tests unitarios en la fase de implementación"],
+    "risks_identified": ["Posible problema de rendimiento con la base de datos"],
+    "recommendation": "continue",
+    "validation_score": 0.9,
+    "feedback_text": "✅ La fase de planificación se completó correctamente. Se definió la arquitectura y los requisitos están claros. Es apropiado pasar a implementación. Sugerencia: Agregar más tests unitarios durante la implementación. Puntuación: 0.9/1.0"
+}
+"""
