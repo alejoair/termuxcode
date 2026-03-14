@@ -542,13 +542,13 @@ class ExtendedStatsManager:
         Obtener datos de feedback para el agente
 
         Returns:
-            Dict con: last_reflection, personal_goal, goal_achieved,
+            Dict con: recent_reflections, personal_goal, goal_achieved,
                      goal_streak, recent_achievements
         """
         stats = self.stats
 
         return {
-            "last_reflection": stats.recent_reflections[-1] if stats.recent_reflections else "",
+            "recent_reflections": stats.recent_reflections,  # Lista de reflexiones (últimas 5)
             "personal_goal": stats.personal_goal,
             "goal_achieved": stats.personal_goal_achieved,
             "goal_streak": stats.personal_goal_streak,

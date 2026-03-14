@@ -2,9 +2,9 @@
 import json
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
-from .filters import FilterConfig, preprocess_history, estimate_prompt_size
+from .filters import FilterManager, estimate_prompt_size
 from .feedback_filter import FeedbackFilter, FeedbackFilterConfig, format_filtered_feedback
 
 
@@ -13,7 +13,12 @@ class MessageHistory:
 
     def __init__(self, filename: str = "messages.jsonl", max_messages: int = 100,
                  session_id: str = None, cwd: str = None,
-                 filter_config: FilterConfig = None,
+                 # Configuración de filtros (directa, sin FilterConfig)
+                 filter_by_useful: Literal[None, False, True] = True,
+                 max_tool_result_length: int | None = 500,
+                 max_assistant_length: int | None = None,
+                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis",
+                 # Configuración de feedback
                  feedback_filter_config: FeedbackFilterConfig = None):
         self.max_messages = max_messages
         self.cwd = Path(cwd) if cwd else Path.cwd()
@@ -21,8 +26,13 @@ class MessageHistory:
         self.session_id = session_id or str(uuid.uuid4())[:8]
         self.filename = filename.replace(".jsonl", f"_{self.session_id}.jsonl")
         self._history_file = self.base_dir / self.filename
+
         # Configuración de filtros para preprocesamiento
-        self.filter_config = filter_config or FilterConfig()
+        self.filter_by_useful = filter_by_useful
+        self.max_tool_result_length = max_tool_result_length
+        self.max_assistant_length = max_assistant_length
+        self.truncate_strategy = truncate_strategy
+
         # Filtro de feedback del agente
         self.feedback_filter = FeedbackFilter(feedback_filter_config or FeedbackFilterConfig())
 
@@ -37,7 +47,20 @@ class MessageHistory:
         if not self._history_file.exists():
             return []
         with open(self._history_file, 'r', encoding='utf-8') as f:
-            return [json.loads(line) for line in f if line.strip()]
+            history = [json.loads(line) for line in f if line.strip()]
+
+        # Migrar mensajes antiguos agregando is_useful
+        migrated = False
+        for msg in history:
+            if "is_useful" not in msg:
+                msg["is_useful"] = True
+                migrated = True
+
+        # Si hubo migración, guardar el archivo actualizado
+        if migrated:
+            self.save(history)
+
+        return history
 
     def save(self, messages: list[dict]) -> None:
         """Guarda el historial en el archivo JSONL (limitado a max_messages)"""
@@ -46,22 +69,55 @@ class MessageHistory:
             for msg in messages_to_save:
                 f.write(json.dumps(msg, ensure_ascii=False) + '\n')
 
-    def append(self, role: str, content: str) -> list[dict]:
-        """Agrega un mensaje al historial y lo guarda"""
+    def append_single(self, role: str, content: str | dict, is_useful: bool = True) -> None:
+        """Guarda un solo mensaje al historial sin cargar todo el archivo.
+
+        Args:
+            role: Rol del mensaje ('user', 'assistant', 'tool_use', 'tool_result')
+            content: Contenido del mensaje (string para user/assistant/result, dict para tool_use)
+            is_useful: Si el mensaje es útil para incluir en el prompt (default True)
+        """
+        msg = {"role": role, "content": content, "is_useful": is_useful}
+
+        # Agregar al archivo directamente
+        with open(self._history_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(msg, ensure_ascii=False) + '\n')
+
+        # Aplicar rolling window si es necesario
         history = self.load()
-        history.append({"role": role, "content": content})
+        if len(history) > self.max_messages:
+            self.save(history)
+
+    def append(self, role: str, content: str, is_useful: bool = True) -> list[dict]:
+        """Agrega un mensaje al historial y lo guarda.
+
+        Args:
+            role: Rol del mensaje
+            content: Contenido del mensaje
+            is_useful: Si el mensaje es útil para incluir en el prompt (default True)
+        """
+        history = self.load()
+        history.append({"role": role, "content": content, "is_useful": is_useful})
         self.save(history)
         return history
 
-    def append_batch(self, messages: list[dict]) -> list[dict]:
+    def append_batch(self, messages: list[dict], is_useful: bool = True) -> list[dict]:
         """Agrega múltiples mensajes al historial y lo guarda.
 
         Cada mensaje debe tener 'role' y 'content'.
         Roles soportados: 'user', 'assistant', 'tool_use', 'tool_result'.
         Para 'tool_use': content es dict con 'name' e 'input'.
         Para 'tool_result': content es string con el resultado.
+
+        Args:
+            messages: Lista de mensajes a agregar
+            is_useful: Si los mensajes son útiles para incluir en el prompt (default True)
         """
         history = self.load()
+        # Agregar is_useful a cada mensaje si no tiene el campo
+        for msg in messages:
+            if "is_useful" not in msg:
+                msg["is_useful"] = is_useful
         history.extend(messages)
         self.save(history)
         return history
@@ -73,14 +129,20 @@ class MessageHistory:
             history: Historial de mensajes
             new_message: Nuevo mensaje del usuario
             apply_filters: Si True, aplica los filtros configurados antes de reconstruir
-                (truncar tool_result, etc.)
+                (truncar tool_result, filtrar mensajes no útiles, etc.)
 
         Returns:
             Prompt reconstruido listo para enviar al LLM
         """
-        # Aplicar filtros si están habilitados
-        if apply_filters and self.filter_config:
-            history = preprocess_history(history, self.filter_config)
+        # Aplicar filtros usando FilterManager
+        if apply_filters:
+            manager = FilterManager(
+                filter_by_useful=self.filter_by_useful,
+                max_tool_result_length=self.max_tool_result_length,
+                max_assistant_length=self.max_assistant_length,
+                truncate_strategy=self.truncate_strategy,
+            )
+            history = manager.apply(history)
 
         prompt = ""
         for msg in history:
@@ -153,8 +215,7 @@ class MessageHistory:
         if agent_feedback:
             # Aplicar filtros al feedback (últimas 3 reflexiones, 1 logro, etc.)
             filtered_feedback = self.feedback_filter.filter_feedback(
-                raw_feedback=agent_feedback,
-                current_long_term_progress=agent_feedback.get("long_term_progress", 0)
+                raw_feedback=agent_feedback
             )
 
             # Formatear el feedback filtrado

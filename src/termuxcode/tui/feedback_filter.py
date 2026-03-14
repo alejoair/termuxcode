@@ -128,8 +128,9 @@ class FeedbackFilter:
         """
         # Registrar información en el historial
         self._turn_counter += 1
-        if raw_feedback.get("last_reflection"):
-            self.history.add_reflection(self._turn_counter, raw_feedback["last_reflection"])
+        if raw_feedback.get("recent_reflections"):
+            for reflection in raw_feedback["recent_reflections"]:
+                self.history.add_reflection(self._turn_counter, reflection)
         if raw_feedback.get("recent_achievements"):
             for ach in raw_feedback["recent_achievements"]:
                 self.history.add_achievement(self._turn_counter, {

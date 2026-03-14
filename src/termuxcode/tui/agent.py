@@ -43,7 +43,7 @@ class AgentClient:
     async def query(self, prompt: str) -> None:
         """Ejecutar query del agente con historial en JSONL"""
 
-        # NOTA: El mensaje del usuario ya se mostró en on_input_submitted
+        # NOTA: El mensaje del usuario ya se guardó en on_input_submitted
         # No lo duplicamos aquí
 
         # Cargar historial (ya está truncado a max_messages por save())
@@ -75,18 +75,22 @@ class AgentClient:
         )
 
         old_claudecode = os.environ.pop('CLAUDECODE', None)
-        # Acumular todos los mensajes del turno para guardar en historial
-        turn_messages = [{"role": "user", "content": prompt}]
+        # El mensaje del usuario ya fue guardado en query_handlers.py
+        # Solo acumulamos mensajes del asistente para guardarlos incrementalmente
         assistant_response = ""
         self.current_assistant_text = ""
         self.current_structured_response = None
+
+        # Guardar índice inicial para poder actualizar is_useful después
+        initial_count = self.history.count()
 
         try:
             async for message in query(prompt=full_prompt, options=options):
                 # Solo procesar si la sesión sigue activa
                 if self.is_active_session():
                     await self._process_message(message)
-                # Acumular mensajes para el historial
+                # Guardar mensajes incrementalmente al historial
+                # Por defecto todos son útiles, se actualizarán si la respuesta estructurada dice lo contrario
                 if hasattr(message, 'content') and isinstance(message.content, list):
                     msg_type = message.__class__.__name__
                     for block in message.content:
@@ -97,46 +101,68 @@ class AgentClient:
                             self.current_assistant_text += block.text
 
                         elif block_type == "ToolUseBlock":
-                            # Guardar el text acumulado antes del tool_use
+                            # Guardar el texto acumulado del asistente antes del tool_use
                             if assistant_response:
-                                turn_messages.append({"role": "assistant", "content": assistant_response})
+                                self.history.append_single("assistant", assistant_response, is_useful=True)
                                 assistant_response = ""
-                            turn_messages.append({
-                                "role": "tool_use",
-                                "content": {
-                                    "name": block.name,
-                                    "input": str(block.input) if hasattr(block, 'input') else "",
-                                }
-                            })
+
+                            # Guardar tool_use inmediatamente
+                            self.history.append_single("tool_use", {
+                                "name": block.name,
+                                "input": str(block.input) if hasattr(block, 'input') else "",
+                            }, is_useful=True)
+
                             # Callback de tool used
                             if self.on_tool_used:
                                 self.on_tool_used()
 
                         elif block_type == "ToolResultBlock":
-                            turn_messages.append({
-                                "role": "tool_result",
-                                "content": str(block.content),
-                            })
+                            # Guardar tool_result inmediatamente
+                            self.history.append_single("tool_result", str(block.content), is_useful=True)
         finally:
             if old_claudecode:
                 os.environ['CLAUDECODE'] = old_claudecode
 
         # Guardar texto final del asistente si queda algo pendiente
         if assistant_response:
-            turn_messages.append({"role": "assistant", "content": assistant_response})
+            self.history.append_single("assistant", assistant_response, is_useful=True)
 
-        # Determinar si guardar en historial basado en metadata
-        should_save = True
+        # Verificar si la respuesta estructurada indica que no es útil
+        # Si es así, actualizar todos los mensajes del turno actual
+        is_useful_to_record = True
         if self.current_structured_response:
-            should_save = self.current_structured_response.should_save_to_history
+            is_useful_to_record = self.current_structured_response.is_useful_to_record_in_history
 
-        # Guardar todos los mensajes del turno en historial
-        # (siempre guardar aunque la sesión ya no esté activa)
-        if should_save:
-            self.history.append_batch(turn_messages)
-        else:
-            # No guardar en historial, pero guardar en un buffer temporal si es necesario
-            pass
+        if not is_useful_to_record:
+            # Marcar todos los mensajes del turno actual como no útiles
+            self._mark_turn_as_not_useful(initial_count)
+
+    def _mark_turn_as_not_useful(self, start_index: int) -> None:
+        """Marca todos los mensajes desde start_index como no útiles.
+
+        Solo marca los mensajes del asistente, los mensajes del usuario
+        siempre se marcan como útiles.
+
+        Args:
+            start_index: Índice desde donde empezar a marcar (exclusivo)
+        """
+        import json
+
+        history = self.history.load()
+        if start_index >= len(history):
+            return
+
+        # Actualizar is_useful a False solo para los mensajes del asistente del turno actual
+        updated = False
+        for i in range(start_index, len(history)):
+            # Solo marcar mensajes del asistente como no útiles
+            if history[i].get("role") == "assistant" and history[i].get("is_useful", True):
+                history[i]["is_useful"] = False
+                updated = True
+
+        if updated:
+            # Guardar el historial actualizado
+            self.history.save(history)
 
     async def _process_message(self, message) -> None:
         """Procesar mensaje del agente"""

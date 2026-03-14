@@ -306,3 +306,76 @@ response = await query(
 self.chat_log.write(f"[bold]🔍 Validación:[/bold]\n{response}")
 ```
 
+## Módulo Memory (memory.py)
+
+### Propósito
+Persistencia en disco simplificada con dos estructuras de datos: Fifo (cola) y Blackboard (key-value anidado).
+
+### Uso básico
+```python
+from termuxcode.tui.memory import Fifo, Blackboard
+
+# Fifo - Cola FIFO (CSV)
+fifo = Fifo("queue_name")
+fifo.push("item")
+item = fifo.pop()  # FIFO
+
+# Blackboard - Key-value anidado (JSON)
+bb = Blackboard("board_name")
+bb.set("path.to.value", "data")
+value = bb.get("path.to.value")
+```
+
+### Fifo - Métodos avanzados
+| Método | Descripción |
+|--------|-------------|
+| `push(data)` | Enqueue - agregar al final |
+| `pop() → Any` | Dequeue - remover y retornar primero (None si vacío) |
+| `peek() → Any` | Retornar primero sin remover |
+| `size() → int` | Cantidad de elementos |
+| `is_empty() → bool` | ¿Está vacía? |
+| `to_list() → list` | Copia como lista |
+| `clear()` | Vaciar cola |
+| `memory_dir` | Customizar dir: `Fifo("name", memory_dir="/path")` |
+
+### Blackboard - Métodos avanzados
+| Método | Descripción |
+|--------|-------------|
+| `set(path, value)` | Guardar valor en ruta anidada ("a.b.c") |
+| `get(path, default=None) → Any` | Obtener valor (default si no existe) |
+| `get_all() → dict` | Copia completa del documento |
+| `update(new_data: dict)` | Merge recursivo (deep) con datos existentes |
+| `delete(path) → bool` | Eliminar ruta (True si existía) |
+| `exists(path) → bool` | Verificar si existe ruta |
+| `keys() → list` | Claves de nivel superior |
+| `clear()` | Vaciar todo |
+| `memory_dir` | Customizar dir: `Blackboard("name", memory_dir="/path")` |
+
+### Deep merge en update()
+```python
+bb.set("a.x", 1)
+bb.set("b.y", 2)
+bb.update({"a": {"z": 3}, "c": 4})
+
+# Resultado:
+# {"a": {"x": 1, "z": 3}, "b": {"y": 2}, "c": 4}
+# "a.x" se preserva, "a.z" se agrega, "b.y" se preserva
+```
+
+### Estructura de archivos
+```
+.memory/              # Por defecto en cwd
+├── queue_name.csv    # Fifo: una fila por elemento
+└── board_name.json   # Blackboard: JSON anidado
+```
+
+### Storage (uso interno)
+Clase interna para persistencia JSON/CSV. No se usa directamente en código normal, pero está disponible:
+```python
+from termuxcode.tui.memory import Storage
+
+s = Storage("/path")
+s.save("file.json", {"key": "value"})
+s.save("file.csv", [["a", "b"], ["c", "d"]])
+```
+

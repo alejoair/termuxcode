@@ -50,6 +50,8 @@ class QueryHandlersMixin:
 
         # Mostrar mensaje del usuario inmediatamente
         self.chat_log.write_user(prompt)
+        # Guardar mensaje del usuario inmediatamente en historial (siempre útil)
+        state.history.append("user", prompt)
         self.chat_log.write_thinking()
         self.is_thinking = True
 

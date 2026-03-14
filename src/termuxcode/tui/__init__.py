@@ -2,15 +2,15 @@
 
 from .app import ClaudeChat
 from .history import MessageHistory
-from .filters import FilterConfig, HistoryPreprocessor, preprocess_history
+from .filters import HistoryPreprocessor
 from .structured_response import (
     StructuredResponse,
     ResponseMetadata,
     parse_structured_output,
     STRUCTURED_RESPONSE_SCHEMA,
-    STRUCTURED_RESPONSE_PROMPT_TEMPLATE,
     format_phase_badge,
     format_advances_badge,
+    format_classification_badge,
     format_suggestion_box,
     format_agent_feedback,
 )
