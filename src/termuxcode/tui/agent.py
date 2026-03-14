@@ -67,7 +67,7 @@ class AgentClient:
             cwd=self.cwd,
             include_partial_messages=False,
             model="opus",
-            setting_sources=["project"],
+            setting_sources=["project", "user"],
             output_format={
                 "type": "json_schema",
                 "schema": STRUCTURED_RESPONSE_SCHEMA

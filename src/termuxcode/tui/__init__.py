@@ -21,30 +21,3 @@ from .feedback_filter import (
     FilteredAgentFeedback,
     format_filtered_feedback,
 )
-from .simple_agent import SimpleAgent
-
-__all__ = [
-    'ClaudeChat',
-    'MessageHistory',
-    'FilterConfig',
-    'HistoryPreprocessor',
-    'preprocess_history',
-    # Structured response
-    'StructuredResponse',
-    'ResponseMetadata',
-    'parse_structured_output',
-    'STRUCTURED_RESPONSE_SCHEMA',
-    'STRUCTURED_RESPONSE_PROMPT_TEMPLATE',
-    'format_phase_badge',
-    'format_advances_badge',
-    'format_suggestion_box',
-    'format_agent_feedback',
-    # Feedback filter
-    'FeedbackFilter',
-    'FeedbackFilterConfig',
-    'FeedbackHistory',
-    'FilteredAgentFeedback',
-    'format_filtered_feedback',
-    # Simple agent
-    'SimpleAgent',
-]

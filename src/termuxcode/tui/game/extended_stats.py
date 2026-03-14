@@ -6,7 +6,6 @@ import json
 from typing import Callable
 
 from .stats import GameStats
-from .change_detector import ChangeManager
 
 
 @dataclass
@@ -54,9 +53,6 @@ class ExtendedGameStats(GameStats):
     current_confidence: float = 0.5
     current_confidence_history: list[float] = field(default_factory=list)  # Últimas 20 confianzas
 
-    # Historial de fases (para detectar cambios de fase)
-    phase_history: list[dict] = field(default_factory=list)  # [{"phase": "planificacion", "timestamp": "..."}]
-
     def process_metadata(self, advances_task: bool, phase: str, saved_to_history: bool,
                          has_suggestion: bool, confidence: float | None = None,
                          requires_refresh: bool = False) -> tuple[int, list]:
@@ -68,24 +64,9 @@ class ExtendedGameStats(GameStats):
         """
         xp_gained = 0
         achievements = []
-        phase_changed = False
 
-        # Detectar cambio de fase
-        previous_phase = self.current_phase
-        if phase != self.current_phase:
-            phase_changed = True
-            self.current_phase = phase
-
-            # Agregar al historial de fases
-            from datetime import datetime
-            self.phase_history.append({
-                "phase": phase,
-                "from_phase": previous_phase,
-                "timestamp": datetime.now().isoformat()
-            })
-            # Mantener solo los últimos 50 cambios de fase
-            if len(self.phase_history) > 50:
-                self.phase_history = self.phase_history[-50:]
+        # Actualizar fase actual
+        self.current_phase = phase
 
         # Guardar metadata actual
         self.current_advances_task = advances_task
@@ -146,10 +127,6 @@ class ExtendedGameStats(GameStats):
             "otro": 1
         }
         xp_gained += phase_bonus.get(phase, 1)
-
-        # XP bonus por cambio de fase
-        if phase_changed:
-            xp_gained += 15
 
         # Verificar logros
         achievements.extend(self._check_metadata_achievements())
@@ -337,15 +314,8 @@ class ExtendedGameStats(GameStats):
             "current_advances_task": self.current_advances_task,
             "current_confidence": self.current_confidence,
             "current_confidence_history": self.current_confidence_history,
-            "phase_history": self.phase_history
         })
         return base_dict
-
-    def get_latest_phase_change(self) -> dict | None:
-        """Retorna el último cambio de fase"""
-        if not self.phase_history:
-            return None
-        return self.phase_history[-1]
 
     @classmethod
     def from_dict(cls, data: dict) -> ExtendedGameStats:
@@ -380,8 +350,7 @@ class ExtendedGameStats(GameStats):
             current_phase=data.get("current_phase", "otro"),
             current_advances_task=data.get("current_advances_task", False),
             current_confidence=data.get("current_confidence", 0.5),
-            current_confidence_history=data.get("current_confidence_history", []),
-            phase_history=data.get("phase_history", [])
+            current_confidence_history=data.get("current_confidence_history", [])
         )
 
         # Restaurar estado de logros
@@ -402,24 +371,6 @@ class ExtendedStatsManager:
         self._stats: ExtendedGameStats | None = None
         self._on_achievement: Callable[[object], None] | None = None
         self._on_level_up: Callable[[int], None] | None = None
-        self._change_manager: ChangeManager | None = None
-
-    @property
-    def change_manager(self) -> ChangeManager:
-        """Obtener el ChangeManager (crear si no existe)"""
-        if self._change_manager is None:
-            # Configurar ChangeManager sin LLM por defecto
-            self._change_manager = ChangeManager()
-        return self._change_manager
-
-    def set_llm_validator(self, llm_query_func: Callable) -> None:
-        """
-        Configurar función LLM para validación
-
-        Args:
-            llm_query_func: Función async para consultar LLM
-        """
-        self._change_manager = ChangeManager(llm_query_func=llm_query_func)
 
     @property
     def stats(self) -> ExtendedGameStats:
@@ -660,88 +611,6 @@ class ExtendedStatsManager:
             "recent_achievements": [a for a in stats.achievements if a.unlocked][-5:]  # Últimos 5
         }
 
-    def get_phase_change_info(self) -> dict | None:
-        """
-        Obtener información del último cambio de fase
-
-        Returns:
-            Dict con: from_phase, to_phase, timestamp, context
-            o None si no hubo cambios
-        """
-        change = self.stats.get_latest_phase_change()
-        if not change:
-            return None
-
-        stats = self.stats
-
-        return {
-            "from_phase": change.get("from_phase", "desconocido"),
-            "to_phase": change.get("phase", "desconocido"),
-            "timestamp": change.get("timestamp", ""),
-            "context": {
-                "current_confidence": stats.current_confidence,
-                "avg_confidence": sum(stats.current_confidence_history) / len(stats.current_confidence_history) if stats.current_confidence_history else 0,
-                "advances_task_count": stats.advances_task_count,
-                "total_messages": stats.total_messages,
-                "phase_counts": stats.phases_count
-            }
-        }
-
-    def generate_phase_validation_prompt(self, change_info: dict, history: list[dict]) -> str:
-        """
-        Generar prompt para validar un cambio de fase con otro LLM
-
-        Args:
-            change_info: Información del cambio de fase
-            history: Historial de conversación
-
-        Returns:
-            Prompt completo para el LLM validador
-        """
-        from_phase = change_info["from_phase"]
-        to_phase = change_info["to_phase"]
-        context = change_info["context"]
-
-        prompt = f"""# VALIDACIÓN DE CAMBIO DE FASE
-
-## Cambio Detectado
-- **Desde**: {from_phase}
-- **Hacia**: {to_phase}
-- **Timestamp**: {change_info['timestamp']}
-
-## Contexto de la Sesión
-- **Confianza actual**: {context['current_confidence']:.2f}
-- **Confianza promedio**: {context['avg_confidence']:.2f}
-- **Mensajes que avanzan la tarea**: {context['advances_task_count']}
-- **Total de mensajes**: {context['total_messages']}
-- **Contador por fase**: {context['phase_counts']}
-
-## Instrucciones
-Eres un auditor de calidad de código y procesos. Tu tarea es validar que el cambio de fase es correcto.
-
-Responde a estas 3 preguntas:
-
-1. **¿Se completó correctamente la fase {from_phase}?**
-   - ¿Qué se hizo en esta fase?
-   - ¿Hay evidencia de que se completó?
-   - ¿Faltó algo importante?
-
-2. **¿Es apropiado pasar a la fase {to_phase}?**
-   - ¿Es el siguiente paso lógico?
-   - ¿Hay dependencias no resueltas?
-   - ¿Debería volver a una fase anterior?
-
-3. **¿Qué se debe mejorar?**
-   - ¿Hay riesgos o problemas identificados?
-   - ¿Qué se debe corregir antes de continuar?
-   - ¿Recomendaciones para el futuro?
-
-## Tu Respuesta
-Proporciona una respuesta clara y concisa. Si detectas problemas, sé específico sobre qué debe corregirse.
-"""
-
-        return prompt
-
     def _check_reflection_achievements(self) -> list:
         """Verificar logros de reflexiones"""
         unlocked = []
@@ -759,50 +628,3 @@ Proporciona una respuesta clara y concisa. Si detectas problemas, sé específic
 
         return unlocked
 
-    async def process_changes_async(
-        self,
-        current_values: dict[str, Any],
-        context: dict | None = None
-    ) -> tuple[int, list]:
-        """
-        Procesar cambios de forma asíncrona usando ChangeManager
-
-        Args:
-            current_values: Valores actuales a monitorear
-            context: Contexto adicional para validación
-
-        Returns:
-            (xp_gained, achievements)
-        """
-        xp_gained = 0
-        achievements = []
-
-        if not self._change_manager:
-            return xp_gained, achievements
-
-        # Detectar y validar cambios
-        changes, validations = await self._change_manager.process_changes(
-            current_values,
-            context=context
-        )
-
-        # XP bonus por cambios detectados
-        xp_gained += len(changes) * 5
-
-        # XP bonus por validaciones exitosas
-        passed_validations = [v for v in validations if v.passed]
-        xp_gained += len(passed_validations) * 3
-
-        # Notificar validaciones fallidas
-        failed_validations = [v for v in validations if not v.passed]
-        if failed_validations and self._on_achievement:
-            # Notificar como "warning" en lugar de logro
-            for validation in failed_validations:
-                self._on_achievement({
-                    "type": "validation_warning",
-                    "message": validation.message,
-                    "recommendations": validation.recommendations,
-                    "field": validation.change.field_path
-                })
-
-        return xp_gained, achievements

@@ -137,11 +137,6 @@ class GamificationMixin:
                 xp_gained += ref_xp
                 achievements.extend(ref_achievements)
 
-            # Programar procesamiento de cambios genérico (async)
-            if hasattr(self, 'extended_stats_manager') and self.extended_stats_manager.change_manager:
-                # Programar task asíncrono para detectar cambios
-                self.call_later(self._process_all_changes)
-
             # Mostrar XP ganada
             if xp_gained > 0:
                 self.chat_log.write(f"[dim]+{xp_gained} XP por respuesta estructurada[/dim]")
@@ -151,49 +146,6 @@ class GamificationMixin:
                 self._show_achievement(ach)
 
             self._update_xp_bar()
-
-            # Verificar si hubo cambio de fase y programar validación
-            self._check_phase_change_after_response()
-
-    async def _process_all_changes(self: "ClaudeChat") -> None:
-        """Procesar todos los cambios detectados usando el sistema genérico"""
-        if not hasattr(self, 'extended_stats_manager'):
-            return
-
-        stats = self.extended_stats_manager.stats
-
-        # Valores actuales para monitorear cambios
-        current_values = {
-            "current_phase": stats.current_phase,
-            "current_confidence": stats.current_confidence,
-            "personal_goal": stats.personal_goal,
-            "long_term_goal": stats.long_term_goal,
-        }
-
-        # Obtener historial actual para contexto
-        state = self._session_states.get(self._current_session_id)
-        if not state:
-            return
-        history = state.history.load()
-
-        # Procesar cambios de forma asíncrona
-        xp_gained, achievements = await self.extended_stats_manager.process_changes_async(
-            current_values,
-            context={
-                "history": history,
-                "stats": stats.to_dict()
-            }
-        )
-
-        # Mostrar XP por cambios
-        if xp_gained > 0:
-            self.chat_log.write(f"[dim]+{xp_gained} XP por cambios detectados[/dim]")
-
-        # Mostrar logros
-        for ach in achievements:
-            self._show_achievement(ach)
-
-        self._update_xp_bar()
 
     def _on_suggestion_followed(self: "ClaudeChat") -> None:
         """Callback cuando usuario sigue una sugerencia"""
@@ -207,91 +159,3 @@ class GamificationMixin:
 
             self._update_xp_bar()
 
-    async def _validate_phase_change(self: "ClaudeChat") -> None:
-        """Validar el último cambio de fase con otro LLM usando SimpleAgent genérico"""
-        if not hasattr(self, 'extended_stats_manager'):
-            return
-
-        change_info = self.extended_stats_manager.get_phase_change_info()
-        if not change_info:
-            return
-
-        # Obtener historial actual desde el estado de la sesión
-        state = self._session_states.get(self._current_session_id)
-        if not state:
-            return
-
-        history = state.history.load()
-
-        # Generar prompt de validación
-        validation_prompt = self.extended_stats_manager.generate_phase_validation_prompt(
-            change_info, history
-        )
-
-        # Mostrar notificación en el chat
-        self.chat_log.write(
-            f"[bold yellow]⚡ CAMBIO DE FASE DETECTADO:[/bold yellow] "
-            f"{change_info['from_phase'].title()} → {change_info['to_phase'].title()}"
-        )
-
-        self.chat_log.write(
-            "[dim]Generando validación con auditor de calidad...[/dim]"
-        )
-
-        # Usar SimpleAgent genérico con el trigger de validación
-        from ..simple_agent import SimpleAgent
-        from ..simple_agent_triggers import PHASE_VALIDATION_TRIGGER
-
-        simple_agent = SimpleAgent(
-            chat_log=self.chat_log,
-            cwd=self.cwd,
-            default_model="sonnet",
-            permission_mode="bypassPermissions",
-        )
-
-        try:
-            # Validar con el agente genérico usando el trigger
-            result = await simple_agent.query_structured(
-                prompt=PHASE_VALIDATION_TRIGGER.build_prompt(validation_prompt=validation_prompt),
-                output_schema=PHASE_VALIDATION_TRIGGER.output_schema,
-                system_prompt=PHASE_VALIDATION_TRIGGER.system_prompt,
-                model="sonnet",
-            )
-
-            # Mostrar el feedback de validación
-            feedback_text = result.get("feedback_text", "")
-            if feedback_text:
-                self.chat_log.write(f"[bold yellow]🔍 Validación:[/bold yellow] {feedback_text}")
-
-            # Mostrar detalles adicionales
-            validation_score = result.get("validation_score", 0)
-            self.chat_log.write(f"[dim]Puntuación de validación: {validation_score:.1%}[/dim]")
-
-            recommendation = result.get("recommendation", "continue")
-            rec_icons = {
-                "continue": "✅",
-                "return_to_previous": "⏪",
-                "pause": "⏸️",
-            }
-            rec_text = {
-                "continue": "Continuar con la nueva fase",
-                "return_to_previous": "Volver a la fase anterior",
-                "pause": "Pausar y revisar antes de continuar",
-            }
-            self.chat_log.write(f"[{rec_icons.get(recommendation, '❓')}] {rec_text.get(recommendation, 'Revisar')}")
-
-        except Exception as e:
-            self.chat_log.write(
-                f"[red]Error en validación de fase: {e}[/red]"
-            )
-
-    def _check_phase_change_after_response(self: "ClaudeChat") -> None:
-        """Verificar si hubo un cambio de fase después de la respuesta"""
-        if not hasattr(self, 'extended_stats_manager'):
-            return
-
-        change_info = self.extended_stats_manager.get_phase_change_info()
-        if change_info:
-            # Programar la validación como async task
-            # Esto se ejecutará después de completar el mensaje actual
-            self.call_later(self._validate_phase_change)
