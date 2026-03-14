@@ -4,18 +4,23 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from .filters import FilterConfig, preprocess_history, estimate_prompt_size
+
 
 class MessageHistory:
     """Gestiona el historial de mensajes en formato JSONL"""
 
     def __init__(self, filename: str = "messages.jsonl", max_messages: int = 100,
-                 session_id: str = None, cwd: str = None):
+                 session_id: str = None, cwd: str = None,
+                 filter_config: FilterConfig = None):
         self.max_messages = max_messages
         self.cwd = Path(cwd) if cwd else Path.cwd()
         self.base_dir = self._get_history_dir()
         self.session_id = session_id or str(uuid.uuid4())[:8]
         self.filename = filename.replace(".jsonl", f"_{self.session_id}.jsonl")
         self._history_file = self.base_dir / self.filename
+        # Configuración de filtros para preprocesamiento
+        self.filter_config = filter_config or FilterConfig()
 
     def _get_history_dir(self) -> Path:
         """Retorna el directorio donde se guarda el historial"""
@@ -57,8 +62,22 @@ class MessageHistory:
         self.save(history)
         return history
 
-    def build_prompt(self, history: list[dict], new_message: str) -> str:
-        """Construye el prompt con el historial de conversación"""
+    def build_prompt(self, history: list[dict], new_message: str, apply_filters: bool = True) -> str:
+        """Construye el prompt con el historial de conversación.
+
+        Args:
+            history: Historial de mensajes
+            new_message: Nuevo mensaje del usuario
+            apply_filters: Si True, aplica los filtros configurados antes de reconstruir
+                (truncar tool_result, etc.)
+
+        Returns:
+            Prompt reconstruido listo para enviar al LLM
+        """
+        # Aplicar filtros si están habilitados
+        if apply_filters and self.filter_config:
+            history = preprocess_history(history, self.filter_config)
+
         prompt = ""
         for msg in history:
             role = msg.get("role", "")
@@ -75,6 +94,21 @@ class MessageHistory:
                 prompt += f"[Tool result: {content}]\n\n"
         prompt += f"User: {new_message}\n\nAssistant:"
         return prompt
+
+    def estimate_size(self, history: list[dict] = None) -> dict:
+        """Estima el tamaño del prompt reconstruido.
+
+        Args:
+            history: Historial a estimar. Si es None, carga desde archivo.
+
+        Returns:
+            Dict con estadísticas: character_count, line_count, message_breakdown,
+            tool_result_total_size
+        """
+        if history is None:
+            history = self.load()
+
+        return estimate_prompt_size(history)
 
     def clear(self) -> None:
         """Limpia el historial"""

@@ -108,6 +108,53 @@ ruff format .
 ruff check .
 ```
 
+## Módulo de Filtros (filters.py)
+
+### Propósito
+Preprocesamiento de mensajes del historial para controlar el tamaño del prompt reconstruido.
+
+### Funciones principales
+| Función | Descripción |
+|----------|-------------|
+| `FilterConfig` | Configuración de filtros (límites, estrategia de truncado) |
+| `preprocess_history()` | Aplica filtros a todo el historial |
+| `estimate_prompt_size()` | Estima tamaño del prompt reconstruido |
+| `suggest_config()` | Sugiere configuración basada en estadísticas |
+| `HistoryPreprocessor` | Clase para preprocesar con configuración persistente |
+
+### Estrategias de truncado
+- `"ellipsis"`: Corta y agrega "..." (default)
+- `"cut"`: Corta directamente
+- `"summary"`: Corta y agrega "[truncado de X caracteres]"
+
+### Uso en MessageHistory
+```python
+from termuxcode.tui import MessageHistory, FilterConfig
+
+# Configurar límites
+config = FilterConfig(
+    max_tool_result_length=500,  # Truncar tool_result a 500 caracteres
+    truncate_strategy="ellipsis"
+)
+
+history = MessageHistory(
+    session_id="abc123",
+    filter_config=config
+)
+
+# build_prompt() aplica filtros automáticamente
+prompt = history.build_prompt(history.load(), "Nuevo mensaje")
+```
+
+### Deshabilitar filtros temporalmente
+```python
+# Sin filtros para debug o cuando necesitas contexto completo
+prompt = history.build_prompt(history, "msg", apply_filters=False)
+```
+
+### Ver `EXAMPLES_FILTERS.md`
+Documentación completa de ejemplos de uso.
+
 ## Modo Web (Template Custom)
 
 ### Archivos
