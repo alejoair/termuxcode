@@ -12,6 +12,7 @@ from .structured_response import (
     format_phase_badge,
     format_advances_badge,
     format_suggestion_box,
+    format_agent_feedback,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     'format_phase_badge',
     'format_advances_badge',
     'format_suggestion_box',
+    'format_agent_feedback',
 ]

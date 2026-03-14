@@ -21,7 +21,12 @@ STRUCTURED_RESPONSE_SCHEMA = {
                 },
                 "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                 "requires_context_refresh": {"type": "boolean"},
-                "related_files": {"type": "array", "items": {"type": "string"}}
+                "related_files": {"type": "array", "items": {"type": "string"}},
+                # NUEVOS CAMPOS: Reflexión y objetivos personales
+                "self_reflection": {"type": "string"},
+                "personal_goal": {"type": "string"},
+                "long_term_goal": {"type": "string"},
+                "long_term_goal_progress": {"type": "integer", "minimum": 0, "maximum": 100}
             },
             "required": ["next_suggested_immediate_action", "is_useful_to_record_in_history", "advances_current_task", "task_phase"],
             "additionalProperties": False
@@ -36,6 +41,7 @@ STRUCTURED_RESPONSE_PROMPT_TEMPLATE = """
 IMPORTANTE: Tu respuesta debe ser estructurada con la siguiente información:
 
 1. **response**: Tu respuesta principal (texto claro y útil)
+
 2. **metadata**: Información adicional sobre tu respuesta:
    - **next_suggested_immediate_action**: Qué acción debe realizar el usuario a continuación (ej. "leer archivo X", "ejecutar comando Y", "revisar documentación")
    - **is_useful_to_record_in_history**: true si este mensaje es útil guardar en el historial, false si es solo small talk
@@ -45,11 +51,46 @@ IMPORTANTE: Tu respuesta debe ser estructurada con la siguiente información:
    - **requires_context_refresh** (opcional): true si se necesita recargar archivos del proyecto
    - **related_files** (opcional): Lista de archivos relevantes mencionados
 
+   - **self_reflection** (opcional): Reflexiona sobre TU trabajo en este turno. Sé honesto:
+     - ¿Qué hiciste bien?
+     - ¿Qué podrías mejorar?
+     - ¿Te equivoqué en algo? Ejemplo: "No leí el archivo completo antes de editarlo.
+       La próxima vez siempre leeré primero."
+     - ¿Aprendiste algo nuevo?
+
+   - **personal_goal** (opcional): Un objetivo TANGIBLE para TU PRÓXIMO trabajo.
+     Debe ser algo que TÚ puedas controlar y ejecutar.
+     Ejemplos:
+     - "Leer siempre el archivo completo antes de hacer ediciones"
+     - "Probar siempre con `python -m py_compile` después de editar"
+     - "Usar nombres de variables más descriptivos"
+     - "Planificar en comentarios antes de implementar"
+     - "Verificar con Glob/Grep antes de crear archivos nuevos"
+
+   - **long_term_goal** (opcional): Un objetivo de LARGO PLAZO que quieras alcanzar (múltiples turnos).
+     Ejemplos:
+     - "Reducir errores de edición a menos de 5%"
+     - "Hacer 10 commits seguidos sin errores"
+     - "Alcanzar 95% de confianza promedio"
+     - "Probar siempre después de cada cambio"
+
+   - **long_term_goal_progress** (opcional): Progreso del objetivo a largo plazo (0-100).
+     Actualiza este valor cada turno basado en tu progreso.
+
 El sistema usará esta metadata para:
 - Filtrar mensajes que no aportan valor (ahorrar espacio en historial)
 - Sugerir próximas acciones automáticamente
 - Rastrear progreso por fases de tarea
 - Gamificación basada en productividad
+- **Darte feedback sobre tu progreso personal**
+
+IMPORTANTE PARA TU AUTO-MEJORA:
+- **self_reflection**: Sé específico y honesto sobre TU trabajo. Las reflexiones genéricas no ayudan.
+- **personal_goal**: Debe ser algo TANGIBLE que puedas ejecutar en el siguiente turno.
+- **long_term_goal**: Un objetivo ambicioso que te motive a mejorar en el tiempo.
+- **long_term_goal_progress**: Actualiza este valor honestamente cada turno.
+
+Cuando cumplas tus objetivos, recibirás reconocimiento y XP bonuses.
 
 Responde de manera natural y conversacional, pero asegúrate de incluir la metadata correcta.
 """
@@ -65,6 +106,11 @@ class ResponseMetadata:
     confidence: float | None = None
     requires_context_refresh: bool = False
     related_files: list[str] = field(default_factory=list)
+    # NUEVOS CAMPOS: Reflexión y objetivos personales
+    self_reflection: str = ""
+    personal_goal: str = ""
+    long_term_goal: str = ""
+    long_term_goal_progress: int = 0
 
 
 @dataclass
@@ -138,7 +184,12 @@ def parse_structured_output(data: dict[str, Any] | None) -> StructuredResponse |
             task_phase=metadata_data.get("task_phase", "otro"),
             confidence=metadata_data.get("confidence"),
             requires_context_refresh=metadata_data.get("requires_context_refresh", False),
-            related_files=metadata_data.get("related_files", [])
+            related_files=metadata_data.get("related_files", []),
+            # NUEVOS CAMPOS
+            self_reflection=metadata_data.get("self_reflection", ""),
+            personal_goal=metadata_data.get("personal_goal", ""),
+            long_term_goal=metadata_data.get("long_term_goal", ""),
+            long_term_goal_progress=metadata_data.get("long_term_goal_progress", 0)
         )
 
         return StructuredResponse(response=response, metadata=metadata)
@@ -175,3 +226,61 @@ def format_suggestion_box(suggestion: str) -> str:
 ────────────────────────────────────────────────────────────
 [Press Tab to execute this suggestion]
 """
+
+
+def format_agent_feedback(
+    last_reflection: str = "",
+    personal_goal: str = "",
+    goal_achieved: bool = False,
+    goal_streak: int = 0,
+    long_term_goal: str = "",
+    long_term_progress: int = 0,
+    recent_achievements: list = None
+) -> str:
+    """Formato de feedback personalizado para el agente
+
+    Este feedback se incluye en el prompt del agente para motiverlo.
+    """
+    if recent_achievements is None:
+        recent_achievements = []
+
+    feedback = "╔════════════════════════════════════════════════════╗\n"
+    feedback += "║         FEEDBACK PERSONALIZADO                    ║\n"
+    feedback += "╚════════════════════════════════════════════════════╝\n\n"
+
+    # Reflexión del agente
+    if last_reflection:
+        feedback += "📝 Tu reflexión anterior:\n"
+        feedback += f"   {last_reflection}\n\n"
+
+    # Objetivo personal
+    if personal_goal:
+        status_icon = "✅" if goal_achieved else "⏳"
+        status_text = "CUMPLIDO" if goal_achieved else "EN PROGRESO"
+        feedback += f"🎯 Objetivo personal: [{status_icon} {status_text}]\n"
+        feedback += f"   {personal_goal}\n"
+
+        if goal_streak > 0:
+            feedback += f"   🔥 Streak: {goal_streak} objetivos cumplidos consecutivamente\n\n"
+        else:
+            feedback += "\n"
+
+    # Objetivo a largo plazo
+    if long_term_goal:
+        feedback += f"🚀 Objetivo a largo plazo ({long_term_progress}%):\n"
+        feedback += f"   {long_term_goal}\n\n"
+
+    # Logros recientes
+    if recent_achievements:
+        feedback += "🏆 Logros recientes:\n"
+        for ach in recent_achievements[:3]:  # Máx 3 logros recientes
+            feedback += f"   • {ach.name}\n"
+        feedback += "\n"
+
+    feedback += "════════════════════════════════════════════════════\n"
+    feedback += "¡Felicidades por tu progreso! Continúa\n"
+    feedback += "trabajando en tu fase actual y sigue\n"
+    feedback += "esforzándote en tus objetivos personales.\n"
+    feedback += "════════════════════════════════════════════════════\n"
+
+    return feedback

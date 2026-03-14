@@ -49,6 +49,12 @@ class SessionHandlersMixin:
                 # Este callback se llama cuando se usa una herramienta
                 self._on_tool_used()
 
+            def get_agent_feedback():
+                # Este callback retorna feedback para el agente
+                if hasattr(self, 'extended_stats_manager'):
+                    return self.extended_stats_manager.get_feedback_for_agent()
+                return {}
+
             agent = AgentClient(
                 self.chat_log,
                 history,
@@ -57,6 +63,7 @@ class SessionHandlersMixin:
                 is_active_session=is_active,
                 on_structured_response=on_structured_response,
                 on_tool_used=on_tool_used,
+                get_agent_feedback=get_agent_feedback,
             )
             self._session_states[session_id] = SessionState(history, agent)
         return self._session_states[session_id]

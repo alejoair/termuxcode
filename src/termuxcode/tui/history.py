@@ -123,3 +123,41 @@ class MessageHistory:
     def filepath(self) -> Path:
         """Retorna la ruta del archivo de historial"""
         return self._history_file
+
+    def build_prompt_with_feedback(
+        self,
+        history: list[dict],
+        new_message: str,
+        apply_filters: bool = True,
+        agent_feedback: dict = None
+    ) -> str:
+        """Construir prompt incluyendo feedback personalizado para el agente.
+
+        Args:
+            history: Historial de mensajes
+            new_message: Nuevo mensaje del usuario
+            apply_filters: Si True, aplica los filtros configurados
+            agent_feedback: Dict con feedback para el agente (reflexiones, objetivos, etc.)
+
+        Returns:
+            Prompt completo con feedback incluido
+        """
+        from .structured_response import format_agent_feedback
+
+        # Construir prompt base
+        prompt = self.build_prompt(history, new_message, apply_filters=apply_filters)
+
+        # Agregar feedback si existe
+        if agent_feedback:
+            feedback = format_agent_feedback(
+                last_reflection=agent_feedback.get("last_reflection", ""),
+                personal_goal=agent_feedback.get("personal_goal", ""),
+                goal_achieved=agent_feedback.get("goal_achieved", False),
+                goal_streak=agent_feedback.get("goal_streak", 0),
+                long_term_goal=agent_feedback.get("long_term_goal", ""),
+                long_term_progress=agent_feedback.get("long_term_progress", 0),
+                recent_achievements=agent_feedback.get("recent_achievements", [])
+            )
+            prompt += "\n" + feedback
+
+        return prompt

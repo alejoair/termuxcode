@@ -38,6 +38,15 @@ class ExtendedGameStats(GameStats):
     high_confidence_responses: int = 0
     context_refreshes: int = 0
 
+    # NUEVOS: Objetivos personales y reflexiones del agente
+    personal_goal: str = ""
+    personal_goal_achieved: bool = False
+    personal_goal_streak: int = 0
+    long_term_goal: str = ""
+    long_term_goal_progress: int = 0
+    reflections_count: int = 0
+    recent_reflections: list[str] = field(default_factory=list)
+
     def process_metadata(self, advances_task: bool, phase: str, saved_to_history: bool,
                          has_suggestion: bool, confidence: float | None = None,
                          requires_refresh: bool = False) -> tuple[int, list]:
@@ -115,6 +124,57 @@ class ExtendedGameStats(GameStats):
 
         return xp_gained, achievements
 
+    def set_personal_goal(self, goal: str) -> None:
+        """Establecer nuevo objetivo personal del agente"""
+        self.personal_goal = goal
+        self.personal_goal_achieved = False
+
+    def mark_personal_goal_achieved(self, achieved: bool) -> tuple[int, list]:
+        """
+        Marcar si se cumplió el objetivo personal
+
+        Returns:
+            (xp_gained, achievements)
+        """
+        self.personal_goal_achieved = achieved
+        xp_gained = 0
+        achievements = []
+
+        if achieved:
+            self.personal_goal_streak += 1
+            xp_gained = 10  # XP por cumplir objetivo personal
+            achievements.extend(self._check_personal_goal_achievements())
+        else:
+            self.personal_goal_streak = 0
+
+        return xp_gained, achievements
+
+    def update_long_term_goal(self, goal: str, progress: int) -> None:
+        """Actualizar objetivo a largo plazo y su progreso"""
+        if goal != self.long_term_goal:
+            # Nuevo objetivo a largo plazo
+            self.long_term_goal = goal
+        self.long_term_goal_progress = max(0, min(100, progress))
+
+    def add_reflection(self, reflection: str) -> int:
+        """
+        Agregar reflexión del agente
+
+        Returns:
+            XP ganada por reflexión
+        """
+        if not reflection or len(reflection.strip()) < 10:
+            return 0  # Reflexión muy corta no da XP
+
+        self.reflections_count += 1
+        self.recent_reflections.append(reflection)
+
+        # Mantener solo las últimas 5 reflexiones
+        if len(self.recent_reflections) > 5:
+            self.recent_reflections.pop(0)
+
+        return 2  # XP por reflexión constructiva
+
     def _calculate_ratios(self) -> None:
         """Calcular todos los ratios"""
         total = max(1, self.total_messages)
@@ -182,6 +242,29 @@ class ExtendedGameStats(GameStats):
 
         return unlocked
 
+    def _check_personal_goal_achievements(self) -> list:
+        """Verificar logros de objetivos personales"""
+        unlocked = []
+
+        for ach in self.achievements:
+            if ach.unlocked:
+                continue
+
+            if ach.id == "personal_goal_first" and self.personal_goal_streak >= 1:
+                ach.unlocked = True
+                unlocked.append(ach)
+            elif ach.id == "personal_goal_streak_5" and self.personal_goal_streak >= 5:
+                ach.unlocked = True
+                unlocked.append(ach)
+            elif ach.id == "personal_goal_streak_10" and self.personal_goal_streak >= 10:
+                ach.unlocked = True
+                unlocked.append(ach)
+            elif ach.id == "reflector" and self.reflections_count >= 10:
+                ach.unlocked = True
+                unlocked.append(ach)
+
+        return unlocked
+
     def to_dict(self) -> dict:
         """Serializar a diccionario"""
         base_dict = super().to_dict()
@@ -198,7 +281,15 @@ class ExtendedGameStats(GameStats):
             "current_streak": self.current_streak,
             "longest_streak": self.longest_streak,
             "high_confidence_responses": self.high_confidence_responses,
-            "context_refreshes": self.context_refreshes
+            "context_refreshes": self.context_refreshes,
+            # NUEVOS CAMPOS
+            "personal_goal": self.personal_goal,
+            "personal_goal_achieved": self.personal_goal_achieved,
+            "personal_goal_streak": self.personal_goal_streak,
+            "long_term_goal": self.long_term_goal,
+            "long_term_goal_progress": self.long_term_goal_progress,
+            "reflections_count": self.reflections_count,
+            "recent_reflections": self.recent_reflections
         })
         return base_dict
 
@@ -222,7 +313,15 @@ class ExtendedGameStats(GameStats):
             current_streak=data.get("current_streak", 0),
             longest_streak=data.get("longest_streak", 0),
             high_confidence_responses=data.get("high_confidence_responses", 0),
-            context_refreshes=data.get("context_refreshes", 0)
+            context_refreshes=data.get("context_refreshes", 0),
+            # NUEVOS CAMPOS
+            personal_goal=data.get("personal_goal", ""),
+            personal_goal_achieved=data.get("personal_goal_achieved", False),
+            personal_goal_streak=data.get("personal_goal_streak", 0),
+            long_term_goal=data.get("long_term_goal", ""),
+            long_term_goal_progress=data.get("long_term_goal_progress", 0),
+            reflections_count=data.get("reflections_count", 0),
+            recent_reflections=data.get("recent_reflections", [])
         )
 
         # Restaurar estado de logros
@@ -381,3 +480,121 @@ class ExtendedStatsManager:
     def on_level_up(self, callback: Callable[[int], None]) -> None:
         """Registrar callback para subida de nivel"""
         self._on_level_up = callback
+
+    # NUEVOS MÉTODOS: Objetivos personales y reflexiones
+
+    def process_reflection_and_goal(
+        self,
+        reflection: str,
+        personal_goal: str,
+        long_term_goal: str = "",
+        long_term_progress: int = 0
+    ) -> tuple[int, list]:
+        """
+        Procesar reflexión y objetivos personales del agente
+
+        Returns:
+            (xp_gained, achievements)
+        """
+        xp_gained = 0
+        achievements = []
+
+        # Procesar reflexión
+        xp_gained += self.stats.add_reflection(reflection)
+
+        # Establecer nuevo objetivo personal
+        self.stats.set_personal_goal(personal_goal)
+
+        # Actualizar objetivo a largo plazo
+        if long_term_goal:
+            self.stats.update_long_term_goal(long_term_goal, long_term_progress)
+
+        # Verificar logros de reflexiones
+        achievements.extend(self._check_reflection_achievements())
+
+        # Verificar subida de nivel
+        old_level = self.stats.level
+        self.stats.add_xp(xp_gained)
+        levels_gained = 0
+        while self.stats.level < 10 and self.stats.xp >= self.stats.xp_for_next_level:
+            self.stats.level += 1
+            levels_gained += 1
+
+        if levels_gained > 0 and self._on_level_up:
+            self._on_level_up(self.stats.level)
+
+        self.save()
+
+        # Notificar logros
+        for ach in achievements:
+            if self._on_achievement:
+                self._on_achievement(ach)
+
+        return xp_gained, achievements
+
+    def mark_goal_achieved(self, achieved: bool) -> tuple[int, list]:
+        """
+        Marcar si el agente cumplió su objetivo personal
+
+        Returns:
+            (xp_gained, achievements)
+        """
+        xp_gained, achievements = self.stats.mark_personal_goal_achieved(achieved)
+
+        # Verificar subida de nivel
+        old_level = self.stats.level
+        self.stats.add_xp(xp_gained)
+        levels_gained = 0
+        while self.stats.level < 10 and self.stats.xp >= self.stats.xp_for_next_level:
+            self.stats.level += 1
+            levels_gained += 1
+
+        if levels_gained > 0 and self._on_level_up:
+            self._on_level_up(self.stats.level)
+
+        self.save()
+
+        # Notificar logros
+        for ach in achievements:
+            if self._on_achievement:
+                self._on_achievement(ach)
+
+        return xp_gained, achievements
+
+    def get_feedback_for_agent(self) -> dict:
+        """
+        Obtener datos de feedback para el agente
+
+        Returns:
+            Dict con: last_reflection, personal_goal, goal_achieved,
+                     goal_streak, long_term_goal, long_term_progress,
+                     recent_achievements
+        """
+        stats = self.stats
+
+        return {
+            "last_reflection": stats.recent_reflections[-1] if stats.recent_reflections else "",
+            "personal_goal": stats.personal_goal,
+            "goal_achieved": stats.personal_goal_achieved,
+            "goal_streak": stats.personal_goal_streak,
+            "long_term_goal": stats.long_term_goal,
+            "long_term_progress": stats.long_term_goal_progress,
+            "recent_achievements": [a for a in stats.achievements if a.unlocked][-5:]  # Últimos 5
+        }
+
+    def _check_reflection_achievements(self) -> list:
+        """Verificar logros de reflexiones"""
+        unlocked = []
+
+        for ach in self.stats.achievements:
+            if ach.unlocked:
+                continue
+
+            if ach.id == "reflector" and self.stats.reflections_count >= 10:
+                ach.unlocked = True
+                unlocked.append(ach)
+            elif ach.id == "deep_thinker" and self.stats.reflections_count >= 50:
+                ach.unlocked = True
+                unlocked.append(ach)
+
+        return unlocked

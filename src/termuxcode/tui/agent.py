@@ -24,6 +24,8 @@ class AgentClient:
         # Callbacks para gamificación
         on_structured_response: Optional[Callable] = None,
         on_tool_used: Optional[Callable] = None,
+        # Callback para obtener feedback del agente
+        get_agent_feedback: Optional[Callable[[], dict]] = None,
     ):
         self.chat_log = chat_log
         self.history = history
@@ -32,6 +34,7 @@ class AgentClient:
         self.is_active_session = is_active_session or (lambda: True)
         self.on_structured_response = on_structured_response
         self.on_tool_used = on_tool_used
+        self.get_agent_feedback = get_agent_feedback
 
         # Estado de la respuesta estructurada actual
         self.current_structured_response = None
@@ -46,10 +49,19 @@ class AgentClient:
         # Cargar historial (ya está truncado a max_messages por save())
         history = self.history.load()
 
-        # Construir prompt con el historial y el nuevo mensaje
+        # Obtener feedback para el agente (si está disponible)
+        agent_feedback = None
+        if self.get_agent_feedback:
+            agent_feedback = self.get_agent_feedback()
+
+        # Construir prompt con el historial, feedback y el nuevo mensaje
         # (con prompt template de respuestas estructuradas)
         from .structured_response import STRUCTURED_RESPONSE_PROMPT_TEMPLATE
-        full_prompt = self.history.build_prompt(history, prompt) + "\n\n" + STRUCTURED_RESPONSE_PROMPT_TEMPLATE
+        full_prompt = self.history.build_prompt_with_feedback(
+            history, prompt,
+            apply_filters=True,
+            agent_feedback=agent_feedback
+        ) + "\n\n" + STRUCTURED_RESPONSE_PROMPT_TEMPLATE
 
         # Usar query() del SDK con output_format
         options = ClaudeAgentOptions(

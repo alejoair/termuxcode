@@ -139,6 +139,43 @@ METADATA_ACHIEVEMENTS: list[dict] = [
         "icon": "🔄",
         "description": "5 refreshs de contexto solicitados"
     },
+
+    # NUEVOS: Objetivos personales y reflexiones
+    {
+        "id": "personal_goal_first",
+        "name": "Goal Getter",
+        "xp": 50,
+        "icon": "🎯",
+        "description": "Cumple tu primer objetivo personal"
+    },
+    {
+        "id": "personal_goal_streak_5",
+        "name": "Goal Hunter",
+        "xp": 100,
+        "icon": "🏆",
+        "description": "Cumple 5 objetivos personales consecutivos"
+    },
+    {
+        "id": "personal_goal_streak_10",
+        "name": "Goal Master",
+        "xp": 200,
+        "icon": "👑",
+        "description": "Cumple 10 objetivos personales consecutivos"
+    },
+    {
+        "id": "reflector",
+        "name": "Self-Improver",
+        "xp": 60,
+        "icon": "🪞",
+        "description": "Haz 10 reflexiones constructivas"
+    },
+    {
+        "id": "deep_thinker",
+        "name": "Deep Thinker",
+        "xp": 150,
+        "icon": "🧠",
+        "description": "Haz 50 reflexiones constructivas"
+    },
 ]
 
 

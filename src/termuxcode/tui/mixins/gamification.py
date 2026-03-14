@@ -115,6 +115,17 @@ class GamificationMixin:
                 requires_refresh=metadata.requires_context_refresh
             )
 
+            # Procesar reflexión y objetivos personales del agente
+            if metadata.self_reflection or metadata.personal_goal or metadata.long_term_goal:
+                ref_xp, ref_achievements = self.extended_stats_manager.process_reflection_and_goal(
+                    reflection=metadata.self_reflection,
+                    personal_goal=metadata.personal_goal,
+                    long_term_goal=metadata.long_term_goal,
+                    long_term_progress=metadata.long_term_goal_progress
+                )
+                xp_gained += ref_xp
+                achievements.extend(ref_achievements)
+
             # Mostrar XP ganada
             if xp_gained > 0:
                 self.chat_log.write(f"[dim]+{xp_gained} XP por respuesta estructurada[/dim]")
