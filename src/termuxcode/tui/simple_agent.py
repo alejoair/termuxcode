@@ -55,7 +55,6 @@ class SimpleAgent:
         prompt: str,
         model: Optional[str] = None,
         include_tools: bool = False,
-        timeout: Optional[int] = None,
         max_tokens: Optional[int] = None,
     ) -> str:
         """Ejecutar una consulta simple sin historial
@@ -64,7 +63,6 @@ class SimpleAgent:
             prompt: Texto de la consulta
             model: Modelo a usar (sonnet, opus, haiku). Si es None, usa default_model
             include_tools: Si incluir herramientas en el query
-            timeout: Timeout en segundos
             max_tokens: Máximo de tokens de respuesta
 
         Returns:
@@ -81,10 +79,10 @@ class SimpleAgent:
             setting_sources=["project"] if include_tools else [],
         )
 
-        # Ejecutar query
+        # Ejecutar query (SDK query() solo acepta prompt, options, transport)
         response_parts = []
         try:
-            async for message in query(prompt=prompt, options=options, timeout=timeout):
+            async for message in query(prompt=prompt, options=options):
                 await self._process_message(message, response_parts, include_tools)
         except Exception as e:
             if self.chat_log:
