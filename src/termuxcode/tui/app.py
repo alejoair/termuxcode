@@ -10,6 +10,8 @@ from .sessions import SessionManager
 from .styles import CSS
 from .mixins import SessionHandlersMixin, QueryHandlersMixin, SessionState
 from .memory import Initializer
+from .background_manager import BackgroundTaskManager
+from .notification_system import NotificationQueue
 
 
 class ClaudeChat(
@@ -36,6 +38,8 @@ class ClaudeChat(
         self.session_manager = SessionManager(Path(self.cwd) / ".sessions")
         self._current_session_id: str | None = None
         self._session_states: dict[str, SessionState] = {}
+        self.background_manager = BackgroundTaskManager()
+        self.notification_queue = NotificationQueue()
 
     def compose(self) -> ComposeResult:
         """Layout minimalista: solo chat + input compacto"""

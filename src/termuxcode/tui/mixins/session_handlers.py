@@ -7,6 +7,11 @@ from textual.widgets import Tabs, Tab
 if TYPE_CHECKING:
     from ..app import ClaudeChat
     from .session_state import SessionState
+    from ..notification_system import NotificationType
+
+if TYPE_CHECKING:
+    from ..app import ClaudeChat
+    from .session_state import SessionState
 
 
 class SessionHandlersMixin:
@@ -91,15 +96,56 @@ class SessionHandlersMixin:
         self.chat_log.clear()
         await self._load_history(state)
 
+        # Mostrar notificaciones pendientes de esta sesión
+        notifs = self.notification_queue.get_for_session(session_id)
+        if notifs:
+            self.chat_log.write("[dim]--- Notificaciones de background ---[/dim]")
+            for notif in notifs:
+                style_map = {
+                    "success": "[green]✓[/green]",
+                    "error": "[red]✗[/red]",
+                    "info": "[blue]ℹ[/blue]"
+                }
+                style = style_map.get(notif.notification_type.value, "")
+                self.chat_log.write(f"{style} {notif.message}")
+
+            # Marcar como leídas
+            self.notification_queue.mark_as_read(session_id)
+            # Actualizar tabs para quitar el indicador de notificaciones
+            self.call_later(self._update_tabs)
+
         # Restaurar scroll position de la sesión (o ir al fondo si es nueva)
         self.call_later(lambda: self._restore_scroll(state))
 
     async def _update_tabs(self: "ClaudeChat") -> None:
-        """Actualizar tabs según sesiones existentes"""
+        """Actualizar tabs según sesiones existentes con indicadores de estado"""
         await self.tabs.clear()
+        running_sessions = self.background_manager.get_running_sessions()
+
         for session in self.session_manager.list_sessions():
             tab_id = f"tab-{session.id}"
-            await self.tabs.add_tab(Tab(session.name, id=tab_id))
+
+            # Construir label del tab
+            label_parts = []
+
+            # Agregar indicador "●" si está corriendo
+            if session.id in running_sessions:
+                label_parts.append("[dim green]●[/dim]")
+
+            # Agregar indicador "!" si tiene notificaciones no leídas
+            unread_count = self.notification_queue.get_unread_count(session.id)
+            if unread_count > 0:
+                if unread_count == 1:
+                    label_parts.append("[yellow]![/yellow]")
+                else:
+                    label_parts.append(f"[yellow]!{unread_count}[/yellow]")
+
+            # Agregar nombre de la sesión
+            label_parts.append(session.name)
+
+            label = " ".join(label_parts)
+
+            await self.tabs.add_tab(Tab(label, id=tab_id))
 
         if self._current_session_id:
             self.tabs.active = f"tab-{self._current_session_id}"

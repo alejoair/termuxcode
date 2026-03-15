@@ -8,6 +8,7 @@ from textual.widgets import Input
 if TYPE_CHECKING:
     from ..app import ClaudeChat
     from .session_state import SessionState
+    from ..notification_system import NotificationType
 
 
 class QueryHandlersMixin:
@@ -43,11 +44,6 @@ class QueryHandlersMixin:
             self.chat_log.write_error("Estado de sesión no encontrado")
             return
 
-        # Cancelar task anterior si existe y no ha terminado
-        if state.pending_task and not state.pending_task.done():
-            state.pending_task.cancel()
-            self.chat_log.write("[dim]Query anterior cancelado[/dim]")
-
         # Mostrar mensaje del usuario inmediatamente
         self.chat_log.write_user(prompt)
         # Guardar mensaje del usuario inmediatamente en historial (siempre útil)
@@ -55,23 +51,70 @@ class QueryHandlersMixin:
         self.chat_log.write_thinking()
         self.is_thinking = True
 
+        # Crear callback para cuando termine la query
+        def on_complete(session_id: str, error: Exception | None):
+            from ..notification_system import NotificationType
+
+            session = self.session_manager.get_session(session_id)
+            if not session:
+                return
+
+            if error:
+                # Solo mostrar error si estamos en esa sesión
+                if session_id == self._current_session_id:
+                    self.chat_log.write_error(f"Error: {error}")
+                else:
+                    # Guardar notificación para cuando vuelva
+                    self.notification_queue.add(
+                        session_id=session_id,
+                        session_name=session.name,
+                        message=f"Query terminó con error: {error}",
+                        notification_type=NotificationType.ERROR
+                    )
+                    # Actualizar tabs para mostrar indicador de notificación
+                    self.call_later(self._update_tabs)
+            else:
+                # Notificar que terminó si no estamos en esa sesión
+                if session_id != self._current_session_id:
+                    self.notification_queue.add(
+                        session_id=session_id,
+                        session_name=session.name,
+                        message="Query completada",
+                        notification_type=NotificationType.SUCCESS
+                    )
+                    # Actualizar tabs para mostrar indicador de notificación
+                    self.call_later(self._update_tabs)
+
+            # Actualizar estado thinking si seguimos en la misma sesión
+            if session_id == self._current_session_id:
+                self.is_thinking = False
+
         # Crear nuevo task para esta query
-        state.pending_task = asyncio.create_task(
-            self._run_query_safe(state, prompt)
+        coro = self._run_query_safe(state, prompt)
+
+        # Guardar referencia en SessionState
+        state.pending_task = asyncio.create_task(coro)
+
+        # Registrar en background_manager con callback
+        self.background_manager.start_task(
+            session_id=self._current_session_id,
+            coro=state.pending_task,
+            on_complete=on_complete
         )
+
+        # Actualizar tabs para mostrar indicador de que está corriendo
+        self.call_later(self._update_tabs)
 
     async def _run_query_safe(self: "ClaudeChat", state: "SessionState", prompt: str) -> None:
         """Ejecutar query con manejo de errores y cancelación"""
         try:
             await state.agent.query(prompt)
         except asyncio.CancelledError:
-            # Query cancelada por el usuario (cambio de sesión o nuevo mensaje)
-            self.chat_log.write("[dim]Query cancelada[/dim]")
+            # Query cancelada por el usuario (el callback se encarga de manejar esto)
+            pass
         except Exception as e:
-            # Error durante la query
+            # Error durante la query (el callback se encarga de mostrarlo)
             if self._current_session_id == state.agent.session_id:
                 self.chat_log.write_error(f"Error: {e}")
-        finally:
-            # Solo actualizar estado thinking si seguimos en la misma sesión
-            if self._current_session_id == state.agent.session_id:
-                self.is_thinking = False
+            # Re-lanzar para que el callback maneje el error
+            raise
