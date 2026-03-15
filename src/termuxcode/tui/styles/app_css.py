@@ -67,6 +67,18 @@ Screen {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   INPUT ROW - Contenedor para input + botón Stop
+   ═══════════════════════════════════════════════════════════ */
+#input-row {
+    height: 3;
+    background: $panel;
+    align-horizontal: left;
+    align-vertical: middle;
+    padding: 0 1;
+    gap: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
    INPUT - Campo de mensaje compacto
    Usamos la clase -textual-compact que Textual provee
    ═════════════════════════════════════════════════════════════ */
@@ -77,7 +89,8 @@ Screen {
     background: $surface;
     color: $text;
     padding: 0 1;
-    margin-bottom: 1;
+    margin-bottom: 0;
+    width: 1fr;
 }
 
 #message-input.-textual-compact:focus {
@@ -150,9 +163,9 @@ Screen {
     text-style: bold;
 }
 
-/* Botón Stop - estilo consistente con botón + */
+/* Botón Stop - al lado del input, mismo tamaño */
 #stop-btn {
-    height: 2;
+    height: 3;
     width: 3;
     min-width: 3;
     padding: 0;
@@ -161,6 +174,7 @@ Screen {
     color: $warning;
     border: none;
     text-style: bold;
+    align-vertical: middle;
 }
 
 /* Hover: warning color más claro */
