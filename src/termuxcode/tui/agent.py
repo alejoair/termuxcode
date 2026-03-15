@@ -1,4 +1,5 @@
 """Módulo para comunicarse con el agente Claude con historial en JSONL"""
+import os
 from typing import TYPE_CHECKING, Callable, Optional
 
 from claude_agent_sdk import query, ClaudeAgentOptions
