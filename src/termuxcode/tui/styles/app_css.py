@@ -47,18 +47,22 @@ Screen {
    ═══════════════════════════════════════════════════════════ */
 #bottom-container {
     height: auto;
+    width: 100%;
     background: $panel;
     padding: 0;
     border-top: solid $primary;
     dock: bottom;
+    overflow-x: hidden;
 }
 
 /* Fila de tabs (horizontal) */
 #tabs-row {
     height: 2;
+    width: 100%;
     background: $panel;
     align-horizontal: left;
     align-vertical: middle;
+    overflow-x: hidden;
 }
 
 /* Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación */
@@ -71,11 +75,12 @@ Screen {
    ═══════════════════════════════════════════════════════════ */
 #input-row {
     height: 3;
+    width: 100%;
     background: $panel;
     align-horizontal: left;
     align-vertical: middle;
-    padding: 0 1;
-    gap: 1;
+    padding: 0;
+    overflow-x: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -85,12 +90,13 @@ Screen {
 
 /* Sobrescribir estilos del input compacto */
 #message-input.-textual-compact {
-    height: 1;
+    height: 3;
+    width: 1fr;
     background: $surface;
     color: $text;
-    padding: 0 1;
-    margin-bottom: 0;
-    width: 1fr;
+    padding: 0;
+    margin: 0;
+    min-width: 1;
 }
 
 #message-input.-textual-compact:focus {
@@ -115,6 +121,7 @@ Screen {
 #sessions-tabs {
     height: 2;
     width: 1fr;
+    min-width: 1;
     background: $panel;
     border-bottom: solid $primary 50%;
 }
@@ -163,36 +170,34 @@ Screen {
     text-style: bold;
 }
 
-/* Botón Stop - al lado del input, mismo tamaño */
+/* Botón Stop - al lado del input */
 #stop-btn {
     height: 3;
-    width: 3;
-    min-width: 3;
-    padding: 0;
+    min-width: 1;
     margin: 0;
-    background: transparent;
-    color: $warning;
-    border: none;
+    background: orange;
+    color: black;
     text-style: bold;
     align-vertical: middle;
 }
 
 /* Hover: warning color más claro */
 #stop-btn:hover {
-    background: $warning 20%;
-    color: $warning;
+    background: orange;
+    color: black;
 }
 
 /* Focus: indicación visual */
 #stop-btn:focus {
-    background: $warning 20%;
-    text-style: bold;
+    background: orange;
+    color: black;
 }
 
-/* Disabled: desvanecer significativamente */
+/* Disabled: desvanecer ligeramente pero visible */
 #stop-btn:disabled {
-    opacity: 0.3;
-    color: $text-muted;
+    background: darkgray;
+    color: black;
+    text-style: dim;
 }
 
 /* Active momentáneo al hacer click */

@@ -10,12 +10,15 @@ from .schemas import STRUCTURED_RESPONSE_SCHEMA
 if TYPE_CHECKING:
     from .chat import ChatLog
 
+# Tools que detienen el turno al ser detectadas
+_STOP_TOOLS = frozenset({"AskUserQuestion", "StructuredOutput"})
 
-def _get_metadata(structured: dict | None, key: str, default=None):
-    """Obtener un campo de metadata con valor por defecto."""
-    if not structured or "metadata" not in structured:
+
+def _get_field(structured: dict | None, key: str, default=None):
+    """Obtener un campo del structured output con valor por defecto."""
+    if not structured:
         return default
-    return structured["metadata"].get(key, default)
+    return structured.get(key, default)
 
 
 class AgentClient:
@@ -60,7 +63,7 @@ class AgentClient:
             output_format={
                 "type": "json_schema",
                 "schema": STRUCTURED_RESPONSE_SCHEMA
-            }
+            },
         )
 
         old_claudecode = os.environ.pop('CLAUDECODE', None)
@@ -68,6 +71,7 @@ class AgentClient:
         # Solo acumulamos mensajes del asistente para guardarlos incrementalmente
         assistant_response = ""
         self.current_structured_response = None
+        should_stop = False
 
         # Guardar índice inicial para poder actualizar is_useful después
         initial_count = self.history.count()
@@ -76,11 +80,9 @@ class AgentClient:
             async for message in query(prompt=full_prompt, options=options):
                 # Solo procesar si la sesión sigue activa
                 if self.is_active_session():
-                    await self._process_message(message)
+                    await self._process_message(message, skip_tools=_STOP_TOOLS)
                 # Guardar mensajes incrementalmente al historial
-                # Por defecto todos son útiles, se actualizarán si la respuesta estructurada dice lo contrario
                 if hasattr(message, 'content') and isinstance(message.content, list):
-                    msg_type = message.__class__.__name__
                     for block in message.content:
                         block_type = block.__class__.__name__
 
@@ -88,6 +90,11 @@ class AgentClient:
                             assistant_response += block.text
 
                         elif block_type == "ToolUseBlock":
+                            # Detectar stop tool
+                            if block.name in _STOP_TOOLS:
+                                should_stop = True
+                                break
+
                             # Guardar el texto acumulado del asistente antes del tool_use
                             if assistant_response:
                                 self.history.append_single("assistant", assistant_response, is_useful=True)
@@ -102,6 +109,9 @@ class AgentClient:
                         elif block_type == "ToolResultBlock":
                             # Guardar tool_result inmediatamente
                             self.history.append_single("tool_result", str(block.content), is_useful=True)
+
+                if should_stop:
+                    break
         finally:
             if old_claudecode:
                 os.environ['CLAUDECODE'] = old_claudecode
@@ -114,7 +124,7 @@ class AgentClient:
         # Si es así, actualizar todos los mensajes del turno actual
         is_useful_to_record = True
         if self.current_structured_response:
-            is_useful_to_record = _get_metadata(self.current_structured_response, "is_useful_to_record_in_history", True)
+            is_useful_to_record = _get_field(self.current_structured_response, "is_useful_to_record_in_history", True)
 
         if not is_useful_to_record:
             # Marcar todos los mensajes del turno actual como no útiles
@@ -147,14 +157,14 @@ class AgentClient:
             # Guardar el historial actualizado
             self.history.save(history)
 
-    async def _process_message(self, message) -> None:
+    async def _process_message(self, message, skip_tools=None) -> None:
         """Procesar mensaje del agente"""
         msg_type = message.__class__.__name__
 
         if msg_type == "ResultMessage":
             await self._process_result(message)
         elif msg_type == "AssistantMessage":
-            await self._process_assistant(message)
+            await self._process_assistant(message, skip_tools=skip_tools)
         elif msg_type == "UserMessage":
             await self._process_user(message)
 
@@ -173,12 +183,12 @@ class AgentClient:
 
             # Debug: imprimir los campos obtenidos
             if structured:
-                tag = _get_metadata(structured, "tag", "INFO")
+                tag = _get_field(structured, "tag", "INFO")
                 sys.stderr.write(f"[DEBUG] Got tag: {tag}\n")
-                sys.stderr.write(f"[DEBUG] Got metadata keys: {list(structured.get('metadata', {}).keys())}\n")
+                sys.stderr.write(f"[DEBUG] Got structured keys: {list(structured.keys())}\n")
             sys.stderr.flush()
 
-    async def _process_assistant(self, message) -> None:
+    async def _process_assistant(self, message, skip_tools=None) -> None:
         """Procesar AssistantMessage"""
         if hasattr(message, 'content') and isinstance(message.content, list):
             for block in message.content:
@@ -189,6 +199,8 @@ class AgentClient:
                     self.chat_log.write_assistant(block.text)
 
                 elif block_type == "ToolUseBlock":
+                    if skip_tools and block.name in skip_tools:
+                        continue
                     tool_input = str(block.input) if hasattr(block, 'input') else None
                     self.chat_log.write_tool(block.name, tool_input)
 

@@ -1,87 +1,75 @@
 {
     "type": "object",
     "properties": {
-        "response": {
+        "user_prompt_objective": {
             "type": "string"
         },
-        "metadata": {
-            "type": "object",
-            "properties": {
-                "user_prompt_objective": {
-                    "type": "string"
-                },
-                "user_prompt_classification": {
-                    "type": "string",
-                    "enum": [
-                        "single_task",
-                        "research",
-                        "plan",
-                        "implementation",
-                        "debugging",
-                        "testing",
-                        "code_review",
-                        "documentation",
-                        "refactoring",
-                        "explanation",
-                        "offtopic",
-                        "meta"
-                    ]
-                },
-                "next_suggested_immediate_action": {
-                    "type": "string"
-                },
-                "is_useful_to_record_in_history": {
-                    "type": "boolean"
-                },
-                "advances_current_task": {
-                    "type": "boolean"
-                },
-                "task_phase": {
-                    "type": "string",
-                    "enum": [
-                        "planificacion",
-                        "implementacion",
-                        "testing",
-                        "debugging",
-                        "analisis",
-                        "otro"
-                    ]
-                },
-                "related_files": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "tag": {
-                    "type": "string",
-                    "enum": [
-                        "WARNING",
-                        "ERROR",
-                        "INFO",
-                        "SUCCESS"
-                    ],
-                    "default": "INFO"
-                },
-                "self_reflection": {
-                    "type": "string"
-                },
-                "personal_goal": {
-                    "type": "string"
-                }
-            },
-            "required": [
-                "user_prompt_objective",
-                "user_prompt_classification",
-                "next_suggested_immediate_action",
-                "is_useful_to_record_in_history",
-                "advances_current_task",
-                "task_phase"
+        "user_prompt_classification": {
+            "type": "string",
+            "enum": [
+                "single_task",
+                "research",
+                "plan",
+                "implementation",
+                "debugging",
+                "testing",
+                "code_review",
+                "documentation",
+                "refactoring",
+                "explanation",
+                "offtopic",
+                "meta"
             ]
+        },
+        "next_suggested_immediate_action": {
+            "type": "string"
+        },
+        "is_useful_to_record_in_history": {
+            "type": "boolean"
+        },
+        "advances_current_task": {
+            "type": "boolean"
+        },
+        "task_phase": {
+            "type": "string",
+            "enum": [
+                "planificacion",
+                "implementacion",
+                "testing",
+                "debugging",
+                "analisis",
+                "otro"
+            ]
+        },
+        "related_files": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "tag": {
+            "type": "string",
+            "enum": [
+                "WARNING",
+                "ERROR",
+                "INFO",
+                "SUCCESS"
+            ],
+            "default": "INFO"
+        },
+        "self_reflection": {
+            "type": "string"
+        },
+        "personal_goal": {
+            "type": "string"
         }
     },
     "required": [
-        "response",
-        "metadata"
+        "user_prompt_objective",
+        "user_prompt_classification",
+        "next_suggested_immediate_action",
+        "is_useful_to_record_in_history",
+        "advances_current_task",
+        "task_phase"
     ]
 }
