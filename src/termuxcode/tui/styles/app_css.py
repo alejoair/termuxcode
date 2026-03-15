@@ -150,6 +150,43 @@ Screen {
     text-style: bold;
 }
 
+/* Botón Stop - estilo consistente con botón + */
+#stop-btn {
+    height: 2;
+    width: 3;
+    min-width: 3;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    color: $warning;
+    border: none;
+    text-style: bold;
+}
+
+/* Hover: warning color más claro */
+#stop-btn:hover {
+    background: $warning 20%;
+    color: $warning;
+}
+
+/* Focus: indicación visual */
+#stop-btn:focus {
+    background: $warning 20%;
+    text-style: bold;
+}
+
+/* Disabled: desvanecer significativamente */
+#stop-btn:disabled {
+    opacity: 0.3;
+    color: $text-muted;
+}
+
+/* Active momentáneo al hacer click */
+#stop-btn.-active {
+    background: $warning;
+    color: $text;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    ACHIEVEMENT POPUP - Overlay en la parte inferior
    ═══════════════════════════════════════════════════════════════ */

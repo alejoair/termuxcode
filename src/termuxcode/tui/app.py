@@ -50,8 +50,8 @@ class ClaudeChat(
         with Vertical(id="bottom-container"):
             with Horizontal(id="tabs-row"):
                 yield Tabs(id="sessions-tabs")
-                yield Button("■", id="stop-btn", classes="-stop-button")
-                yield Button("+", id="new-session-btn")
+                yield Button("⏹", id="stop-btn", variant="warning", flat=True, classes="-stop-button")
+                yield Button("+", id="new-session-btn", flat=True)
             yield Input(id="message-input", placeholder="Mensaje...", classes="-textual-compact")
             # Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación
             yield Static(id="bottom-spacer")
