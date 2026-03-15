@@ -89,6 +89,11 @@ class QueryHandlersMixin:
             if session_id == self._current_session_id:
                 self.is_thinking = False
 
+            # Actualizar botón Stop (deshabilitado cuando terminó)
+            self.call_later(self._update_stop_button)
+            # Actualizar tabs para quitar indicador de corriendo
+            self.call_later(self._update_tabs)
+
         # Crear nuevo task para esta query
         coro = self._run_query_safe(state, prompt)
 
@@ -104,6 +109,8 @@ class QueryHandlersMixin:
 
         # Actualizar tabs para mostrar indicador de que está corriendo
         self.call_later(self._update_tabs)
+        # Actualizar botón Stop (habilitado cuando está corriendo)
+        self.call_later(self._update_stop_button)
 
     async def _run_query_safe(self: "ClaudeChat", state: "SessionState", prompt: str) -> None:
         """Ejecutar query con manejo de errores y cancelación"""

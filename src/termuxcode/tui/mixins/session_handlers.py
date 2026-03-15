@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from textual.widgets import Tabs, Tab
+from textual.widgets import Tabs, Tab, Button
 
 if TYPE_CHECKING:
     from ..app import ClaudeChat
@@ -117,6 +117,9 @@ class SessionHandlersMixin:
         # Restaurar scroll position de la sesión (o ir al fondo si es nueva)
         self.call_later(lambda: self._restore_scroll(state))
 
+        # Actualizar botón Stop según estado de la sesión
+        self._update_stop_button()
+
     async def _update_tabs(self: "ClaudeChat") -> None:
         """Actualizar tabs según sesiones existentes con indicadores de estado"""
         await self.tabs.clear()
@@ -130,7 +133,7 @@ class SessionHandlersMixin:
 
             # Agregar indicador "●" si está corriendo
             if session.id in running_sessions:
-                label_parts.append("[dim green]●[/dim]")
+                label_parts.append("[dim green]●[/]")
 
             # Agregar indicador "!" si tiene notificaciones no leídas
             unread_count = self.notification_queue.get_unread_count(session.id)
@@ -163,6 +166,24 @@ class SessionHandlersMixin:
         session = self.session_manager.create_session()
         await self._switch_to_session(session.id)
 
+    async def action_stop_query(self: "ClaudeChat") -> None:
+        """Detener query de la sesión actual explícitamente"""
+        if not self._current_session_id:
+            return
+
+        # Cancelar task en background_manager
+        self.background_manager.cancel_task(self._current_session_id)
+
+        # Cancelar task pendiente si existe
+        state = self._session_states.get(self._current_session_id)
+        if state and state.pending_task and not state.pending_task.done():
+            state.pending_task.cancel()
+
+        self.chat_log.write("[dim]Query detenida[/dim]")
+        self._update_stop_button()
+        # Actualizar tabs para quitar indicador de corriendo
+        self.call_later(self._update_tabs)
+
     async def action_close_session(self: "ClaudeChat") -> None:
         """Cerrar sesión actual (Ctrl+W)"""
         sessions = self.session_manager.list_sessions()
@@ -172,6 +193,7 @@ class SessionHandlersMixin:
 
         if self._current_session_id:
             # Cancelar task pendiente si existe
+            self.background_manager.cancel_task(self._current_session_id)
             state = self._session_states.get(self._current_session_id)
             if state and state.pending_task and not state.pending_task.done():
                 state.pending_task.cancel()
@@ -191,6 +213,15 @@ class SessionHandlersMixin:
             marker = ">" if s.id == self._current_session_id else " "
             self.chat_log.write(f"  {marker} {s.name}")
         self.chat_log.write("[dim]Ctrl+N nueva, Ctrl+W cerrar[/dim]")
+
+    def _update_stop_button(self: "ClaudeChat") -> None:
+        """Habilitar/deshabilitar botón Stop según estado de la query actual"""
+        stop_btn = self.query_one("#stop-btn", Button)
+        if not self._current_session_id:
+            stop_btn.disabled = True
+        else:
+            is_running = self.background_manager.is_running(self._current_session_id)
+            stop_btn.disabled = not is_running
 
     def _restore_scroll(self: "ClaudeChat", state: "SessionState") -> None:
         """Restaurar posición de scroll de una sesión"""

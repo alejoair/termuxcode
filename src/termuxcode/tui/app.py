@@ -49,6 +49,7 @@ class ClaudeChat(
         with Vertical(id="bottom-container"):
             with Horizontal(id="tabs-row"):
                 yield Tabs(id="sessions-tabs")
+                yield Button("■", id="stop-btn", classes="-stop-button")
                 yield Button("+", id="new-session-btn")
             yield Input(id="message-input", placeholder="Mensaje...", classes="-textual-compact")
             # Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación
@@ -58,6 +59,9 @@ class ClaudeChat(
         self.chat_log = self.query_one("#messages", ChatLog)
         self.tabs = self.query_one("#sessions-tabs", Tabs)
         self.input = self.query_one("#message-input", Input)
+
+        # Inicializar botón Stop (deshabilitado por defecto)
+        self._update_stop_button()
 
         # Inicializar sistema de memoria (CLAUDE.md, config.json, etc.)
         self._initialize_memory()
@@ -87,9 +91,11 @@ class ClaudeChat(
             event.stop()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Manejar click en botón nueva sesión"""
+        """Manejar click en botones"""
         if event.button.id == "new-session-btn":
             await self.action_new_session()
+        elif event.button.id == "stop-btn":
+            await self.action_stop_query()
 
 
 
