@@ -29,6 +29,7 @@ class ClaudeChat(
         ("ctrl+n", "new_session", "Nuevo"),
         ("ctrl+w", "close_session", "Cerrar"),
         ("ctrl+s", "toggle_sessions", "Sesiones"),
+        ("ctrl+h", "stop_query", "Stop"),
     ]
 
     def __init__(self, cwd: str = None, max_history: int = 100):
