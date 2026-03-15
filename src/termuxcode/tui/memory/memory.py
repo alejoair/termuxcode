@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 # Directorio por defecto para persistencia
-_DEFAULT_MEMORY_DIR = ".memory"
+_DEFAULT_MEMORY_DIR = os.path.join(".claude", "memory")
 
 
 class Storage:
