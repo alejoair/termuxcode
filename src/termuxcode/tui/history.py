@@ -16,7 +16,12 @@ class MessageHistory:
                  filter_by_useful: Literal[None, False, True] = True,
                  max_tool_result_length: int | None = 500,
                  max_assistant_length: int | None = None,
-                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis"):
+                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis",
+                 # Configuración de truncamiento exponencial
+                 exponential_truncate: bool = False,
+                 exp_base_length: int = 500,
+                 exp_decay: float = 0.2,
+                 exp_min_length: int = 100):
         self.max_messages = max_messages
         self.cwd = Path(cwd) if cwd else Path.cwd()
         self.base_dir = self._get_history_dir()
@@ -29,6 +34,11 @@ class MessageHistory:
         self.max_tool_result_length = max_tool_result_length
         self.max_assistant_length = max_assistant_length
         self.truncate_strategy = truncate_strategy
+        # Configuración de truncamiento exponencial
+        self.exponential_truncate = exponential_truncate
+        self.exp_base_length = exp_base_length
+        self.exp_decay = exp_decay
+        self.exp_min_length = exp_min_length
 
     def _get_history_dir(self) -> Path:
         """Retorna el directorio donde se guarda el historial"""
@@ -135,6 +145,10 @@ class MessageHistory:
                 max_tool_result_length=self.max_tool_result_length,
                 max_assistant_length=self.max_assistant_length,
                 truncate_strategy=self.truncate_strategy,
+                exponential_truncate=self.exponential_truncate,
+                exp_base_length=self.exp_base_length,
+                exp_decay=self.exp_decay,
+                exp_min_length=self.exp_min_length,
             )
             history = manager.apply(history)
 

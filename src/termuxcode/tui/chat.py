@@ -86,7 +86,3 @@ class ChatLog(RichLog):
         self.write("")
         self.write(f"[bold white on #8b0000] ✗ ERROR [/bold white on #8b0000]")
         self.write(f"[red]{error}[/red]")
-
-    def write_streaming(self, chunk: str) -> None:
-        """Acumular chunks durante streaming (NO renderizar todavía)"""
-        pass  # El agente llama a write_assistant() después con el tag correcto

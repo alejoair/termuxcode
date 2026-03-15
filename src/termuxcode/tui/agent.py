@@ -37,7 +37,6 @@ class AgentClient:
 
         # Estado de la respuesta estructurada actual
         self.current_structured_response = None
-        self.current_assistant_text = ""
 
     async def query(self, prompt: str) -> None:
         """Ejecutar query del agente con historial en JSONL"""
@@ -68,7 +67,6 @@ class AgentClient:
         # El mensaje del usuario ya fue guardado en query_handlers.py
         # Solo acumulamos mensajes del asistente para guardarlos incrementalmente
         assistant_response = ""
-        self.current_assistant_text = ""
         self.current_structured_response = None
 
         # Guardar índice inicial para poder actualizar is_useful después
@@ -88,7 +86,6 @@ class AgentClient:
 
                         if block_type == "TextBlock":
                             assistant_response += block.text
-                            self.current_assistant_text += block.text
 
                         elif block_type == "ToolUseBlock":
                             # Guardar el texto acumulado del asistente antes del tool_use
@@ -181,14 +178,6 @@ class AgentClient:
                 sys.stderr.write(f"[DEBUG] Got metadata keys: {list(structured.get('metadata', {}).keys())}\n")
             sys.stderr.flush()
 
-            # Renderizar el texto acumulado del asistente con el tag del structured output
-            if self.current_assistant_text:
-                tag = _get_metadata(structured, "tag", "INFO")
-                # Debug: imprimir el tag
-                sys.stderr.write(f"[DEBUG] Tag from structured output: {tag}\n")
-                sys.stderr.flush()
-                self.chat_log.write_assistant(self.current_assistant_text, structured_tag=tag)
-
     async def _process_assistant(self, message) -> None:
         """Procesar AssistantMessage"""
         if hasattr(message, 'content') and isinstance(message.content, list):
@@ -196,9 +185,8 @@ class AgentClient:
                 block_type = block.__class__.__name__
 
                 if block_type == "TextBlock":
-                    # Guardar texto en memoria, NO renderizar todavía
-                    # Se renderizará cuando recibamos el structured_output
-                    self.chat_log.write_streaming(block.text)
+                    # Mostrar texto directamente con header y Markdown
+                    self.chat_log.write_assistant(block.text)
 
                 elif block_type == "ToolUseBlock":
                     tool_input = str(block.input) if hasattr(block, 'input') else None

@@ -17,6 +17,7 @@ from .base import MessageFilter
 from .manager import FilterManager
 from .impl.truncate_filter import TruncateFilter
 from .impl.useful_filter import UsefulFilter
+from .impl.exponential_truncate_filter import ExponentialTruncateFilter
 from .preprocessor import HistoryPreprocessor
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "FilterManager",
     "TruncateFilter",
     "UsefulFilter",
+    "ExponentialTruncateFilter",
     "HistoryPreprocessor",
 ]
 
