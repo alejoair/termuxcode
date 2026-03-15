@@ -50,7 +50,7 @@ body {
 
 /* Base styles para el textarea de xterm */
 .xterm-helper-textarea {
-    font-size: 16px !important;          /* Prevenir zoom de Android al foco */
+    font-size: 18px !important;          /* Aumentado de 16px para mejor legibilidad */
     -webkit-text-size-adjust: none !important;  /* No auto-ajustar tamaño */
     text-size-adjust: none !important;
     transform: scale(1) !important;      /* Sin transformaciones */
