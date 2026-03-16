@@ -4,7 +4,7 @@ Este módulo contiene todos los esquemas JSON utilizados para
 definir la estructura de datos que espera la aplicación.
 
 Ejemplo de uso:
-    from termuxcode.tui.schemas import STRUCTURED_RESPONSE_SCHEMA
+    from termuxcode.core.schemas import STRUCTURED_RESPONSE_SCHEMA
 
     options = ClaudeAgentOptions(
         output_format={

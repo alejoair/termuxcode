@@ -10,7 +10,7 @@ Este módulo proporciona clases para gestión de datos con persistencia:
 Las clases Fifo y Blackboard crean su propio Storage internamente.
 
 Ejemplo de uso:
-    from termuxcode.tui.memory import Fifo, Blackboard, Initializer
+    from termuxcode.core.memory import Fifo, Blackboard, Initializer
 
     # Inicializar al inicio de la app
     init = Initializer()

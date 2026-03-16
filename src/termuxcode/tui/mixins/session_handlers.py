@@ -6,12 +6,8 @@ from textual.widgets import Tabs, Tab, Button
 
 if TYPE_CHECKING:
     from ..app import ClaudeChat
-    from .session_state import SessionState
-    from ..notification_system import NotificationType
-
-if TYPE_CHECKING:
-    from ..app import ClaudeChat
-    from .session_state import SessionState
+    from ...core.session_state import SessionState
+    from ...core.notification_system import NotificationType
 
 
 class SessionHandlersMixin:
@@ -31,9 +27,9 @@ class SessionHandlersMixin:
     async def _get_or_create_session_state(self: "ClaudeChat", session_id: str) -> "SessionState":
         """Obtener o crear el estado de una sesión"""
         if session_id not in self._session_states:
-            from .session_state import SessionState
-            from ..history import MessageHistory
-            from ..agent import AgentClient
+            from ...core.session_state import SessionState
+            from ...core.history import MessageHistory
+            from ...core.agent import AgentClient
 
             history = MessageHistory(
                 filename="messages.jsonl",

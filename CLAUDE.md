@@ -1,4 +1,67 @@
-# TermuxCode - File Tree
+# TermuxCode
+
+## Arquitectura
+
+El proyecto separa la lógica general reutilizable (`core/`) de la interfaz Textual (`tui/`).
+
+```
+src/termuxcode/
+├── __init__.py              # Re-exporta ClaudeChat y main
+├── __main__.py
+├── cli.py                   # CLI: parsea args, lanza TUI o web server
+│
+├── core/                    # Lógica general (sin dependencia de Textual)
+│   ├── __init__.py          # Re-exporta: AgentClient, MessageHistory, SessionManager,
+│   │                        #   SessionState, BackgroundTaskManager, NotificationQueue
+│   ├── agent.py             # AgentClient - comunicación con Claude Agent SDK
+│   ├── history.py           # MessageHistory - historial JSONL por sesión
+│   ├── sessions.py          # SessionManager, Session - gestión multi-sesión
+│   ├── session_state.py     # SessionState - estado individual de sesión
+│   ├── background_manager.py # BackgroundTaskManager - tasks asyncio por sesión
+│   ├── notification_system.py # NotificationQueue, NotificationType
+│   ├── filters/             # Pipeline de filtros para historial
+│   │   ├── base.py          # MessageFilter (clase base abstracta)
+│   │   ├── manager.py       # FilterManager - ejecuta filtros en orden
+│   │   ├── preprocessor.py  # HistoryPreprocessor - wrapper con config persistente
+│   │   ├── estimator.py     # estimate_prompt_size()
+│   │   └── impl/            # Implementaciones concretas
+│   │       ├── useful_filter.py
+│   │       ├── truncate_filter.py
+│   │       └── exponential_truncate_filter.py
+│   ├── memory/              # Persistencia en disco (JSON/CSV)
+│   │   └── memory.py        # Storage, Fifo, Blackboard, Initializer
+│   └── schemas/             # Schemas JSON
+│       └── structured_response.json
+│
+├── tui/                     # Interfaz Textual (depende de core/)
+│   ├── __init__.py          # Re-exporta ClaudeChat
+│   ├── app.py               # ClaudeChat(App) - app principal
+│   ├── chat.py              # ChatLog(RichLog) - widget de mensajes
+│   ├── mixins/              # Mixins para ClaudeChat
+│   │   ├── session_handlers.py  # SessionHandlersMixin - tabs, navegación
+│   │   └── query_handlers.py   # QueryHandlersMixin - input, ejecución
+│   └── styles/
+│       └── app_css.py       # CSS de la app
+│
+├── web/                     # Assets para modo web (xterm.js)
+│   ├── static/
+│   └── templates/
+└── web_server.py            # Servidor web (textual-serve)
+```
+
+### Imports principales
+
+```python
+# Lógica general
+from termuxcode.core import AgentClient, MessageHistory, SessionManager
+from termuxcode.core.filters import FilterManager
+from termuxcode.core.memory import Blackboard, Fifo, Initializer
+
+# TUI
+from termuxcode.tui import ClaudeChat
+```
+
+## File Tree
 
 ```
 termuxcode/
@@ -8,29 +71,8 @@ termuxcode/
 │   └── workflows/
 │       └── deploy.yaml
 ├── .gitignore
-├── .memory/
-│   ├── app.json
-│   ├── tags.csv
-│   ├── test_board.json
-│   └── test_queue.csv
-├── .sessions/
-│   ├── .last_active
-│   ├── messages_211d2f9e.jsonl
-│   ├── messages_51c47b2a.jsonl
-│   ├── messages_b0514732.jsonl
-│   ├── messages_cfae9d12.jsonl
-│   └── sessions.json
-├── EXAMPLES_FILTERS.md
-├── PLAN_SESSION_PARALLEL.md
-├── README.md
-├── capture_console.sh
-├── capture_debug.py
-├── capture_logs.py
-├── capture_textual_console.sh
-├── debug_filtered.log
 ├── docs/
 │   └── claude-agent-sdk-reference.md
-├── memory/
 ├── pyproject.toml
 ├── scripts/
 │   └── copy_web_static.py
@@ -39,38 +81,39 @@ termuxcode/
 │       ├── __init__.py
 │       ├── __main__.py
 │       ├── cli.py
-│       ├── tui/
+│       ├── core/
 │       │   ├── __init__.py
-│       │   ├── __main__.py
 │       │   ├── agent.py
-│       │   ├── app.py
 │       │   ├── background_manager.py
-│       │   ├── chat.py
+│       │   ├── history.py
+│       │   ├── notification_system.py
+│       │   ├── session_state.py
+│       │   ├── sessions.py
 │       │   ├── filters/
 │       │   │   ├── __init__.py
 │       │   │   ├── base.py
 │       │   │   ├── estimator.py
-│       │   │   ├── impl/
-│       │   │   │   ├── exponential_truncate_filter.py
-│       │   │   │   ├── truncate_filter.py
-│       │   │   │   └── useful_filter.py
 │       │   │   ├── manager.py
-│       │   │   └── preprocessor.py
-│       │   ├── history.py
+│       │   │   ├── preprocessor.py
+│       │   │   └── impl/
+│       │   │       ├── exponential_truncate_filter.py
+│       │   │       ├── truncate_filter.py
+│       │   │       └── useful_filter.py
 │       │   ├── memory/
 │       │   │   ├── __init__.py
 │       │   │   └── memory.py
+│       │   └── schemas/
+│       │       ├── __init__.py
+│       │       └── structured_response.json
+│       ├── tui/
+│       │   ├── __init__.py
+│       │   ├── __main__.py
+│       │   ├── app.py
+│       │   ├── chat.py
 │       │   ├── mixins/
 │       │   │   ├── __init__.py
 │       │   │   ├── query_handlers.py
-│       │   │   ├── session_handlers.py
-│       │   │   └── session_state.py
-│       │   ├── notification_system.py
-│       │   ├── schemas/
-│       │   │   ├── README.md
-│       │   │   ├── __init__.py
-│       │   │   └── structured_response.json
-│       │   ├── sessions.py
+│       │   │   └── session_handlers.py
 │       │   └── styles/
 │       │       ├── __init__.py
 │       │       └── app_css.py
@@ -89,10 +132,5 @@ termuxcode/
 │       │   └── templates/
 │       │       └── app_index.html
 │       └── web_server.py
-├── termuxcode_dev.log
-├── test_tag_system.py
-├── textual.log
-├── textual_app.log
-├── textual_console.log
-└── textual_dev.log
+└── test_tag_system.py
 ```

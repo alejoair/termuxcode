@@ -4,7 +4,7 @@ Este módulo permite aplicar filtros al historial antes de pasarlo al LLM.
 Los filtros pueden truncar contenido, eliminar mensajes no útiles, etc.
 
 Uso:
-    from termuxcode.tui.filters import FilterManager
+    from termuxcode.core.filters import FilterManager
 
     manager = FilterManager(
         filter_by_useful=True,

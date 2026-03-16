@@ -8,7 +8,7 @@ from .history import MessageHistory
 from .schemas import STRUCTURED_RESPONSE_SCHEMA
 
 if TYPE_CHECKING:
-    from .chat import ChatLog
+    from ..tui.chat import ChatLog
 
 # Tools que detienen el turno al ser detectadas
 _STOP_TOOLS = frozenset({"AskUserQuestion", "StructuredOutput"})

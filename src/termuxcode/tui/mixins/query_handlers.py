@@ -7,8 +7,8 @@ from textual.widgets import Input
 
 if TYPE_CHECKING:
     from ..app import ClaudeChat
-    from .session_state import SessionState
-    from ..notification_system import NotificationType
+    from ...core.session_state import SessionState
+    from ...core.notification_system import NotificationType
 
 
 class QueryHandlersMixin:
@@ -53,7 +53,7 @@ class QueryHandlersMixin:
 
         # Crear callback para cuando termine la query
         def on_complete(session_id: str, error: Exception | None):
-            from ..notification_system import NotificationType
+            from ...core.notification_system import NotificationType
 
             session = self.session_manager.get_session(session_id)
             if not session:

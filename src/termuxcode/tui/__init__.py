@@ -1,5 +1,5 @@
 """TUI para Claude Agent SDK - Chat Interface"""
 
 from .app import ClaudeChat
-from .history import MessageHistory
-from .filters import HistoryPreprocessor
+from ..core.history import MessageHistory
+from ..core.filters import HistoryPreprocessor

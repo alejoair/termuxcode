@@ -6,12 +6,13 @@ from textual.widgets import Input, Tabs, Button, Static
 from textual.reactive import reactive
 
 from .chat import ChatLog
-from .sessions import SessionManager
+from ..core.sessions import SessionManager
 from .styles import CSS
-from .mixins import SessionHandlersMixin, QueryHandlersMixin, SessionState
-from .memory import Initializer
-from .background_manager import BackgroundTaskManager
-from .notification_system import NotificationQueue
+from .mixins import SessionHandlersMixin, QueryHandlersMixin
+from ..core.session_state import SessionState
+from ..core.memory import Initializer
+from ..core.background_manager import BackgroundTaskManager
+from ..core.notification_system import NotificationQueue
 
 
 class ClaudeChat(
