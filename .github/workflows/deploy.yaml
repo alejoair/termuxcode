@@ -13,6 +13,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necesario para que setuptools-scm lea los tags de Git
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -22,7 +24,7 @@ jobs:
       - name: Install build dependencies
         run: |
           pip install --upgrade pip
-          pip install build
+          pip install build setuptools-scm
 
       - name: Build package
         run: python -m build

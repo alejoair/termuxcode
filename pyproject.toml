@@ -1,6 +1,6 @@
 [project]
 name = "termuxcode"
-version = "0.4.0"
+dynamic = ["version"]
 description = "Python project for Termux development"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,8 +13,11 @@ dependencies = [
 termuxcode = "termuxcode.cli:main"
 
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "setuptools-scm", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+# La versión se toma automáticamente del tag de Git (ej: v0.4.1 → 0.4.1)
 
 [project.optional-dependencies]
 dev = [
