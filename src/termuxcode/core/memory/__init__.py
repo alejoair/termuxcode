@@ -16,17 +16,20 @@ Ejemplo de uso:
     init = Initializer()
     init.initialize_all()  # Carga CLAUDE.md y config.json
 
-    # Usar Fifo (crea Storage internamente en .memory/)
+    # Usar Fifo (crea Storage internamente en .claude/memory/)
     fifo = Fifo("messages")
     fifo.push("mensaje 1")
     msg = fifo.pop()  # "mensaje 1"
 
-    # Usar Blackboard (crea Storage internamente en .memory/)
+    # Usar Blackboard (crea Storage internamente en .claude/memory/)
     bb = Blackboard("app")
     claude_md = bb.get("docs.claude_md")  # CLAUDE.md cargado
     config = bb.get("config")  # config.json cargado
 """
 
-from termuxcode.core.memory.memory import Blackboard, Fifo, Initializer, Storage
+from .blackboard import Blackboard
+from .fifo import Fifo
+from .initializer import Initializer
+from .storage import Storage
 
-__all__ = ["Fifo", "Blackboard", "Initializer", "Storage"]
+__all__ = ["Storage", "Fifo", "Blackboard", "Initializer"]

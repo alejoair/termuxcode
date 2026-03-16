@@ -28,8 +28,11 @@ src/termuxcode/
 │   │       ├── useful_filter.py
 │   │       ├── truncate_filter.py
 │   │       └── exponential_truncate_filter.py
-│   ├── memory/              # Persistencia en disco (JSON/CSV)
-│   │   └── memory.py        # Storage, Fifo, Blackboard, Initializer
+│   ├── memory/              # Persistencia en disco (.claude/memory/)
+│   │   ├── storage.py       # Storage - base JSON/CSV
+│   │   ├── fifo.py          # Fifo - cola persistente CSV
+│   │   ├── blackboard.py    # Blackboard - key-value JSON con rutas "a.b.c"
+│   │   └── initializer.py   # Initializer - carga CLAUDE.md, config.json
 │   └── schemas/             # Schemas JSON
 │       └── structured_response.json
 │
@@ -61,76 +64,12 @@ from termuxcode.core.memory import Blackboard, Fifo, Initializer
 from termuxcode.tui import ClaudeChat
 ```
 
-## File Tree
+## Memory System
 
-```
-termuxcode/
-├── .claude/
-│   └── settings.local.json
-├── .github/
-│   └── workflows/
-│       └── deploy.yaml
-├── .gitignore
-├── docs/
-│   └── claude-agent-sdk-reference.md
-├── pyproject.toml
-├── scripts/
-│   └── copy_web_static.py
-├── src/
-│   └── termuxcode/
-│       ├── __init__.py
-│       ├── __main__.py
-│       ├── cli.py
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── agent.py
-│       │   ├── background_manager.py
-│       │   ├── history.py
-│       │   ├── notification_system.py
-│       │   ├── session_state.py
-│       │   ├── sessions.py
-│       │   ├── filters/
-│       │   │   ├── __init__.py
-│       │   │   ├── base.py
-│       │   │   ├── estimator.py
-│       │   │   ├── manager.py
-│       │   │   ├── preprocessor.py
-│       │   │   └── impl/
-│       │   │       ├── exponential_truncate_filter.py
-│       │   │       ├── truncate_filter.py
-│       │   │       └── useful_filter.py
-│       │   ├── memory/
-│       │   │   ├── __init__.py
-│       │   │   └── memory.py
-│       │   └── schemas/
-│       │       ├── __init__.py
-│       │       └── structured_response.json
-│       ├── tui/
-│       │   ├── __init__.py
-│       │   ├── __main__.py
-│       │   ├── app.py
-│       │   ├── chat.py
-│       │   ├── mixins/
-│       │   │   ├── __init__.py
-│       │   │   ├── query_handlers.py
-│       │   │   └── session_handlers.py
-│       │   └── styles/
-│       │       ├── __init__.py
-│       │       └── app_css.py
-│       ├── web/
-│       │   ├── static/
-│       │   │   ├── app.css
-│       │   │   ├── css/
-│       │   │   │   └── xterm.css
-│       │   │   ├── fonts/
-│       │   │   │   ├── RobotoMono-Italic-VariableFont_wght.ttf
-│       │   │   │   └── RobotoMono-VariableFont_wght.ttf
-│       │   │   ├── images/
-│       │   │   │   └── background.png
-│       │   │   └── js/
-│       │   │       └── textual.js
-│       │   └── templates/
-│       │       └── app_index.html
-│       └── web_server.py
-└── test_tag_system.py
-```
+Persistencia simple en `.claude/memory/`:
+
+- **Storage**: Base para leer/escribir JSON y CSV
+- **Fifo**: Cola persistente (`push`/`pop`, archivo CSV)
+- **Blackboard**: Dict anidado con rutas tipo Firebase (`bb.get("user.name")`, archivo JSON)
+- **Initializer**: Carga archivos iniciales (CLAUDE.md, config.json) al Blackboard
+
