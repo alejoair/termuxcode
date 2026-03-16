@@ -29,7 +29,7 @@ class SessionHandlersMixin:
         if session_id not in self._session_states:
             from ...core.session_state import SessionState
             from ...core.history import MessageHistory
-            from ...core.agent import AgentClient
+            from ...core.agent import MainAgentClient
 
             history = MessageHistory(
                 filename="messages.jsonl",
@@ -41,7 +41,7 @@ class SessionHandlersMixin:
             captured_session_id = session_id
             is_active = lambda: self._current_session_id == captured_session_id
 
-            agent = AgentClient(
+            agent = MainAgentClient(
                 self.chat_log,
                 history,
                 self.cwd,

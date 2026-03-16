@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 
 from termuxcode.core.history import MessageHistory
-from termuxcode.core.agent import AgentClient
+from termuxcode.core.agent import MainAgentClient
 
 
 class SessionState:
     """Estado de una sesión individual"""
-    def __init__(self, history: MessageHistory, agent: AgentClient):
+    def __init__(self, history: MessageHistory, agent: MainAgentClient):
         self.history = history
         self.agent = agent
         self.pending_task: asyncio.Task | None = None

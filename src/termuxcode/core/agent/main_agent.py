@@ -21,7 +21,7 @@ def _get_field(structured: dict | None, key: str, default=None):
     return structured.get(key, default)
 
 
-class AgentClient:
+class MainAgentClient:
     """Cliente para comunicarse con Claude Agent SDK con historial en JSONL"""
 
     def __init__(
