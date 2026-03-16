@@ -12,16 +12,13 @@ class MessageHistory:
 
     def __init__(self, filename: str = "messages.jsonl", max_messages: int = 100,
                  session_id: str = None, cwd: str = None,
-                 # Configuración de filtros (directa, sin FilterConfig)
+                 # Configuración de filtros
                  filter_by_useful: Literal[None, False, True] = True,
-                 max_tool_result_length: int | None = 500,
-                 max_assistant_length: int | None = None,
-                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis",
-                 # Configuración de truncamiento exponencial
-                 exponential_truncate: bool = False,
-                 exp_base_length: int = 500,
-                 exp_decay: float = 0.2,
-                 exp_min_length: int = 100):
+                 base_length: int = 2000,
+                 decay: float = 0.08,
+                 min_length: int = 200,
+                 max_decay_distance: int = 10,
+                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis"):
         self.max_messages = max_messages
         self.cwd = Path(cwd) if cwd else Path.cwd()
         self.base_dir = self._get_history_dir()
@@ -31,14 +28,11 @@ class MessageHistory:
 
         # Configuración de filtros para preprocesamiento
         self.filter_by_useful = filter_by_useful
-        self.max_tool_result_length = max_tool_result_length
-        self.max_assistant_length = max_assistant_length
+        self.base_length = base_length
+        self.decay = decay
+        self.min_length = min_length
+        self.max_decay_distance = max_decay_distance
         self.truncate_strategy = truncate_strategy
-        # Configuración de truncamiento exponencial
-        self.exponential_truncate = exponential_truncate
-        self.exp_base_length = exp_base_length
-        self.exp_decay = exp_decay
-        self.exp_min_length = exp_min_length
 
     def _get_history_dir(self) -> Path:
         """Retorna el directorio donde se guarda el historial"""
@@ -142,13 +136,11 @@ class MessageHistory:
         if apply_filters:
             manager = FilterManager(
                 filter_by_useful=self.filter_by_useful,
-                max_tool_result_length=self.max_tool_result_length,
-                max_assistant_length=self.max_assistant_length,
+                base_length=self.base_length,
+                decay=self.decay,
+                min_length=self.min_length,
+                max_decay_distance=self.max_decay_distance,
                 truncate_strategy=self.truncate_strategy,
-                exponential_truncate=self.exponential_truncate,
-                exp_base_length=self.exp_base_length,
-                exp_decay=self.exp_decay,
-                exp_min_length=self.exp_min_length,
             )
             history = manager.apply(history)
 

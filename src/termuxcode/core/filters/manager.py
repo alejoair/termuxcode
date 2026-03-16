@@ -3,7 +3,6 @@
 from typing import Literal
 from termuxcode.core.filters.base import MessageFilter
 from termuxcode.core.filters.impl.useful_filter import UsefulFilter
-from termuxcode.core.filters.impl.truncate_filter import TruncateFilter
 from termuxcode.core.filters.impl.exponential_truncate_filter import ExponentialTruncateFilter
 
 
@@ -12,7 +11,7 @@ class FilterManager:
 
     Los filtros se ejecutan en orden de registro. Por defecto:
     1. UsefulFilter - Elimina mensajes no útiles
-    2. TruncateFilter - Trunca contenido largo (o ExponentialTruncateFilter si está activado)
+    2. ExponentialTruncateFilter - Trunca contenido con decaimiento exponencial
 
     Puedes agregar filtros personalizados con register().
     """
@@ -21,69 +20,54 @@ class FilterManager:
         self,
         # Configuración de UsefulFilter
         filter_by_useful: Literal[None, False, True] = True,
-        # Configuración de TruncateFilter
-        max_tool_result_length: int | None = 500,
-        max_assistant_length: int | None = None,
-        truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis",
         # Configuración de ExponentialTruncateFilter
-        exponential_truncate: bool = False,
-        exp_base_length: int = 500,
-        exp_decay: float = 0.2,
-        exp_min_length: int = 100,
+        base_length: int = 2000,
+        decay: float = 0.08,
+        min_length: int = 200,
+        max_decay_distance: int = 10,
+        truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis",
     ):
         """Inicializa el manager con filtros por defecto.
 
         Args:
             filter_by_useful: Controla el filtro de mensajes útiles
-            max_tool_result_length: Longitud máxima para tool_result (sin modo exponencial)
-            max_assistant_length: Longitud máxima para assistant
-            truncate_strategy: Estrategia de truncado
-            exponential_truncate: Si True, usa truncamiento exponencial en lugar de fijo
-            exp_base_length: Longitud base para el mensaje más reciente (modo exponencial)
-            exp_decay: Factor de decremento por cada posición (modo exponencial)
-            exp_min_length: Longitud mínima garantizada (modo exponencial)
+            base_length: Longitud máxima para el mensaje más reciente
+            decay: Factor de decaimiento por posición
+            min_length: Longitud mínima (piso del truncado)
+            max_decay_distance: Distancia máxima para el decaimiento
+            truncate_strategy: Estrategia de truncado (cut/ellipsis/summary)
         """
         self._filters: list[MessageFilter] = []
         self._register_default_filters(
             filter_by_useful,
-            max_tool_result_length,
-            max_assistant_length,
+            base_length,
+            decay,
+            min_length,
+            max_decay_distance,
             truncate_strategy,
-            exponential_truncate,
-            exp_base_length,
-            exp_decay,
-            exp_min_length,
         )
 
     def _register_default_filters(
         self,
         filter_by_useful: Literal[None, False, True],
-        max_tool_result_length: int | None,
-        max_assistant_length: int | None,
+        base_length: int,
+        decay: float,
+        min_length: int,
+        max_decay_distance: int,
         truncate_strategy: Literal["cut", "ellipsis", "summary"],
-        exponential_truncate: bool,
-        exp_base_length: int,
-        exp_decay: float,
-        exp_min_length: int,
     ) -> None:
         """Registra los filtros incluidos por defecto."""
         # Útil primero para eliminar mensajes que no necesitamos truncar
         self.register(UsefulFilter(filter_by_useful))
 
-        # Truncamiento: exponencial o fijo
-        if exponential_truncate:
-            self.register(ExponentialTruncateFilter(
-                base_length=exp_base_length,
-                decay=exp_decay,
-                min_length=exp_min_length,
-                truncate_strategy=truncate_strategy,
-            ))
-        else:
-            self.register(TruncateFilter(
-                max_tool_result_length,
-                max_assistant_length,
-                truncate_strategy,
-            ))
+        # Truncamiento exponencial para todos los mensajes
+        self.register(ExponentialTruncateFilter(
+            base_length,
+            decay,
+            min_length,
+            max_decay_distance,
+            truncate_strategy,
+        ))
 
     def register(self, filter_instance: MessageFilter) -> None:
         """Registra un nuevo filtro.

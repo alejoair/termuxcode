@@ -90,11 +90,6 @@ class AgentClient:
                             assistant_response += block.text
 
                         elif block_type == "ToolUseBlock":
-                            # Detectar stop tool
-                            if block.name in _STOP_TOOLS:
-                                should_stop = True
-                                break
-
                             # Guardar el texto acumulado del asistente antes del tool_use
                             if assistant_response:
                                 self.history.append_single("assistant", assistant_response, is_useful=True)
@@ -105,6 +100,11 @@ class AgentClient:
                                 "name": block.name,
                                 "input": str(block.input) if hasattr(block, 'input') else "",
                             }, is_useful=True)
+
+                            # Detectar stop tool (después de guardar)
+                            if block.name in _STOP_TOOLS:
+                                should_stop = True
+                                break
 
                         elif block_type == "ToolResultBlock":
                             # Guardar tool_result inmediatamente

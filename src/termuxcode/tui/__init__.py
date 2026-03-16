@@ -2,4 +2,3 @@
 
 from termuxcode.tui.app import ClaudeChat
 from termuxcode.core.history import MessageHistory
-from termuxcode.core.filters import HistoryPreprocessor

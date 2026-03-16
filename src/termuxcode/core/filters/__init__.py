@@ -8,25 +8,20 @@ Uso:
 
     manager = FilterManager(
         filter_by_useful=True,
-        max_tool_result_length=500
+        base_length=2000,
+        decay=0.15,
     )
     filtered = manager.apply(history)
 """
 
 from termuxcode.core.filters.base import MessageFilter
 from termuxcode.core.filters.manager import FilterManager
-from termuxcode.core.filters.impl.truncate_filter import TruncateFilter
 from termuxcode.core.filters.impl.useful_filter import UsefulFilter
-from termuxcode.core.filters.impl.exponential_truncate_filter import ExponentialTruncateFilter
-from termuxcode.core.filters.preprocessor import HistoryPreprocessor
 
 __all__ = [
     "MessageFilter",
     "FilterManager",
-    "TruncateFilter",
     "UsefulFilter",
-    "ExponentialTruncateFilter",
-    "HistoryPreprocessor",
 ]
 
 
