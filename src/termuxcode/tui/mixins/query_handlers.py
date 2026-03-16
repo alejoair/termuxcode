@@ -50,11 +50,10 @@ class QueryHandlersMixin:
 
         # Mostrar mensaje del usuario inmediatamente
         self.chat_log.write_user(prompt)
+        # Guardar mensaje del usuario inmediatamente en historial (siempre útil)
+        state.history.append("user", prompt)
         self.chat_log.write_thinking()
         self.is_thinking = True
-
-        # Gamificación: mensaje enviado
-        self._on_message_sent()
 
         # Crear nuevo task para esta query
         state.pending_task = asyncio.create_task(
@@ -76,5 +75,3 @@ class QueryHandlersMixin:
             # Solo actualizar estado thinking si seguimos en la misma sesión
             if self._current_session_id == state.agent.session_id:
                 self.is_thinking = False
-                # Gamificación: respuesta recibida
-                self._on_response_received()

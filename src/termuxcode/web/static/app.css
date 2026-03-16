@@ -33,9 +33,40 @@ body {
     touch-action: manipulation;
 }
 
-/* Prevenir zoom automático de Android al enfocar el textarea de xterm */
+/* ========================================================================
+ * FIX PARA TECLADO ANDROID EN XTERM.JS
+ * ========================================================================
+ *
+ * Problema: xterm.js oculta el textarea (.xterm-helper-textarea) fuera
+ * de pantalla (left: -9999em, opacity: 0, width/height: 0). Cuando el
+ * usuario toca para abrir el teclado, Android NO muestra el teclado porque
+ * el elemento enfocado está invisible y fuera de la vista.
+ *
+ * Solución: Agregar la clase "input-active" al textarea solo cuando el
+ * usuario toca la zona de input. Esta clase hace el textarea visible y
+ * con dimensiones suficientes para que Android detecte el foco.
+ * ========================================================================
+ */
+
+/* Base styles para el textarea de xterm */
 .xterm-helper-textarea {
-    font-size: 16px !important;
+    font-size: 16px !important;          /* Prevenir zoom de Android al foco */
+    -webkit-text-size-adjust: none !important;  /* No auto-ajustar tamaño */
+    text-size-adjust: none !important;
+    transform: scale(1) !important;      /* Sin transformaciones */
+    transform-origin: 0 0 !important;
+    /* Nota: width/height/opacity se manejan dinámicamente con .input-active */
+}
+
+/* Estado activo: usuario tocó la zona de input, mostrar teclado */
+.xterm-helper-textarea.input-active {
+    /* Sobreescribir estilos de xterm.css (left: -9999em, opacity: 0, etc) */
+    opacity: 1 !important;       /* Hacerlo visible para Android */
+    left: 0 !important;          /* Traerlo dentro de la pantalla */
+    width: 50% !important;       /* Dimensiones suficientes para detectar foco */
+    height: 20px !important;
+    z-index: 10 !important;      /* Encima de otros elementos */
+    position: absolute !important;
 }
 
 

@@ -1,4 +1,6 @@
 """Widget de chat con mensajes diferenciados"""
+import json
+import re
 from textual.widgets import RichLog
 from rich.markdown import Markdown
 from rich.text import Text
@@ -34,13 +36,21 @@ class ChatLog(RichLog):
         self.write(f"[cyan]{content}[/cyan]")
         self.write("[dim]─[/dim]")
 
-    def write_assistant(self, content: str) -> None:
-        """Mensaje del asistente - estilo diferente"""
+    def write_assistant(self, content: str, structured_tag: str = None) -> None:
+        """Mensaje del asistente
+
+        Args:
+            content: Contenido del mensaje.
+            structured_tag: Tag desde la respuesta estructurada (INFO, WARNING, ERROR, SUCCESS).
+                            Ignorado en esta versión simplificada.
+        """
         self._is_thinking = False
         # Línea vacía para separar
         self.write("")
-        # Asistente con prefijo diferente
-        self.write(f"[bold black on #4a7c59] ◆ CLAUDE [/bold black on #4a7c59] [dim]─────────────────[/dim]")
+
+        # Header simple con color verde por defecto
+        self.write("[bold black on #4a7c59] ◆ CLAUDE [/bold black on #4a7c59]")
+
         try:
             md = Markdown(content, code_theme="monokai")
             self.write(md)
@@ -78,5 +88,5 @@ class ChatLog(RichLog):
         self.write(f"[red]{error}[/red]")
 
     def write_streaming(self, chunk: str) -> None:
-        """Escribir chunk durante streaming"""
-        pass
+        """Acumular chunks durante streaming (NO renderizar todavía)"""
+        pass  # El agente llama a write_assistant() después con el tag correcto

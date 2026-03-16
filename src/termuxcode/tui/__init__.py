@@ -2,5 +2,4 @@
 
 from .app import ClaudeChat
 from .history import MessageHistory
-
-__all__ = ['ClaudeChat', 'MessageHistory']
+from .filters import HistoryPreprocessor

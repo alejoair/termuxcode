@@ -8,14 +8,13 @@ from textual.reactive import reactive
 from .chat import ChatLog
 from .sessions import SessionManager
 from .styles import CSS
-from .game import StatsManager, XPBar, AchievementPopup, LevelUpBanner
-from .mixins import SessionHandlersMixin, QueryHandlersMixin, GamificationMixin, SessionState
+from .mixins import SessionHandlersMixin, QueryHandlersMixin, SessionState
+from .memory import Initializer
 
 
 class ClaudeChat(
     SessionHandlersMixin,
     QueryHandlersMixin,
-    GamificationMixin,
     App
 ):
     """TUI optimizada para móvil: sin header, compacta, touch-friendly"""
@@ -38,13 +37,8 @@ class ClaudeChat(
         self._current_session_id: str | None = None
         self._session_states: dict[str, SessionState] = {}
 
-        # Sistema de gamificación
-        self.stats_manager = StatsManager(Path(self.cwd) / ".sessions")
-
     def compose(self) -> ComposeResult:
         """Layout minimalista: solo chat + input compacto"""
-        # XPBar en el top
-        yield XPBar(id="xp-bar")
         # Chat en el medio (ocupa el espacio restante)
         yield ChatLog(id="messages")
         # Input en la parte inferior
@@ -55,25 +49,26 @@ class ClaudeChat(
             yield Input(id="message-input", placeholder="Mensaje...", classes="-textual-compact")
             # Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación
             yield Static(id="bottom-spacer")
-        # Popups de gamificación al final (overlays, no afectan layout)
-        yield AchievementPopup()
-        yield LevelUpBanner()
 
     def on_mount(self) -> None:
         self.chat_log = self.query_one("#messages", ChatLog)
         self.tabs = self.query_one("#sessions-tabs", Tabs)
         self.input = self.query_one("#message-input", Input)
-        self.xp_bar = self.query_one("#xp-bar", XPBar)
 
-        # Configurar callbacks de gamificación
-        self.stats_manager.on_achievement(self._show_achievement)
-        self.stats_manager.on_level_up(self._show_level_up)
-
-        # Actualizar XP bar con stats actuales
-        self._update_xp_bar()
+        # Inicializar sistema de memoria (CLAUDE.md, config.json, etc.)
+        self._initialize_memory()
 
         self.chat_log.write("[dim]TermuxCode listo. Ctrl+N = nueva sesión[/dim]")
         self.call_later(self._load_first_session)
+
+    def _initialize_memory(self) -> None:
+        """Inicializa el sistema de memoria al iniciar la app."""
+        try:
+            init = Initializer(cwd=self.cwd)
+            results = init.initialize_all()
+        except Exception as e:
+            # Silencioso - si falla, la app sigue funcionando
+            self.chat_log.write(f"[dim]Memoria: {e}[/dim]")
 
     def on_click(self, event) -> None:
         if isinstance(event.widget, ChatLog):
@@ -91,6 +86,7 @@ class ClaudeChat(
         """Manejar click en botón nueva sesión"""
         if event.button.id == "new-session-btn":
             await self.action_new_session()
+
 
 
 if __name__ == "__main__":
