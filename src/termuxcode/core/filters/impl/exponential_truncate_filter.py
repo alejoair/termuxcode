@@ -1,7 +1,7 @@
 """Filtro que aplica truncamiento exponencial a tool_result messages."""
 
 from typing import Literal
-from ..base import MessageFilter
+from termuxcode.core.filters.base import MessageFilter
 
 
 class ExponentialTruncateFilter(MessageFilter):

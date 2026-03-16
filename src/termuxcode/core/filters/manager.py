@@ -1,10 +1,10 @@
 """Manager que ejecuta todos los filtros en orden."""
 
 from typing import Literal
-from .base import MessageFilter
-from .impl.useful_filter import UsefulFilter
-from .impl.truncate_filter import TruncateFilter
-from .impl.exponential_truncate_filter import ExponentialTruncateFilter
+from termuxcode.core.filters.base import MessageFilter
+from termuxcode.core.filters.impl.useful_filter import UsefulFilter
+from termuxcode.core.filters.impl.truncate_filter import TruncateFilter
+from termuxcode.core.filters.impl.exponential_truncate_filter import ExponentialTruncateFilter
 
 
 class FilterManager:

@@ -5,14 +5,14 @@ from textual.containers import Vertical, Horizontal
 from textual.widgets import Input, Tabs, Button, Static
 from textual.reactive import reactive
 
-from .chat import ChatLog
-from ..core.sessions import SessionManager
-from .styles import CSS
-from .mixins import SessionHandlersMixin, QueryHandlersMixin
-from ..core.session_state import SessionState
-from ..core.memory import Initializer
-from ..core.background_manager import BackgroundTaskManager
-from ..core.notification_system import NotificationQueue
+from termuxcode.tui.chat import ChatLog
+from termuxcode.core.sessions import SessionManager
+from termuxcode.tui.styles import CSS
+from termuxcode.tui.mixins import SessionHandlersMixin, QueryHandlersMixin
+from termuxcode.core.session_state import SessionState
+from termuxcode.core.memory import Initializer
+from termuxcode.core.background_manager import BackgroundTaskManager
+from termuxcode.core.notification_system import NotificationQueue
 
 
 class ClaudeChat(

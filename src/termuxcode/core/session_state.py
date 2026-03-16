@@ -2,8 +2,8 @@
 from __future__ import annotations
 import asyncio
 
-from .history import MessageHistory
-from .agent import AgentClient
+from termuxcode.core.history import MessageHistory
+from termuxcode.core.agent import AgentClient
 
 
 class SessionState:

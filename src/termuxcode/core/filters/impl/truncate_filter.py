@@ -1,7 +1,7 @@
 """Filtro que trunca el contenido de mensajes."""
 
 from typing import Literal
-from ..base import MessageFilter
+from termuxcode.core.filters.base import MessageFilter
 
 
 class TruncateFilter(MessageFilter):

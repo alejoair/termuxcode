@@ -2,7 +2,7 @@
 
 __version__ = "0.2.0"
 
-from .tui import ClaudeChat
-from .cli import main
+from termuxcode.tui import ClaudeChat
+from termuxcode.cli import main
 
 __all__ = ['ClaudeChat', 'main']

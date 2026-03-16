@@ -1,7 +1,7 @@
 """Filtro que elimina mensajes marcados como no útiles."""
 
 from typing import Literal
-from ..base import MessageFilter
+from termuxcode.core.filters.base import MessageFilter
 
 
 class UsefulFilter(MessageFilter):

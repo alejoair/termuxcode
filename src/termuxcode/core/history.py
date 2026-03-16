@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Literal, Optional
 
-from .filters import FilterManager, estimate_prompt_size
+from termuxcode.core.filters import FilterManager, estimate_prompt_size
 
 
 class MessageHistory:

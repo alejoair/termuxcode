@@ -13,12 +13,12 @@ Uso:
     filtered = manager.apply(history)
 """
 
-from .base import MessageFilter
-from .manager import FilterManager
-from .impl.truncate_filter import TruncateFilter
-from .impl.useful_filter import UsefulFilter
-from .impl.exponential_truncate_filter import ExponentialTruncateFilter
-from .preprocessor import HistoryPreprocessor
+from termuxcode.core.filters.base import MessageFilter
+from termuxcode.core.filters.manager import FilterManager
+from termuxcode.core.filters.impl.truncate_filter import TruncateFilter
+from termuxcode.core.filters.impl.useful_filter import UsefulFilter
+from termuxcode.core.filters.impl.exponential_truncate_filter import ExponentialTruncateFilter
+from termuxcode.core.filters.preprocessor import HistoryPreprocessor
 
 __all__ = [
     "MessageFilter",
@@ -40,5 +40,5 @@ def estimate_prompt_size(history: list[dict], new_message: str = "") -> dict:
     Returns:
         Dict con estadísticas del tamaño
     """
-    from .estimator import estimate_prompt_size as _estimate
+    from termuxcode.core.filters.estimator import estimate_prompt_size as _estimate
     return _estimate(history, new_message)

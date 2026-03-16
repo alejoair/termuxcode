@@ -3,12 +3,12 @@ import os
 from typing import TYPE_CHECKING, Callable, Optional
 
 from claude_agent_sdk import query, ClaudeAgentOptions
+from termuxcode.core.schemas.main_agent_schema import MainAgentResponse
+from termuxcode.core.history import MessageHistory
 
-from .history import MessageHistory
-from .schemas import STRUCTURED_RESPONSE_SCHEMA
 
 if TYPE_CHECKING:
-    from ..tui.chat import ChatLog
+    from termuxcode.tui.chat import ChatLog
 
 # Tools que detienen el turno al ser detectadas
 _STOP_TOOLS = frozenset({"AskUserQuestion", "StructuredOutput"})
@@ -62,7 +62,7 @@ class AgentClient:
             setting_sources=["project", "user"],
             output_format={
                 "type": "json_schema",
-                "schema": STRUCTURED_RESPONSE_SCHEMA
+                "schema": MainAgentResponse.model_json_schema()
             },
         )
 

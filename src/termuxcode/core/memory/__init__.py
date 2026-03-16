@@ -27,6 +27,6 @@ Ejemplo de uso:
     config = bb.get("config")  # config.json cargado
 """
 
-from .memory import Blackboard, Fifo, Initializer, Storage
+from termuxcode.core.memory.memory import Blackboard, Fifo, Initializer, Storage
 
 __all__ = ["Fifo", "Blackboard", "Initializer", "Storage"]

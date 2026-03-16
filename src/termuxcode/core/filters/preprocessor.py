@@ -1,8 +1,8 @@
 """Wrapper para mantener compatibilidad con HistoryPreprocessor."""
 
 from typing import Literal
-from .manager import FilterManager
-from .estimator import estimate_prompt_size
+from termuxcode.core.filters.manager import FilterManager
+from termuxcode.core.filters.estimator import estimate_prompt_size
 
 
 class HistoryPreprocessor:
