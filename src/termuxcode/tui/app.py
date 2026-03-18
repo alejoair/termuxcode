@@ -6,10 +6,10 @@ from textual.widgets import Input, Tabs, Button, Static
 from textual.reactive import reactive
 
 from termuxcode.tui.chat import ChatLog
-from termuxcode.core.sessions import SessionManager
+from termuxcode.core.session_manager import SessionManager
 from termuxcode.tui.styles import CSS
 from termuxcode.tui.mixins import SessionHandlersMixin, QueryHandlersMixin
-from termuxcode.core.session_state import SessionState
+from termuxcode.core.session_manager import SessionState
 from termuxcode.core.memory import Initializer
 from termuxcode.core.background_manager import BackgroundTaskManager
 from termuxcode.core.notification_system import NotificationQueue
@@ -37,7 +37,7 @@ class ClaudeChat(
         super().__init__()
         self.cwd = cwd or str(Path.cwd())
         self.max_history = max_history
-        self.session_manager = SessionManager(Path(self.cwd) / ".sessions")
+        self.session_manager = SessionManager(Path(self.cwd) / ".claude" / "sessions")
         self._current_session_id: str | None = None
         self._session_states: dict[str, SessionState] = {}
         self.background_manager = BackgroundTaskManager()
@@ -53,8 +53,8 @@ class ClaudeChat(
                 yield Tabs(id="sessions-tabs")
                 yield Button("+", id="new-session-btn", flat=True)
             with Horizontal(id="input-row"):
-                yield Button("⏹", id="stop-btn", classes="-stop-button")
                 yield Input(id="message-input", placeholder="Mensaje...", classes="-textual-compact")
+                yield Button("⏹", id="stop-btn", classes="-stop-button")
             # Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación
             yield Static(id="bottom-spacer")
 

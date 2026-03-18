@@ -67,7 +67,7 @@ Screen {
 
 /* Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación */
 #bottom-spacer {
-    height: 2;
+    height: 1;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -88,8 +88,8 @@ Screen {
    Usamos la clase -textual-compact que Textual provee
    ═════════════════════════════════════════════════════════════ */
 
-/* Sobrescribir estilos del input compacto */
-#message-input.-textual-compact {
+/* Selector base con mayor especificidad */
+#input-row #message-input {
     height: 3;
     width: 1fr;
     background: $surface;
@@ -99,18 +99,18 @@ Screen {
     min-width: 1;
 }
 
-#message-input.-textual-compact:focus {
+#input-row #message-input:focus {
     background: $surface-darken-1;
 }
 
 /* Cursor */
-#message-input.-textual-compact .input--cursor {
+#input-row #message-input .input--cursor {
     background: $primary;
     color: $background;
 }
 
 /* Placeholder */
-#message-input.-textual-compact .input--placeholder {
+#input-row #message-input .input--placeholder {
     color: $text-muted;
     text-style: italic;
 }
@@ -123,7 +123,7 @@ Screen {
     width: 1fr;
     min-width: 1;
     background: $panel;
-    border-bottom: solid $primary 50%;
+    border-bottom: solid $primary 10%;
 }
 
 /* Ocultar underline bar de Textual */
@@ -173,12 +173,12 @@ Screen {
 /* Botón Stop - al lado del input */
 #stop-btn {
     height: 3;
-    min-width: 1;
+    width: 3;
     margin: 0;
     background: orange;
     color: black;
     text-style: bold;
-    align-vertical: middle;
+    content-align: center middle;
 }
 
 /* Hover: warning color más claro */

@@ -1,64 +1,51 @@
 """Módulo para manejo de historial de conversación en JSONL"""
 import json
-import uuid
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
-from termuxcode.core.filters import FilterManager, estimate_prompt_size
+from termuxcode.core.history_manager.filters import ExponentialTruncateFilter
 
 
 class MessageHistory:
     """Gestiona el historial de mensajes en formato JSONL"""
 
-    def __init__(self, filename: str = "messages.jsonl", max_messages: int = 100,
-                 session_id: str = None, cwd: str = None,
+    def __init__(self, filepath: Path | str = None, max_messages: int = 100,
                  # Configuración de filtros
-                 filter_by_useful: Literal[None, False, True] = True,
                  base_length: int = 2000,
                  decay: float = 0.08,
                  min_length: int = 200,
                  max_decay_distance: int = 10,
-                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis"):
+                 truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis",
+                 # Deprecated: mantener por compatibilidad
+                 filename: str = None, session_id: str = None, cwd: str = None):
         self.max_messages = max_messages
-        self.cwd = Path(cwd) if cwd else Path.cwd()
-        self.base_dir = self._get_history_dir()
-        self.session_id = session_id or str(uuid.uuid4())[:8]
-        self.filename = filename.replace(".jsonl", f"_{self.session_id}.jsonl")
-        self._history_file = self.base_dir / self.filename
+
+        # Determinar ruta del archivo
+        if filepath is not None:
+            self._history_file = Path(filepath)
+        elif cwd is not None and session_id is not None:
+            # Ruta legacy: cwd/.claude/sessions/messages_{session_id}.jsonl
+            base_dir = Path(cwd) / ".claude" / "sessions"
+            base_dir.mkdir(parents=True, exist_ok=True)
+            name = filename or "messages.jsonl"
+            name = name.replace(".jsonl", f"_{session_id}.jsonl")
+            self._history_file = base_dir / name
+        else:
+            raise ValueError("Se requiere filepath o (cwd + session_id)")
 
         # Configuración de filtros para preprocesamiento
-        self.filter_by_useful = filter_by_useful
         self.base_length = base_length
         self.decay = decay
         self.min_length = min_length
         self.max_decay_distance = max_decay_distance
         self.truncate_strategy = truncate_strategy
 
-    def _get_history_dir(self) -> Path:
-        """Retorna el directorio donde se guarda el historial"""
-        sessions_dir = self.cwd / ".sessions"
-        sessions_dir.mkdir(parents=True, exist_ok=True)
-        return sessions_dir
-
     def load(self) -> list[dict]:
         """Carga el historial desde el archivo JSONL"""
         if not self._history_file.exists():
             return []
         with open(self._history_file, 'r', encoding='utf-8') as f:
-            history = [json.loads(line) for line in f if line.strip()]
-
-        # Migrar mensajes antiguos agregando is_useful
-        migrated = False
-        for msg in history:
-            if "is_useful" not in msg:
-                msg["is_useful"] = True
-                migrated = True
-
-        # Si hubo migración, guardar el archivo actualizado
-        if migrated:
-            self.save(history)
-
-        return history
+            return [json.loads(line) for line in f if line.strip()]
 
     def save(self, messages: list[dict]) -> None:
         """Guarda el historial en el archivo JSONL (limitado a max_messages)"""
@@ -67,15 +54,14 @@ class MessageHistory:
             for msg in messages_to_save:
                 f.write(json.dumps(msg, ensure_ascii=False) + '\n')
 
-    def append_single(self, role: str, content: str | dict, is_useful: bool = True) -> None:
+    def append_single(self, role: str, content: str | dict) -> None:
         """Guarda un solo mensaje al historial sin cargar todo el archivo.
 
         Args:
             role: Rol del mensaje ('user', 'assistant', 'tool_use', 'tool_result')
             content: Contenido del mensaje (string para user/assistant/result, dict para tool_use)
-            is_useful: Si el mensaje es útil para incluir en el prompt (default True)
         """
-        msg = {"role": role, "content": content, "is_useful": is_useful}
+        msg = {"role": role, "content": content}
 
         # Agregar al archivo directamente
         with open(self._history_file, 'a', encoding='utf-8') as f:
@@ -86,20 +72,19 @@ class MessageHistory:
         if len(history) > self.max_messages:
             self.save(history)
 
-    def append(self, role: str, content: str, is_useful: bool = True) -> list[dict]:
+    def append(self, role: str, content: str) -> list[dict]:
         """Agrega un mensaje al historial y lo guarda.
 
         Args:
             role: Rol del mensaje
             content: Contenido del mensaje
-            is_useful: Si el mensaje es útil para incluir en el prompt (default True)
         """
         history = self.load()
-        history.append({"role": role, "content": content, "is_useful": is_useful})
+        history.append({"role": role, "content": content})
         self.save(history)
         return history
 
-    def append_batch(self, messages: list[dict], is_useful: bool = True) -> list[dict]:
+    def append_batch(self, messages: list[dict]) -> list[dict]:
         """Agrega múltiples mensajes al historial y lo guarda.
 
         Cada mensaje debe tener 'role' y 'content'.
@@ -109,13 +94,8 @@ class MessageHistory:
 
         Args:
             messages: Lista de mensajes a agregar
-            is_useful: Si los mensajes son útiles para incluir en el prompt (default True)
         """
         history = self.load()
-        # Agregar is_useful a cada mensaje si no tiene el campo
-        for msg in messages:
-            if "is_useful" not in msg:
-                msg["is_useful"] = is_useful
         history.extend(messages)
         self.save(history)
         return history
@@ -127,22 +107,20 @@ class MessageHistory:
             history: Historial de mensajes
             new_message: Nuevo mensaje del usuario
             apply_filters: Si True, aplica los filtros configurados antes de reconstruir
-                (truncar tool_result, filtrar mensajes no útiles, etc.)
 
         Returns:
             Prompt reconstruido listo para enviar al LLM
         """
-        # Aplicar filtros usando FilterManager
+        # Aplicar truncado directamente
         if apply_filters:
-            manager = FilterManager(
-                filter_by_useful=self.filter_by_useful,
+            truncate_filter = ExponentialTruncateFilter(
                 base_length=self.base_length,
                 decay=self.decay,
                 min_length=self.min_length,
                 max_decay_distance=self.max_decay_distance,
                 truncate_strategy=self.truncate_strategy,
             )
-            history = manager.apply(history)
+            history = truncate_filter.apply(history)
 
         prompt = ""
         for msg in history:
@@ -160,21 +138,6 @@ class MessageHistory:
                 prompt += f"[Tool result: {content}]\n\n"
         prompt += f"User: {new_message}\n\nAssistant:"
         return prompt
-
-    def estimate_size(self, history: list[dict] = None) -> dict:
-        """Estima el tamaño del prompt reconstruido.
-
-        Args:
-            history: Historial a estimar. Si es None, carga desde archivo.
-
-        Returns:
-            Dict con estadísticas: character_count, line_count, message_breakdown,
-            tool_result_total_size
-        """
-        if history is None:
-            history = self.load()
-
-        return estimate_prompt_size(history)
 
     def clear(self) -> None:
         """Limpia el historial"""

@@ -1,10 +1,9 @@
 """Filtro que aplica truncamiento exponencial a todos los mensajes."""
 
 from typing import Literal
-from termuxcode.core.filters.base import MessageFilter
 
 
-class ExponentialTruncateFilter(MessageFilter):
+class ExponentialTruncateFilter:
     """Aplica truncamiento exponencial a todos los mensajes.
 
     Los mensajes más recientes se mantienen más completos que los antiguos.
@@ -85,7 +84,6 @@ class ExponentialTruncateFilter(MessageFilter):
         return {
             "role": msg.get("role", ""),
             "content": new_content,
-            "is_useful": msg.get("is_useful", True),
         }
 
     def _apply_strategy(self, truncated: str, original: str) -> str:

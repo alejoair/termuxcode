@@ -1,7 +1,6 @@
 """Core - Lógica general reutilizable"""
-from termuxcode.core.agent import MainAgentClient
-from termuxcode.core.history import MessageHistory
-from termuxcode.core.sessions import SessionManager
-from termuxcode.core.session_state import SessionState
+from termuxcode.core.agents import MainAgentClient
+from termuxcode.core.history_manager import MessageHistory
+from termuxcode.core.session_manager import SessionManager, Session, SessionState
 from termuxcode.core.background_manager import BackgroundTaskManager
 from termuxcode.core.notification_system import NotificationQueue, NotificationType

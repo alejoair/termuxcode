@@ -1,10 +1,10 @@
 """Módulo para comunicarse con el agente Claude con historial en JSONL"""
 import os
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable
 
 from claude_agent_sdk import query, ClaudeAgentOptions
 from termuxcode.core.schemas.main_agent_schema import MainAgentResponse
-from termuxcode.core.history import MessageHistory
+from termuxcode.core.history_manager import MessageHistory
 
 
 if TYPE_CHECKING:
@@ -73,9 +73,6 @@ class MainAgentClient:
         self.current_structured_response = None
         should_stop = False
 
-        # Guardar índice inicial para poder actualizar is_useful después
-        initial_count = self.history.count()
-
         try:
             async for message in query(prompt=full_prompt, options=options):
                 # Solo procesar si la sesión sigue activa
@@ -92,14 +89,14 @@ class MainAgentClient:
                         elif block_type == "ToolUseBlock":
                             # Guardar el texto acumulado del asistente antes del tool_use
                             if assistant_response:
-                                self.history.append_single("assistant", assistant_response, is_useful=True)
+                                self.history.append_single("assistant", assistant_response)
                                 assistant_response = ""
 
                             # Guardar tool_use inmediatamente
                             self.history.append_single("tool_use", {
                                 "name": block.name,
                                 "input": str(block.input) if hasattr(block, 'input') else "",
-                            }, is_useful=True)
+                            })
 
                             # Detectar stop tool (después de guardar)
                             if block.name in _STOP_TOOLS:
@@ -108,7 +105,7 @@ class MainAgentClient:
 
                         elif block_type == "ToolResultBlock":
                             # Guardar tool_result inmediatamente
-                            self.history.append_single("tool_result", str(block.content), is_useful=True)
+                            self.history.append_single("tool_result", str(block.content))
 
                 if should_stop:
                     break
@@ -118,44 +115,7 @@ class MainAgentClient:
 
         # Guardar texto final del asistente si queda algo pendiente
         if assistant_response:
-            self.history.append_single("assistant", assistant_response, is_useful=True)
-
-        # Verificar si la respuesta estructurada indica que no es útil
-        # Si es así, actualizar todos los mensajes del turno actual
-        is_useful_to_record = True
-        if self.current_structured_response:
-            is_useful_to_record = _get_field(self.current_structured_response, "is_useful_to_record_in_history", True)
-
-        if not is_useful_to_record:
-            # Marcar todos los mensajes del turno actual como no útiles
-            self._mark_turn_as_not_useful(initial_count)
-
-    def _mark_turn_as_not_useful(self, start_index: int) -> None:
-        """Marca todos los mensajes desde start_index como no útiles.
-
-        Solo marca los mensajes del asistente, los mensajes del usuario
-        siempre se marcan como útiles.
-
-        Args:
-            start_index: Índice desde donde empezar a marcar (exclusivo)
-        """
-        import json
-
-        history = self.history.load()
-        if start_index >= len(history):
-            return
-
-        # Actualizar is_useful a False solo para los mensajes del asistente del turno actual
-        updated = False
-        for i in range(start_index, len(history)):
-            # Solo marcar mensajes del asistente como no útiles
-            if history[i].get("role") == "assistant" and history[i].get("is_useful", True):
-                history[i]["is_useful"] = False
-                updated = True
-
-        if updated:
-            # Guardar el historial actualizado
-            self.history.save(history)
+            self.history.append_single("assistant", assistant_response)
 
     async def _process_message(self, message, skip_tools=None) -> None:
         """Procesar mensaje del agente"""

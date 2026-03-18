@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING
 from textual.widgets import Tabs, Tab, Button
 
 if TYPE_CHECKING:
-    from ..app import ClaudeChat
-    from ...core.session_state import SessionState
-    from ...core.notification_system import NotificationType
+    from termuxcode.tui.app import ClaudeChat
+    from termuxcode.core.session_manager import SessionState
+    from termuxcode.core.notification_system import NotificationType
 
 
 class SessionHandlersMixin:
@@ -27,15 +27,16 @@ class SessionHandlersMixin:
     async def _get_or_create_session_state(self: "ClaudeChat", session_id: str) -> "SessionState":
         """Obtener o crear el estado de una sesión"""
         if session_id not in self._session_states:
-            from ...core.session_state import SessionState
-            from ...core.history import MessageHistory
-            from ...core.agent import MainAgentClient
+            from termuxcode.core.session_manager import SessionState
+            from termuxcode.core.history_manager import MessageHistory
+            from termuxcode.core.agents import MainAgentClient
+
+            # Obtener la ruta del archivo desde SessionManager
+            session = self.session_manager.get_session(session_id)
 
             history = MessageHistory(
-                filename="messages.jsonl",
+                filepath=session.history_file,
                 max_messages=self.max_history,
-                session_id=session_id,
-                cwd=self.cwd
             )
             # Crear agent con session_id capturado por valor (no por referencia)
             captured_session_id = session_id
