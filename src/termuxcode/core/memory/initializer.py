@@ -45,7 +45,7 @@ class Initializer:
         if path.exists():
             content = path.read_text(encoding="utf-8")
             bb = Blackboard(blackboard_name, memory_dir=self.memory_dir)
-            bb.set("docs.claude_md", content)
+            bb.set_sync("docs.claude_md", content)
         else:
             raise FileNotFoundError(f"CLAUDE.md no encontrado en {path}")
 
@@ -67,7 +67,7 @@ class Initializer:
             with open(path, "r", encoding="utf-8") as f:
                 config = json.load(f)
             bb = Blackboard(blackboard_name, memory_dir=self.memory_dir)
-            bb.set(blackboard_path, config)
+            bb.set_sync(blackboard_path, config)
         else:
             raise FileNotFoundError(f"Config no encontrado en {path}")
 

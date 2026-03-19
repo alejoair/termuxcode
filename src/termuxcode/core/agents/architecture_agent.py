@@ -71,6 +71,7 @@ class ArchitectureAgent:
                 context_lines.append(f"- {label}: {val}")
 
         schema = build_partial_schema(ArchitectureAgentResponse, missing)
+        all_missing = len(missing) == len(FIELD_MAP)
         field_names = list(missing.values())
 
         context_block = ""
@@ -81,12 +82,17 @@ class ArchitectureAgent:
                 + "\nUse this to guide your exploration.\n"
             )
 
-        prompt = (
-            _BASE_PROMPT
-            + context_block
-            + f"\nOnly fill these fields: {', '.join(field_names)}. "
-            + "Leave no field empty."
-        )
+        if all_missing:
+            prompt = _BASE_PROMPT + context_block
+            final_schema = ArchitectureAgentResponse.model_json_schema()
+        else:
+            prompt = (
+                _BASE_PROMPT
+                + context_block
+                + f"\nOnly fill these fields: {', '.join(field_names)}. "
+                + "Leave no field empty."
+            )
+            final_schema = schema
 
         options = ClaudeAgentOptions(
             permission_mode="bypassPermissions",
@@ -96,7 +102,7 @@ class ArchitectureAgent:
             tools=["Read", "LS", "Bash", "StructuredOutput"],
             output_format={
                 "type": "json_schema",
-                "schema": schema,
+                "schema": final_schema,
             },
         )
 
@@ -124,10 +130,10 @@ class ArchitectureAgent:
                 logger.info(f"structured_output raw: {structured}")
                 logger.info(f"structured={bool(structured)}")
                 if structured:
-                    self._persist(structured, missing)
+                    await self._persist(structured, missing)
                     logger.info("persisted architecture to blackboard")
 
-    def _persist(self, structured: dict, missing: dict[str, str]) -> None:
+    async def _persist(self, structured: dict, missing: dict[str, str]) -> None:
         """Write only the missing fields from structured output to the blackboard."""
         bb = Blackboard("app")
         for bb_path, schema_field in missing.items():
@@ -140,4 +146,4 @@ class ArchitectureAgent:
                     value = json.loads(value)
                 except (json.JSONDecodeError, TypeError):
                     pass
-            bb.set(bb_path, value)
+            await bb.set(bb_path, value)

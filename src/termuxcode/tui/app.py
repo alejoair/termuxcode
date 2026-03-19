@@ -16,6 +16,8 @@ Logging:
 """
 import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal
 from textual.widgets import Input, Tabs, Button, Static
@@ -31,7 +33,9 @@ from termuxcode.core.memory import Initializer
 from termuxcode.core.background_manager import BackgroundTaskManager
 from termuxcode.core.agents.environment_agent import EnvironmentAgent
 from termuxcode.core.agents.architecture_agent import ArchitectureAgent
+from termuxcode.core.memory.blackboard import Blackboard
 from termuxcode.core.notification_system import NotificationQueue
+from termuxcode.tui.project_info import ProjectInfo
 
 
 class ClaudeChat(
@@ -84,6 +88,7 @@ class ClaudeChat(
         El spacer al final evita que el input quede tapado por la barra de
         navegación del sistema en móvil.
         """
+        yield ProjectInfo(id="project-info")
         yield ChatLog(id="messages")
         with Vertical(id="bottom-container"):
             with Horizontal(id="tabs-row"):

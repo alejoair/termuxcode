@@ -39,8 +39,13 @@ def build_partial_schema(
     if not missing_fields:
         return None
 
-    needed = set(missing_fields.values())
     full_schema = full_model.model_json_schema()
+    needed = set(missing_fields.values())
+    all_fields = set(full_schema.get("properties", {}).keys())
+
+    # If all fields are missing, return the full schema as-is
+    if needed == all_fields:
+        return full_schema
 
     partial = {
         "title": full_schema.get("title", "PartialResponse"),
@@ -50,4 +55,7 @@ def build_partial_schema(
             if k in needed
         },
     }
+    # Preserve description if present
+    if "description" in full_schema:
+        partial["description"] = full_schema["description"]
     return partial

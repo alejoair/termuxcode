@@ -56,12 +56,19 @@ class EnvironmentAgent:
             return
 
         schema = build_partial_schema(EnvironmentAgentResponse, missing)
+        all_missing = len(missing) == len(FIELD_MAP)
         field_names = list(missing.values())
-        prompt = (
-            _BASE_PROMPT
-            + f"\nOnly fill these fields: {', '.join(field_names)}. "
-            + "Leave no field empty."
-        )
+
+        if all_missing:
+            prompt = _BASE_PROMPT
+            final_schema = EnvironmentAgentResponse.model_json_schema()
+        else:
+            prompt = (
+                _BASE_PROMPT
+                + f"\nOnly fill these fields: {', '.join(field_names)}. "
+                + "Leave no field empty."
+            )
+            final_schema = schema
 
         options = ClaudeAgentOptions(
             permission_mode="bypassPermissions",
@@ -71,7 +78,7 @@ class EnvironmentAgent:
             tools=["Read", "LS", "Bash", "StructuredOutput"],
             output_format={
                 "type": "json_schema",
-                "schema": schema,
+                "schema": final_schema,
             },
         )
 
@@ -99,13 +106,13 @@ class EnvironmentAgent:
                 logger.info(f"structured_output raw: {structured}")
                 logger.info(f"structured={bool(structured)}")
                 if structured:
-                    self._persist(structured, missing)
+                    await self._persist(structured, missing)
                     logger.info("persisted to blackboard")
 
-    def _persist(self, structured: dict, missing: dict[str, str]) -> None:
+    async def _persist(self, structured: dict, missing: dict[str, str]) -> None:
         """Write only the missing fields from structured output to the blackboard."""
         bb = Blackboard("app")
         for bb_path, schema_field in missing.items():
             value = structured.get(schema_field)
             if value is not None:
-                bb.set(bb_path, value)
+                await bb.set(bb_path, value)
