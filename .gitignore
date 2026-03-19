@@ -42,6 +42,7 @@ Thumbs.db
 
 # Sessions data
 .sessions/
+.claude/sessions/
 
 # Logs
 *.log

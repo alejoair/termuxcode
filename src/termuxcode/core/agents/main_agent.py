@@ -57,7 +57,7 @@ class MainAgentClient:
         options = ClaudeAgentOptions(
             permission_mode="bypassPermissions",
             cwd=self.cwd,
-            include_partial_messages=False,
+            include_partial_messages=True,
             model="opus",
             setting_sources=["project", "user"],
             output_format={

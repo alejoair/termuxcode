@@ -173,7 +173,7 @@ Screen {
 /* Botón Stop - al lado del input */
 #stop-btn {
     height: 3;
-    width: 3;
+    width: 1;
     margin: 0;
     background: orange;
     color: black;
