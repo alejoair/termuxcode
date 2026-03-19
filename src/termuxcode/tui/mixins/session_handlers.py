@@ -93,7 +93,7 @@ class SessionHandlersMixin:
 
         # Publicar sesión activa en Blackboard para que TokenInfo sepa qué mostrar
         bb = Blackboard("app")
-        bb.set_sync("session.active_id", session_id)
+        await bb.set("session.active_id", session_id)
 
         if update_tabs:
             self.call_later(self._update_tabs)

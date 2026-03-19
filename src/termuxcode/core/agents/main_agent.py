@@ -17,13 +17,6 @@ if TYPE_CHECKING:
 _STOP_TOOLS = frozenset({"AskUserQuestion", "StructuredOutput"})
 
 
-def _get_field(structured: dict | None, key: str, default=None):
-    """Obtener un campo del structured output con valor por defecto."""
-    if not structured:
-        return default
-    return structured.get(key, default)
-
-
 def _build_bb_context() -> str:
     """Build a system context string from the Blackboard contents."""
     bb = Blackboard("app")
@@ -74,8 +67,6 @@ class MainAgentClient:
         self.session_id = session_id
         self.is_active_session = is_active_session or (lambda: True)
 
-        # Estado de la respuesta estructurada actual
-        self.current_structured_response = None
 
     async def query(self, prompt: str) -> None:
         """Ejecutar query del agente con historial en JSONL"""
@@ -108,11 +99,9 @@ class MainAgentClient:
             },
         )
 
-        old_claudecode = os.environ.pop('CLAUDECODE', None)
         # El mensaje del usuario ya fue guardado en query_handlers.py
         # Solo acumulamos mensajes del asistente para guardarlos incrementalmente
         assistant_response = ""
-        self.current_structured_response = None
 
         # Referencia al generador para limpieza controlada
         query_gen = None
@@ -159,11 +148,6 @@ class MainAgentClient:
             # Permitir que la cancelación se propague correctamente
             # El SDK limpiará sus recursos en su propio contexto
             raise
-        finally:
-            # Restaurar la variable de entorno
-            if old_claudecode:
-                os.environ['CLAUDECODE'] = old_claudecode
-
         # Guardar texto final del asistente si queda algo pendiente
         if assistant_response:
             self.history.append_single("assistant", assistant_response)
@@ -218,23 +202,6 @@ class MainAgentClient:
                 current_cost = bb.get(cost_key) or 0.0
                 await bb.set(cost_key, current_cost + message.total_cost_usd)  # await para disparar eventos
 
-        if hasattr(message, 'structured_output'):
-            # Debug: imprimir el structured output crudo
-            import sys
-            import json
-            sys.stderr.write(f"[DEBUG] Raw structured_output: {json.dumps(message.structured_output, indent=2)}\n")
-            sys.stderr.flush()
-
-            # Usar el dict directamente del SDK
-            structured = message.structured_output
-            self.current_structured_response = structured
-
-            # Debug: imprimir los campos obtenidos
-            if structured:
-                tag = _get_field(structured, "tag", "INFO")
-                sys.stderr.write(f"[DEBUG] Got tag: {tag}\n")
-                sys.stderr.write(f"[DEBUG] Got structured keys: {list(structured.keys())}\n")
-            sys.stderr.flush()
 
     async def _process_assistant(self, message, skip_tools=None) -> None:
         """Procesar AssistantMessage"""

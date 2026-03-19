@@ -113,8 +113,23 @@ class QueryHandlersMixin:
         self.call_later(self._update_stop_button)
 
     async def _run_query_safe(self: "ClaudeChat", state: "SessionState", prompt: str) -> None:
-        """Ejecutar query con manejo de errores y cancelación"""
+        """Ejecutar query con manejo de errores y cancelación.
+
+        Pipeline:
+        1. Run pre-query reactive agents (classifier + context gatherers) — awaited
+        2. Run main agent query — with enriched BB context
+        """
         try:
+            # Pre-query: classify prompt and run reactive agents
+            try:
+                await self.reactive_registry.run_pre_query(
+                    prompt, state.agent.session_id
+                )
+            except Exception as e:
+                # Pre-query failure is non-fatal — main agent can still work
+                import logging
+                logging.getLogger(__name__).warning(f"pre-query pipeline failed: {e}")
+
             await state.agent.query(prompt)
         except asyncio.CancelledError:
             # Query cancelada por el usuario (el callback se encarga de manejar esto)

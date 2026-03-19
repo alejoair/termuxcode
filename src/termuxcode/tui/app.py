@@ -36,6 +36,8 @@ from termuxcode.core.agents.architecture_agent import ArchitectureAgent
 from termuxcode.core.agents.overview_agent import OverviewAgent
 from termuxcode.core.memory.blackboard import Blackboard
 from termuxcode.core.notification_system import NotificationQueue
+from termuxcode.core.reactive_agents import ReactiveRegistry
+from termuxcode.core.reactive_agents.agents import FixContextAgent
 from termuxcode.tui.project_info import ProjectInfo
 from termuxcode.tui.token_info import TokenInfo
 from termuxcode.tui.blackboard_screen import BlackboardScreen
@@ -84,6 +86,10 @@ class ClaudeChat(
         self.background_manager = BackgroundTaskManager()
         # Cola de notificaciones para mostrar eventos asincrónicos en la UI
         self.notification_queue = NotificationQueue()
+        # Reactive agents: se activan con cambios en el Blackboard
+        self.reactive_registry = ReactiveRegistry(cwd=self.cwd)
+        self.reactive_registry.register(FixContextAgent)
+        self.reactive_registry.activate()
 
     def compose(self) -> ComposeResult:
         """Construye el layout: chat central + barra inferior fija.
@@ -128,6 +134,12 @@ class ClaudeChat(
         """Limpiar recursos al salir de la app."""
         # Cancelar todas las tareas en background
         self.background_manager.cancel_all()
+
+        # Desactivar reactive agents
+        try:
+            self.reactive_registry.deactivate()
+        except Exception:
+            pass
 
         # Limpiar listeners del Blackboard para evitar memory leaks
         try:
