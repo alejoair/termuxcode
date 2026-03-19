@@ -5,11 +5,14 @@ from textual.containers import Vertical, Horizontal
 from textual.widgets import Input, Tabs, Button, Static
 from textual.reactive import reactive
 
-from .chat import ChatLog
-from .sessions import SessionManager
-from .styles import CSS
-from .mixins import SessionHandlersMixin, QueryHandlersMixin, SessionState
-from .memory import Initializer
+from termuxcode.tui.chat import ChatLog
+from termuxcode.core.session_manager import SessionManager
+from termuxcode.tui.styles import CSS
+from termuxcode.tui.mixins import SessionHandlersMixin, QueryHandlersMixin
+from termuxcode.core.session_manager import SessionState
+from termuxcode.core.memory import Initializer
+from termuxcode.core.background_manager import BackgroundTaskManager
+from termuxcode.core.notification_system import NotificationQueue
 
 
 class ClaudeChat(
@@ -27,15 +30,18 @@ class ClaudeChat(
         ("ctrl+n", "new_session", "Nuevo"),
         ("ctrl+w", "close_session", "Cerrar"),
         ("ctrl+s", "toggle_sessions", "Sesiones"),
+        ("ctrl+h", "stop_query", "Stop"),
     ]
 
     def __init__(self, cwd: str = None, max_history: int = 100):
         super().__init__()
         self.cwd = cwd or str(Path.cwd())
         self.max_history = max_history
-        self.session_manager = SessionManager(Path(self.cwd) / ".sessions")
+        self.session_manager = SessionManager(Path(self.cwd) / ".claude" / "sessions")
         self._current_session_id: str | None = None
         self._session_states: dict[str, SessionState] = {}
+        self.background_manager = BackgroundTaskManager()
+        self.notification_queue = NotificationQueue()
 
     def compose(self) -> ComposeResult:
         """Layout minimalista: solo chat + input compacto"""
@@ -45,8 +51,10 @@ class ClaudeChat(
         with Vertical(id="bottom-container"):
             with Horizontal(id="tabs-row"):
                 yield Tabs(id="sessions-tabs")
-                yield Button("+", id="new-session-btn")
-            yield Input(id="message-input", placeholder="Mensaje...", classes="-textual-compact")
+                yield Button("+", id="new-session-btn", flat=True)
+            with Horizontal(id="input-row"):
+                yield Input(id="message-input", placeholder="Mensaje...", classes="-textual-compact")
+                yield Button("⏹", id="stop-btn", classes="-stop-button")
             # Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación
             yield Static(id="bottom-spacer")
 
@@ -54,6 +62,9 @@ class ClaudeChat(
         self.chat_log = self.query_one("#messages", ChatLog)
         self.tabs = self.query_one("#sessions-tabs", Tabs)
         self.input = self.query_one("#message-input", Input)
+
+        # Inicializar botón Stop (deshabilitado por defecto)
+        self._update_stop_button()
 
         # Inicializar sistema de memoria (CLAUDE.md, config.json, etc.)
         self._initialize_memory()
@@ -83,9 +94,11 @@ class ClaudeChat(
             event.stop()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Manejar click en botón nueva sesión"""
+        """Manejar click en botones"""
         if event.button.id == "new-session-btn":
             await self.action_new_session()
+        elif event.button.id == "stop-btn":
+            await self.action_stop_query()
 
 
 

@@ -70,23 +70,19 @@ class ChatLog(RichLog):
             preview = str(tool_input).replace('\n', ' ')[:40]
             if len(str(tool_input)) > 40:
                 preview += "..."
-            self.write(f"  [dim yellow]│[/dim yellow] [bold yellow]{tool_name}[/bold yellow] [dim]{preview}[/dim]")
+            self.write(f"  [dim yellow]│[/] [bold yellow]{tool_name}[/bold yellow] [dim]{preview}[/dim]")
         else:
-            self.write(f"  [dim yellow]│[/dim yellow] [bold yellow]{tool_name}[/bold yellow]")
+            self.write(f"  [dim yellow]│[/] [bold yellow]{tool_name}[/bold yellow]")
 
     def write_result(self, content: str) -> None:
         """Resultado de herramienta"""
         preview = str(content).replace('\n', ' ')[:50]
         if len(str(content)) > 50:
             preview += "..."
-        self.write(f"  [dim green]└►[/dim green] [dim]{preview}[/dim]")
+        self.write(f"  [dim green]└►[/] [dim]{preview}[/dim]")
 
     def write_error(self, error: str) -> None:
         """Error - visible"""
         self.write("")
         self.write(f"[bold white on #8b0000] ✗ ERROR [/bold white on #8b0000]")
         self.write(f"[red]{error}[/red]")
-
-    def write_streaming(self, chunk: str) -> None:
-        """Acumular chunks durante streaming (NO renderizar todavía)"""
-        pass  # El agente llama a write_assistant() después con el tag correcto

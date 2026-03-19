@@ -1,5 +1,4 @@
 """TUI para Claude Agent SDK - Chat Interface"""
 
-from .app import ClaudeChat
-from .history import MessageHistory
-from .filters import HistoryPreprocessor
+from termuxcode.tui.app import ClaudeChat
+from termuxcode.core.history_manager import MessageHistory

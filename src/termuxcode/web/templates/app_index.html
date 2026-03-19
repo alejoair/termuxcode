@@ -113,7 +113,7 @@
           const textarea = document.querySelector('.xterm-helper-textarea');
           if (textarea && !textarea.hasAttribute('data-managed')) {
             textarea.setAttribute('data-managed', '1');  // Marcar como ya inicializado
-            textarea.style.fontSize = '16px';
+            textarea.style.fontSize = '14px';  // Reducido para mejor ajuste en pantalla
             applyReadOnly(textarea);  // Empezar sin teclado
 
             // Cuando el usuario cierra el teclado (blur), volver al estado inicial
@@ -256,9 +256,9 @@
     </script>
 
     <script>
-      // Font size proporcional al viewport: ~vw/30, entre 10px y 22px
+      // Font size proporcional al viewport: ~vw/24, entre 10px y 20px
       (function() {
-        const size = Math.max(10, Math.min(28, Math.floor(window.innerWidth / 22)));
+        const size = Math.max(10, Math.min(20, Math.floor(window.innerWidth / 24)));
         document.getElementById('terminal').dataset.fontSize = size;
       })();
     </script>

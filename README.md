@@ -41,25 +41,6 @@ Opciones:
 | `Ctrl+N` | Nueva sesión |
 | `Ctrl+W` | Cerrar sesión actual |
 
-## Desarrollo
-
-```bash
-# Clonar y instalar en modo desarrollo
-git clone https://github.com/tu-usuario/termuxcode.git
-cd termuxcode
-pip install -e ".[dev]"
-
-# Ejecutar la TUI
-textual run src/termuxcode/tui.py
-
-# Tests
-pytest
-
-# Formato y lint
-ruff format .
-ruff check .
-```
-
 ## Licencia
 
 MIT

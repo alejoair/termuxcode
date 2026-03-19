@@ -50,7 +50,7 @@ body {
 
 /* Base styles para el textarea de xterm */
 .xterm-helper-textarea {
-    font-size: 16px !important;          /* Prevenir zoom de Android al foco */
+    font-size: 14px !important;          /* Reducido para mejor ajuste en pantalla */
     -webkit-text-size-adjust: none !important;  /* No auto-ajustar tamaño */
     text-size-adjust: none !important;
     transform: scale(1) !important;      /* Sin transformaciones */
@@ -167,4 +167,11 @@ body.-closed .closed-dialog {
 
 #start.-delay {
     display: flex;
+}
+
+/* Botón Stop - eliminar padding */
+#stop-btn {
+    font-size: 32px !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }

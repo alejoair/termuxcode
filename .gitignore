@@ -42,3 +42,9 @@ Thumbs.db
 
 # Sessions data
 .sessions/
+
+# Logs
+*.log
+
+# Memory data
+.claude/memory/

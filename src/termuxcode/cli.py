@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .web_server import run_web_server
+from termuxcode.web_server import run_web_server
 
 
 def main() -> None:
@@ -60,7 +60,7 @@ def main() -> None:
     else:
         # Importar ClaudeChat solo cuando se ejecuta en modo TUI normal
         # para evitar el warning de importación en modo serve
-        from .tui.app import ClaudeChat
+        from termuxcode.tui.app import ClaudeChat
 
         app = ClaudeChat(cwd=args.cwd)
         app.run()

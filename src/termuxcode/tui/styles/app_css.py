@@ -47,23 +47,40 @@ Screen {
    ═══════════════════════════════════════════════════════════ */
 #bottom-container {
     height: auto;
+    width: 100%;
     background: $panel;
     padding: 0;
     border-top: solid $primary;
     dock: bottom;
+    overflow-x: hidden;
 }
 
 /* Fila de tabs (horizontal) */
 #tabs-row {
     height: 2;
+    width: 100%;
     background: $panel;
     align-horizontal: left;
     align-vertical: middle;
+    overflow-x: hidden;
 }
 
 /* Spacer de 2 líneas para evitar que el input quede tapado por la barra de navegación */
 #bottom-spacer {
-    height: 2;
+    height: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INPUT ROW - Contenedor para input + botón Stop
+   ═══════════════════════════════════════════════════════════ */
+#input-row {
+    height: 3;
+    width: 100%;
+    background: $panel;
+    align-horizontal: left;
+    align-vertical: middle;
+    padding: 0;
+    overflow-x: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -71,27 +88,29 @@ Screen {
    Usamos la clase -textual-compact que Textual provee
    ═════════════════════════════════════════════════════════════ */
 
-/* Sobrescribir estilos del input compacto */
-#message-input.-textual-compact {
-    height: 1;
+/* Selector base con mayor especificidad */
+#input-row #message-input {
+    height: 3;
+    width: 1fr;
     background: $surface;
     color: $text;
-    padding: 0 1;
-    margin-bottom: 1;
+    padding: 0;
+    margin: 0;
+    min-width: 1;
 }
 
-#message-input.-textual-compact:focus {
+#input-row #message-input:focus {
     background: $surface-darken-1;
 }
 
 /* Cursor */
-#message-input.-textual-compact .input--cursor {
+#input-row #message-input .input--cursor {
     background: $primary;
     color: $background;
 }
 
 /* Placeholder */
-#message-input.-textual-compact .input--placeholder {
+#input-row #message-input .input--placeholder {
     color: $text-muted;
     text-style: italic;
 }
@@ -102,8 +121,9 @@ Screen {
 #sessions-tabs {
     height: 2;
     width: 1fr;
+    min-width: 1;
     background: $panel;
-    border-bottom: solid $primary 50%;
+    border-bottom: solid $primary 10%;
 }
 
 /* Ocultar underline bar de Textual */
@@ -148,6 +168,42 @@ Screen {
 #new-session-btn:focus {
     background: $primary 20%;
     text-style: bold;
+}
+
+/* Botón Stop - al lado del input */
+#stop-btn {
+    height: 3;
+    width: 3;
+    margin: 0;
+    background: orange;
+    color: black;
+    text-style: bold;
+    content-align: center middle;
+}
+
+/* Hover: warning color más claro */
+#stop-btn:hover {
+    background: orange;
+    color: black;
+}
+
+/* Focus: indicación visual */
+#stop-btn:focus {
+    background: orange;
+    color: black;
+}
+
+/* Disabled: desvanecer ligeramente pero visible */
+#stop-btn:disabled {
+    background: darkgray;
+    color: black;
+    text-style: dim;
+}
+
+/* Active momentáneo al hacer click */
+#stop-btn.-active {
+    background: $warning;
+    color: $text;
 }
 
 /* ═══════════════════════════════════════════════════════════════
