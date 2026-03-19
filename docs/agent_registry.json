@@ -103,6 +103,69 @@
           "example": ["observer en events", "strategy en agents"]
         }
       }
+    },
+    "overview": {
+      "file": "core/agents/overview_agent.py",
+      "schema": "core/schemas/overview_agent_schema.py",
+      "description": "Builds a comprehensive high-level overview of the project: what it does, why it exists, how to use it, key concepts, and developer onboarding notes.",
+      "depends_on": ["environment", "architecture"],
+      "fields": {
+        "project.overview.name": {
+          "schema_field": "name",
+          "type": "str | null",
+          "example": "termuxcode"
+        },
+        "project.overview.description": {
+          "schema_field": "description",
+          "type": "str | null",
+          "example": "A mobile-first coding assistant powered by Claude, built with Textual for terminal UI."
+        },
+        "project.overview.purpose": {
+          "schema_field": "purpose",
+          "type": "str | null",
+          "example": "Enable developers to code from mobile devices using an AI agent with full project context."
+        },
+        "project.overview.target_platform": {
+          "schema_field": "target_platform",
+          "type": "str | null",
+          "example": "Android/Termux, Windows, Linux"
+        },
+        "project.overview.tech_stack": {
+          "schema_field": "tech_stack",
+          "type": "str | null",
+          "example": "Python 3.12, Textual 8.0.0, claude-agent-sdk 0.1.48"
+        },
+        "project.overview.how_to_install": {
+          "schema_field": "how_to_install",
+          "type": "str | null",
+          "example": "git clone ... && cd termuxcode && pip install -e ."
+        },
+        "project.overview.how_to_run": {
+          "schema_field": "how_to_run",
+          "type": "str | null",
+          "example": "termuxcode"
+        },
+        "project.overview.how_to_test": {
+          "schema_field": "how_to_test",
+          "type": "str | null",
+          "example": "pytest"
+        },
+        "project.overview.key_concepts": {
+          "schema_field": "key_concepts",
+          "type": "list[str]",
+          "example": ["Blackboard memory: key-value store that persists project context across sessions"]
+        },
+        "project.overview.user_facing_features": {
+          "schema_field": "user_facing_features",
+          "type": "list[str]",
+          "example": ["Multi-session chat with tabs", "AI-powered code editing"]
+        },
+        "project.overview.developer_notes": {
+          "schema_field": "developer_notes",
+          "type": "str | null",
+          "example": "Pydantic schemas must be flat — nested models break StructuredOutput."
+        }
+      }
     }
   }
 }

@@ -10,7 +10,9 @@ Cada agente es **incremental**: al arrancar revisa el Blackboard y solo pide al 
 
 ## Conceptos del proyecto que necesitás conocer
 
-**Blackboard** (`core/memory/blackboard.py`): almacenamiento key-value persistido en disco como JSON. Funciona como una base de datos simple con rutas anidadas separadas por puntos: `bb.set("project.runtime.language", "python")`. El archivo físico vive en `.claude/memory/app.json` dentro del directorio del proyecto. Métodos útiles: `bb.get(path, default)`, `bb.exists(path)`.
+**Blackboard** (`core/memory/blackboard.py`): almacenamiento key-value persistido en disco como JSON con sistema de eventos. Funciona como una base de datos simple con rutas anidadas separadas por puntos: `await bb.set("project.runtime.language", "python")`. El archivo físico vive en `.claude/memory/app.json` dentro del directorio del proyecto. Métodos útiles: `bb.get(path, default)`, `bb.exists(path)`, `await bb.set(path, value)`, `bb.set_sync(path, value)` (sin eventos, para código sincrónico).
+
+**Sistema de eventos del Blackboard**: cada `await bb.set()` dispara callbacks registrados con `Blackboard.on(pattern, callback)`. Los patrones soportados son: exacto (`"project.architecture.modules"`), wildcard de un nivel (`"project.architecture.*"`), y deep wildcard (`"project.**"`). Los callbacks son funciones async que reciben `(path, value, blackboard)`. Se registran a nivel de clase, así que cualquier módulo que importe `Blackboard` puede registrar listeners. Para código sincrónico que no necesita eventos, usar `bb.set_sync()`.
 
 **Storage** (`core/memory/storage.py`): capa base de persistencia. Define `MEMORY_DIR = Path.cwd() / ".claude" / "memory"`, que es el único lugar donde se define la ruta de memoria. `Blackboard` y `Fifo` la usan automáticamente sin que nadie tenga que pasarla como argumento.
 
@@ -112,31 +114,33 @@ class MiAgent:
             if message.__class__.__name__ == "ResultMessage":
                 structured = getattr(message, "structured_output", None)
                 if structured:
-                    self._persist(structured, missing)
+                    await self._persist(structured, missing)
 ```
 
 **Importante: no usar `break` dentro del `async for` de `query()`.** El `ResultMessage` es siempre el último mensaje del generador. Hacer `break` fuerza el cierre del generador y provoca un error de `anyio` (`Attempted to exit cancel scope in a different task`). Dejar que el loop termine solo.
 
-    def _persist(self, structured: dict, missing: dict[str, str]) -> None:
+```python
+    async def _persist(self, structured: dict, missing: dict[str, str]) -> None:
         bb = Blackboard("app")
         for bb_path, schema_field in missing.items():
             value = structured.get(schema_field)
             if value is not None:
-                bb.set(bb_path, value)
+                await bb.set(bb_path, value)
 ```
 
 **Puntos clave:**
 - `get_missing_fields(FIELD_MAP, bb)` retorna solo las entradas del map cuyo valor en el BB es `None`, `""` o `[]`.
-- `build_partial_schema(Model, missing)` genera un JSON schema con solo los campos faltantes. Retorna `None` si no falta nada.
-- El prompt se parchea con `"\nOnly fill these fields: ..."` para que el subagente no pierda tokens en campos que ya existen.
-- `_persist` recibe `missing` (no el model completo) y solo escribe esos campos al BB.
+- `build_partial_schema(Model, missing)` genera un JSON schema con solo los campos faltantes. Si faltan todos, devuelve el schema completo de Pydantic tal cual. Retorna `None` si no falta nada.
+- El prompt se parchea con `"\nOnly fill these fields: ..."` para que el subagente no pierda tokens en campos que ya existen. Cuando faltan todos, usar el prompt base sin parchear.
+- `_persist` es `async` y usa `await bb.set()` para que cada escritura dispare eventos del Blackboard.
+- **Modelo: usar siempre `opus`.** Haiku no es confiable con structured output y tiende a hacer loops llamando `StructuredOutput` sin completar.
 
 **Si el schema tiene campos JSON string (dicts serializados):**
 
 ```python
 _JSON_STRING_FIELDS = {"campo_dict"}
 
-def _persist(self, structured: dict, missing: dict[str, str]) -> None:
+async def _persist(self, structured: dict, missing: dict[str, str]) -> None:
     bb = Blackboard("app")
     for bb_path, schema_field in missing.items():
         value = structured.get(schema_field)
@@ -147,7 +151,7 @@ def _persist(self, structured: dict, missing: dict[str, str]) -> None:
                 value = json.loads(value)
             except (json.JSONDecodeError, TypeError):
                 pass
-        bb.set(bb_path, value)
+        await bb.set(bb_path, value)
 ```
 
 ### 4. Inyectar contexto de agentes previos (opcional)
@@ -220,6 +224,40 @@ Recibe un `FIELD_MAP` y una instancia de `Blackboard`. Retorna el subconjunto de
 
 **`build_partial_schema(full_model, missing_fields) -> dict | None`**
 Recibe el Pydantic model completo y el dict de campos faltantes. Genera un JSON schema que solo incluye las `properties` de los campos faltantes. Retorna `None` si `missing_fields` está vacío.
+
+---
+
+## Referencia: sistema de eventos del Blackboard
+
+El Blackboard dispara eventos cada vez que se escribe un valor con `await bb.set()`. Los eventos permiten reaccionar a cambios en la memoria sin acoplamiento directo entre módulos.
+
+**Registrar un listener:**
+```python
+from termuxcode.core.memory.blackboard import Blackboard
+
+async def mi_callback(path: str, value, bb: Blackboard) -> None:
+    # path: la ruta que cambió (ej: "project.architecture.modules")
+    # value: el nuevo valor
+    # bb: la instancia del Blackboard
+    ...
+
+Blackboard.on("project.architecture.modules", mi_callback)   # exacto
+Blackboard.on("project.architecture.*", mi_callback)          # un nivel
+Blackboard.on("project.**", mi_callback)                      # cualquier profundidad
+```
+
+**Remover listeners:**
+```python
+Blackboard.off("project.**", mi_callback)  # remueve uno específico
+Blackboard.off("project.**")               # remueve todos del patrón
+Blackboard.clear_listeners()               # remueve todos
+```
+
+**Notas:**
+- Los listeners se registran a nivel de clase, no de instancia. Cualquier módulo que importe `Blackboard` puede registrar los suyos.
+- Los callbacks deben ser `async`. Si fallan, el error se loguea pero no interrumpe la escritura.
+- `bb.set_sync()` escribe sin disparar eventos. Usarlo en código sincrónico (como el Initializer).
+- `await bb.update()` y `await bb.delete()` también disparan eventos.
 
 ---
 

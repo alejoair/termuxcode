@@ -20,7 +20,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal
-from textual.widgets import Input, Tabs, Button, Static
+from textual.widgets import Input, Tabs, Button, Static, Footer
 from textual.reactive import reactive
 from textual.logging import TextualHandler
 
@@ -33,9 +33,11 @@ from termuxcode.core.memory import Initializer
 from termuxcode.core.background_manager import BackgroundTaskManager
 from termuxcode.core.agents.environment_agent import EnvironmentAgent
 from termuxcode.core.agents.architecture_agent import ArchitectureAgent
+from termuxcode.core.agents.overview_agent import OverviewAgent
 from termuxcode.core.memory.blackboard import Blackboard
 from termuxcode.core.notification_system import NotificationQueue
 from termuxcode.tui.project_info import ProjectInfo
+from termuxcode.tui.blackboard_screen import BlackboardScreen
 
 
 class ClaudeChat(
@@ -60,6 +62,7 @@ class ClaudeChat(
         ("ctrl+w", "close_session", "Cerrar"),
         ("ctrl+s", "toggle_sessions", "Sesiones"),
         ("ctrl+h", "stop_query", "Stop"),
+        ("ctrl+b", "show_blackboard", "Memoria"),
     ]
 
     def __init__(self, cwd: str = None, max_history: int = 100):
@@ -99,6 +102,7 @@ class ClaudeChat(
                 yield Button("⏹", id="stop-btn", classes="-stop-button")
             # Evita que el input quede oculto bajo la barra de navegación del SO
             yield Static(id="bottom-spacer")
+        yield Footer()
 
     def on_mount(self) -> None:
         """Punto de entrada post-render: resuelve widgets, inicializa memoria y sesión."""
@@ -140,6 +144,8 @@ class ClaudeChat(
             await env.run()
             arch = ArchitectureAgent(cwd=self.cwd)
             await arch.run()
+            overview = OverviewAgent(cwd=self.cwd)
+            await overview.run()
 
         self.background_manager.start_task("project_init", _run_init_agents())
 
@@ -163,6 +169,10 @@ class ClaudeChat(
             await self.action_new_session()
         elif event.button.id == "stop-btn":
             await self.action_stop_query()
+
+    def action_show_blackboard(self) -> None:
+        """Abre el modal con el contenido del Blackboard."""
+        self.push_screen(BlackboardScreen())
 
 
 if __name__ == "__main__":

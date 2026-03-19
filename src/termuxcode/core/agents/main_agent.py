@@ -1,10 +1,12 @@
 """Módulo para comunicarse con el agente Claude con historial en JSONL"""
+import json
 import os
 from typing import TYPE_CHECKING, Callable
 
 from claude_agent_sdk import query, ClaudeAgentOptions
 from termuxcode.core.schemas.main_agent_schema import MainAgentResponse
 from termuxcode.core.history_manager import MessageHistory
+from termuxcode.core.memory.blackboard import Blackboard
 
 
 if TYPE_CHECKING:
@@ -19,6 +21,39 @@ def _get_field(structured: dict | None, key: str, default=None):
     if not structured:
         return default
     return structured.get(key, default)
+
+
+def _build_bb_context() -> str:
+    """Build a system context string from the Blackboard contents."""
+    bb = Blackboard("app")
+    data = bb.get("project")
+    if not data:
+        return ""
+
+    lines = ["<project_context>"]
+    _flatten_to_lines(data, lines, prefix="")
+    lines.append("</project_context>")
+    return "\n".join(lines)
+
+
+def _flatten_to_lines(data: dict, lines: list, prefix: str) -> None:
+    """Recursively flatten a dict into readable lines."""
+    for key, value in data.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            _flatten_to_lines(value, lines, path)
+        elif isinstance(value, list):
+            if value and len(value) <= 10:
+                items = ", ".join(str(v) for v in value)
+                lines.append(f"{path}: {items}")
+            elif value:
+                lines.append(f"{path}: ({len(value)} items)")
+                for item in value:
+                    lines.append(f"  - {item}")
+            else:
+                lines.append(f"{path}: []")
+        else:
+            lines.append(f"{path}: {value}")
 
 
 class MainAgentClient:
@@ -52,6 +87,11 @@ class MainAgentClient:
 
         # Construir prompt con el historial y el nuevo mensaje
         full_prompt = self.history.build_prompt(history, prompt, apply_filters=True)
+
+        # Inyectar contexto del Blackboard al inicio del prompt
+        bb_context = _build_bb_context()
+        if bb_context:
+            full_prompt = bb_context + "\n\n" + full_prompt
 
         # Usar query() del SDK con output_format
         options = ClaudeAgentOptions(
