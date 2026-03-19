@@ -1,0 +1,108 @@
+{
+  "agents": {
+    "environment": {
+      "file": "core/agents/environment_agent.py",
+      "schema": "core/schemas/environment_agent_schema.py",
+      "description": "Detecta runtime, dependencias, estructura de directorios y scripts del proyecto.",
+      "fields": {
+        "project.runtime.language": {
+          "schema_field": "runtime_language",
+          "type": "str | null",
+          "example": "python"
+        },
+        "project.runtime.version": {
+          "schema_field": "runtime_version",
+          "type": "str | null",
+          "example": "3.14.2"
+        },
+        "project.runtime.package_manager": {
+          "schema_field": "runtime_package_manager",
+          "type": "str | null",
+          "example": "pip"
+        },
+        "project.dependencies.main": {
+          "schema_field": "dependencies_main",
+          "type": "list[str]",
+          "example": ["textual==8.0.0", "claude-agent-sdk>=0.1"]
+        },
+        "project.dependencies.dev": {
+          "schema_field": "dependencies_dev",
+          "type": "list[str]",
+          "example": ["pytest>=7.0.0"]
+        },
+        "project.structure.entry_point": {
+          "schema_field": "structure_entry_point",
+          "type": "str | null",
+          "example": "src/termuxcode/cli.py"
+        },
+        "project.structure.source_dir": {
+          "schema_field": "structure_source_dir",
+          "type": "str | null",
+          "example": "src/"
+        },
+        "project.structure.test_dir": {
+          "schema_field": "structure_test_dir",
+          "type": "str | null",
+          "example": null
+        },
+        "project.env.required": {
+          "schema_field": "env_required",
+          "type": "list[str]",
+          "example": []
+        },
+        "project.env.has_dotenv": {
+          "schema_field": "env_has_dotenv",
+          "type": "bool",
+          "example": false
+        },
+        "project.scripts.run": {
+          "schema_field": "scripts_run",
+          "type": "str | null",
+          "example": "termuxcode"
+        },
+        "project.scripts.test": {
+          "schema_field": "scripts_test",
+          "type": "str | null",
+          "example": "pytest"
+        }
+      }
+    },
+    "architecture": {
+      "file": "core/agents/architecture_agent.py",
+      "schema": "core/schemas/architecture_agent_schema.py",
+      "description": "Mapea módulos del proyecto, sus roles, dependencias internas, entry points, base classes y patrones arquitectónicos.",
+      "fields": {
+        "project.architecture.modules": {
+          "schema_field": "modules",
+          "type": "list[str]",
+          "example": ["core/memory", "core/agents", "tui"]
+        },
+        "project.architecture.module_roles": {
+          "schema_field": "module_roles",
+          "type": "dict (JSON string in schema)",
+          "example": {"core/memory": "persistencia key-value y colas", "tui": "terminal UI screens"}
+        },
+        "project.architecture.entry_points": {
+          "schema_field": "entry_points",
+          "type": "list[str]",
+          "example": ["cli.py", "tui/app.py"]
+        },
+        "project.architecture.dependencies_map": {
+          "schema_field": "dependencies_map",
+          "type": "dict (JSON string in schema)",
+          "example": {"tui": ["core/agents", "core/memory"], "core/agents": ["core/memory"]}
+        },
+        "project.architecture.base_classes": {
+          "schema_field": "base_classes",
+          "type": "list[str]",
+          "example": ["BaseAgent", "BaseScreen"]
+        },
+        "project.architecture.patterns": {
+          "schema_field": "patterns",
+          "type": "list[str]",
+          "example": ["observer en events", "strategy en agents"]
+        }
+      }
+    }
+  }
+}

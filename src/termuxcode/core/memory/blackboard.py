@@ -4,29 +4,18 @@ from typing import Any
 
 from .storage import Storage
 
-# Directorio por defecto para persistencia
-_DEFAULT_MEMORY_DIR = ".claude/memory"
-
 
 class Blackboard:
-    """Almacenamiento key-value tipo Firebase con persistencia en JSON.
+    """Almacenamiento key-value con rutas anidadas separadas por puntos."""
 
-    Permite guardar y recuperar datos usando rutas anidadas
-    separadas por puntos (ej: "usuario.nombre").
-    """
-
-    def __init__(self, name: str, memory_dir: str = None):
+    def __init__(self, name: str):
         """Inicializa un blackboard.
 
         Args:
-            name: Nombre del blackboard (usado para el archivo).
-            memory_dir: Directorio para persistencia (default: .claude/memory/).
+            name: Nombre del blackboard (determina el nombre del archivo JSON).
         """
         self.name = name
-        if memory_dir is None:
-            cwd = Path.cwd()
-            memory_dir = str(cwd / _DEFAULT_MEMORY_DIR)
-        self.storage = Storage(memory_dir)
+        self.storage = Storage()
         self.file_path = f"{name}.json"
         self.data: dict = {}
         self._load_from_disk()

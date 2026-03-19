@@ -5,24 +5,26 @@ Proporciona métodos para guardar y cargar datos en formato JSON o CSV.
 import csv
 import json
 import os
+from pathlib import Path
 from typing import Any
+
+# Único lugar donde se define el directorio de memoria.
+# Todas las clases del módulo lo usan como default — nadie de fuera
+# necesita pasarlo como argumento.
+MEMORY_DIR = str(Path.cwd() / ".claude" / "memory")
 
 
 class Storage:
-    """Clase base para persistencia genérica en disco (uso interno).
+    """Clase base para persistencia genérica en disco (uso interno)."""
 
-    Proporciona métodos genéricos para guardar y cargar datos en
-    formato JSON o CSV.
-    """
-
-    def __init__(self, base_path: str):
-        """Inicializa el storage con un directorio base.
+    def __init__(self, base_path: str = None):
+        """Inicializa el storage.
 
         Args:
-            base_path: Directorio base para guardar archivos.
+            base_path: Directorio base. Por defecto usa MEMORY_DIR.
         """
-        self.base_path = base_path
-        os.makedirs(base_path, exist_ok=True)
+        self.base_path = base_path or MEMORY_DIR
+        os.makedirs(self.base_path, exist_ok=True)
 
     def save(self, file_name: str, data: Any, format: str = "json") -> None:
         """Guarda datos a disco.

@@ -7,36 +7,22 @@ from pydantic import BaseModel, Field
 
 class PromptClassification(str, Enum):
     """Classification of user prompt type."""
-    SINGLE_TASK = "single_task"
-    RESEARCH = "research"
-    PLAN = "plan"
-    IMPLEMENTATION = "implementation"
-    DEBUGGING = "debugging"
-    TESTING = "testing"
-    CODE_REVIEW = "code_review"
-    DOCUMENTATION = "documentation"
-    REFACTORING = "refactoring"
-    EXPLANATION = "explanation"
+    UNDERSTAND = "understand"   # explain, review, audit code
+    CREATE = "create"           # new feature, scaffold, integration
+    FIX = "fix"                 # bug, broken behavior, error
+    IMPROVE = "improve"         # refactor, optimization, cleanup
+    TEST = "test"               # create or fix tests
+    CONFIGURE = "configure"     # setup, env, dependencies
+    DOCUMENT = "document"       # comments, README, docstrings
     OFFTOPIC = "offtopic"
-    META = "meta"
 
 
 class TaskPhase(str, Enum):
     """Current phase of the task."""
-    PLANIFICACION = "planificacion"
-    IMPLEMENTACION = "implementacion"
-    TESTING = "testing"
-    DEBUGGING = "debugging"
-    ANALISIS = "analisis"
-    OTRO = "otro"
-
-
-class Tag(str, Enum):
-    """Message severity tag."""
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    INFO = "INFO"
-    SUCCESS = "SUCCESS"
+    EXPLORE = "explore"         # understand context and problem
+    PLAN = "plan"               # decide approach
+    IMPLEMENT = "implement"     # execute the plan
+    VERIFY = "verify"           # check it worked
 
 
 class MainAgentResponse(BaseModel):
@@ -49,7 +35,7 @@ class MainAgentResponse(BaseModel):
         description="One-line summary of what the user is trying to achieve with this prompt. Be specific: 'fix TypeError in login handler' not 'fix bug'."
     )
     user_prompt_classification: PromptClassification = Field(
-        description="Category that best matches the user's intent. Use 'single_task' for quick one-off requests, 'meta' for questions about the agent itself, 'offtopic' for non-coding chat."
+        description="Category that best matches the user's intent: 'understand' for explanations/reviews, 'create' for new features/scaffolding, 'fix' for bugs/errors, 'improve' for refactors/optimization, 'test' for writing/fixing tests, 'configure' for setup/env/deps, 'document' for comments/README/docstrings, 'offtopic' for non-coding chat."
     )
     next_suggested_immediate_action: str = Field(
         description="Concrete next step the agent should take after this turn. Example: 'run pytest to verify the fix', 'read auth.py to understand the middleware chain'. Should be actionable, not vague."
@@ -61,21 +47,13 @@ class MainAgentResponse(BaseModel):
         description="True if this turn made concrete progress: wrote/modified code, identified root cause, produced a plan, or gathered needed information. False for clarifying questions, failed attempts that yielded no insight, or unrelated tangents."
     )
     task_phase: TaskPhase = Field(
-        description="Current phase: 'planificacion' when designing approach or gathering requirements, 'implementacion' when writing/editing code, 'testing' when running or writing tests, 'debugging' when diagnosing failures, 'analisis' when reading/understanding code without modifying it, 'otro' for everything else."
+        description="Current phase: 'explore' when understanding context or the problem, 'plan' when deciding the approach, 'implement' when writing/editing code, 'verify' when checking that the solution worked."
     )
     related_files: Annotated[list[str], Field(default_factory=list)] = Field(
         default_factory=list,
         description="Relative paths of files read, modified, or directly relevant in this turn. Include only files actually touched or referenced, not the entire codebase. Empty list if no files involved."
     )
-    tag: Tag = Field(
-        default=Tag.INFO,
-        description="WARNING: agent encountered something unexpected that may need user attention. ERROR: the turn failed or produced an error. SUCCESS: a milestone was completed (tests pass, feature done, bug fixed). INFO: normal informational response (default)."
-    )
     self_reflection: str | None = Field(
         default=None,
         description="Brief honest assessment of this turn's quality: what went well, what could be improved, any uncertainty or assumptions made. Null if not applicable (trivial exchange)."
-    )
-    personal_goal: str | None = Field(
-        default=None,
-        description="Short-term goal the agent is working towards across multiple turns, e.g. 'complete auth refactor' or 'get all tests passing'. Null if there is no ongoing multi-turn goal."
     )
