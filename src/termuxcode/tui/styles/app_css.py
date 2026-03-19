@@ -12,20 +12,26 @@ Screen {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   XP BAR - Header compacto arriba
+   TOP BAR - ProjectInfo (izq) + TokenInfo (der)
    ═══════════════════════════════════════════════════════════════ */
-#xp-bar {
+#top-bar {
     height: 1;
+    width: 100%;
     background: $panel;
-    color: gold;
-    padding: 0 1;
-    content-align: left middle;
+}
+
+#top-bar #project-info {
+    width: 1fr;
+}
+
+#top-bar #token-info {
+    width: auto;
 }
 
 /* ChatLog - ocupa el espacio restante y scrollea */
 #messages {
     height: 1fr;
-    padding: 0 1;
+    padding: 0 1 2 1;  /* top: 0, right: 1, bottom: 2, left: 1 */
 }
 
 /* Scrollbar minimalista */

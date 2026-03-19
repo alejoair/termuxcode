@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual.widgets import Tabs, Tab, Button
+from termuxcode.core.memory.blackboard import Blackboard
 
 if TYPE_CHECKING:
     from termuxcode.tui.app import ClaudeChat
@@ -37,6 +38,12 @@ class SessionHandlersMixin:
             history = MessageHistory(
                 filepath=session.history_file,
                 max_messages=self.max_history,
+                # Configuración de truncado por porcentajes
+                base_percent=100.0,          # Últimos mensajes 100% completos
+                decay_per_message=7.0,       # 7% menos por mensaje de distancia
+                min_percent=30.0,            # Piso mínimo del 30%
+                full_content_distance=10,    # Últimos 10 mensajes con 100%
+                truncate_strategy="ellipsis", # Agregar "..." al truncar
             )
             # Crear agent con session_id capturado por valor (no por referencia)
             captured_session_id = session_id
@@ -83,6 +90,10 @@ class SessionHandlersMixin:
 
         self._current_session_id = session_id
         state = await self._get_or_create_session_state(session_id)
+
+        # Publicar sesión activa en Blackboard para que TokenInfo sepa qué mostrar
+        bb = Blackboard("app")
+        bb.set_sync("session.active_id", session_id)
 
         if update_tabs:
             self.call_later(self._update_tabs)
@@ -194,6 +205,11 @@ class SessionHandlersMixin:
             state = self._session_states.get(self._current_session_id)
             if state and state.pending_task and not state.pending_task.done():
                 state.pending_task.cancel()
+
+            # Limpiar tokens y costo de esta sesión del Blackboard
+            bb = Blackboard("app")
+            bb.set_sync(f"sessions.{self._current_session_id}.tokens", None)
+            bb.set_sync(f"sessions.{self._current_session_id}.cost", None)
 
             self.session_manager.delete_session(self._current_session_id)
             if self._current_session_id in self._session_states:

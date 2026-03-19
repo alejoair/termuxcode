@@ -1,4 +1,5 @@
 """Módulo para comunicarse con el agente Claude con historial en JSONL"""
+import asyncio
 import json
 import os
 from typing import TYPE_CHECKING, Callable
@@ -93,13 +94,14 @@ class MainAgentClient:
         if bb_context:
             full_prompt = bb_context + "\n\n" + full_prompt
 
-        # Usar query() del SDK con output_format
+        # Usar query() del SDK con output_format y tools restringidas
         options = ClaudeAgentOptions(
             permission_mode="bypassPermissions",
             cwd=self.cwd,
             include_partial_messages=True,
             model="opus",
             setting_sources=["project", "user"],
+            tools=["Bash", "Edit", "Glob", "Grep", "Read", "Write", "StructuredOutput"],
             output_format={
                 "type": "json_schema",
                 "schema": MainAgentResponse.model_json_schema()
@@ -111,10 +113,15 @@ class MainAgentClient:
         # Solo acumulamos mensajes del asistente para guardarlos incrementalmente
         assistant_response = ""
         self.current_structured_response = None
-        should_stop = False
+
+        # Referencia al generador para limpieza controlada
+        query_gen = None
 
         try:
-            async for message in query(prompt=full_prompt, options=options):
+            # Crear el generador del query
+            query_gen = query(prompt=full_prompt, options=options)
+
+            async for message in query_gen:
                 # Solo procesar si la sesión sigue activa
                 if self.is_active_session():
                     await self._process_message(message, skip_tools=_STOP_TOOLS)
@@ -138,18 +145,22 @@ class MainAgentClient:
                                 "input": str(block.input) if hasattr(block, 'input') else "",
                             })
 
-                            # Detectar stop tool (después de guardar)
-                            if block.name in _STOP_TOOLS:
-                                should_stop = True
-                                break
+                            # Nota: Los STOP_TOOLS (AskUserQuestion, StructuredOutput) se detectan
+                            # en _process_assistant para mostrar UI, pero NO hacemos break aquí
+                            # para permitir que llegue el ResultMessage con el usage.
 
                         elif block_type == "ToolResultBlock":
                             # Guardar tool_result inmediatamente
                             self.history.append_single("tool_result", str(block.content))
 
-                if should_stop:
-                    break
+                # No hacer break aquí - esperar ResultMessage para obtener usage
+                # El break ocurrirá naturalmente cuando el SDK termine el stream
+        except asyncio.CancelledError:
+            # Permitir que la cancelación se propague correctamente
+            # El SDK limpiará sus recursos en su propio contexto
+            raise
         finally:
+            # Restaurar la variable de entorno
             if old_claudecode:
                 os.environ['CLAUDECODE'] = old_claudecode
 
@@ -169,7 +180,44 @@ class MainAgentClient:
             await self._process_user(message)
 
     async def _process_result(self, message) -> None:
-        """Procesar ResultMessage - extraer structured_output"""
+        """Procesar ResultMessage - extraer structured_output y usage"""
+        # Debug: ver qué tiene el mensaje
+        import sys
+        sys.stderr.write(f"[DEBUG] ResultMessage attrs: {dir(message)}\n")
+        sys.stderr.write(f"[DEBUG] Has usage: {hasattr(message, 'usage')}\n")
+        if hasattr(message, 'usage'):
+            sys.stderr.write(f"[DEBUG] usage value: {message.usage}\n")
+            sys.stderr.write(f"[DEBUG] usage type: {type(message.usage)}\n")
+        sys.stderr.flush()
+
+        # Guardar usage en Blackboard (tokens acumulados por sesión)
+        if hasattr(message, 'usage') and message.usage:
+            bb = Blackboard("app")
+            # Usar clave por sesión para evitar acumulación global
+            token_key = f"sessions.{self.session_id}.tokens"
+            cost_key = f"sessions.{self.session_id}.cost"
+            current = bb.get(token_key) or {"input": 0, "output": 0}
+            usage = message.usage
+            # Puede ser dict o objeto con atributos
+            if isinstance(usage, dict):
+                input_tokens = usage.get("input_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0)
+            else:
+                input_tokens = getattr(usage, "input_tokens", 0) or 0
+                output_tokens = getattr(usage, "output_tokens", 0) or 0
+
+            new_tokens = {
+                "input": current["input"] + input_tokens,
+                "output": current["output"] + output_tokens,
+            }
+            sys.stderr.write(f"[DEBUG] Saving tokens for session {self.session_id}: {new_tokens}\n")
+            sys.stderr.flush()
+            await bb.set(token_key, new_tokens)  # await para disparar eventos
+            # Costo si está disponible
+            if hasattr(message, 'total_cost_usd') and message.total_cost_usd:
+                current_cost = bb.get(cost_key) or 0.0
+                await bb.set(cost_key, current_cost + message.total_cost_usd)  # await para disparar eventos
+
         if hasattr(message, 'structured_output'):
             # Debug: imprimir el structured output crudo
             import sys

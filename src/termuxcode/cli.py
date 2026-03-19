@@ -3,9 +3,14 @@ import argparse
 import os
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 from termuxcode.web_server import run_web_server
+
+# Suprimir warnings de asyncio sobre "unclosed transport" en Windows
+# Estos son falsos positivos cuando se cierran subprocess
+warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed transport")
 
 
 def main() -> None:

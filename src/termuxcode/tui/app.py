@@ -37,6 +37,7 @@ from termuxcode.core.agents.overview_agent import OverviewAgent
 from termuxcode.core.memory.blackboard import Blackboard
 from termuxcode.core.notification_system import NotificationQueue
 from termuxcode.tui.project_info import ProjectInfo
+from termuxcode.tui.token_info import TokenInfo
 from termuxcode.tui.blackboard_screen import BlackboardScreen
 
 
@@ -91,7 +92,9 @@ class ClaudeChat(
         El spacer al final evita que el input quede tapado por la barra de
         navegación del sistema en móvil.
         """
-        yield ProjectInfo(id="project-info")
+        with Horizontal(id="top-bar"):
+            yield ProjectInfo(id="project-info")
+            yield TokenInfo(id="token-info")
         yield ChatLog(id="messages")
         with Vertical(id="bottom-container"):
             with Horizontal(id="tabs-row"):
@@ -120,6 +123,17 @@ class ClaudeChat(
         # call_later garantiza que la sesión se carga después de que Textual
         # termine el ciclo de mount completo
         self.call_later(self._load_first_session)
+
+    def on_unmount(self) -> None:
+        """Limpiar recursos al salir de la app."""
+        # Cancelar todas las tareas en background
+        self.background_manager.cancel_all()
+
+        # Limpiar listeners del Blackboard para evitar memory leaks
+        try:
+            Blackboard.clear_listeners()
+        except Exception:
+            pass
 
     def _initialize_memory(self) -> None:
         """Inicializa la memoria de sesión en dos pasos:

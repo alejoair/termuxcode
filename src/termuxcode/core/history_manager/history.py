@@ -10,11 +10,11 @@ class MessageHistory:
     """Gestiona el historial de mensajes en formato JSONL"""
 
     def __init__(self, filepath: Path | str = None, max_messages: int = 100,
-                 # Configuración de filtros
-                 base_length: int = 2000,
-                 decay: float = 0.08,
-                 min_length: int = 200,
-                 max_decay_distance: int = 10,
+                 # Configuración de filtros basada en porcentajes
+                 base_percent: float = 100.0,
+                 decay_per_message: float = 7.0,
+                 min_percent: float = 30.0,
+                 full_content_distance: int = 10,
                  truncate_strategy: Literal["cut", "ellipsis", "summary"] = "ellipsis",
                  # Deprecated: mantener por compatibilidad
                  filename: str = None, session_id: str = None, cwd: str = None):
@@ -33,11 +33,11 @@ class MessageHistory:
         else:
             raise ValueError("Se requiere filepath o (cwd + session_id)")
 
-        # Configuración de filtros para preprocesamiento
-        self.base_length = base_length
-        self.decay = decay
-        self.min_length = min_length
-        self.max_decay_distance = max_decay_distance
+        # Configuración de filtros para preprocesamiento (basada en porcentajes)
+        self.base_percent = base_percent
+        self.decay_per_message = decay_per_message
+        self.min_percent = min_percent
+        self.full_content_distance = full_content_distance
         self.truncate_strategy = truncate_strategy
 
     def load(self) -> list[dict]:
@@ -111,13 +111,13 @@ class MessageHistory:
         Returns:
             Prompt reconstruido listo para enviar al LLM
         """
-        # Aplicar truncado directamente
+        # Aplicar truncado basado en porcentajes
         if apply_filters:
             truncate_filter = ExponentialTruncateFilter(
-                base_length=self.base_length,
-                decay=self.decay,
-                min_length=self.min_length,
-                max_decay_distance=self.max_decay_distance,
+                base_percent=self.base_percent,
+                decay_per_message=self.decay_per_message,
+                min_percent=self.min_percent,
+                full_content_distance=self.full_content_distance,
                 truncate_strategy=self.truncate_strategy,
             )
             history = truncate_filter.apply(history)

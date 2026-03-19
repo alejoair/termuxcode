@@ -14,7 +14,7 @@ class BackgroundTaskManager:
         session_id: str,
         coro,
         on_complete: Callable[[str, Optional[Exception]], None] = None
-    ) -> None:
+    ) -> asyncio.Task:
         """Iniciar task para una sesión
 
         Args:
@@ -22,6 +22,9 @@ class BackgroundTaskManager:
             coro: Coroutine a ejecutar
             on_complete: Callback opcional que se llama cuando la task termina
                          (session_id, Exception | None)
+
+        Returns:
+            El Task creado
         """
         # Cancelar task anterior si existe
         if session_id in self._tasks:
@@ -42,6 +45,7 @@ class BackgroundTaskManager:
 
         task = asyncio.create_task(wrapped())
         self._tasks[session_id] = task
+        return task
 
     def cancel_task(self, session_id: str) -> bool:
         """Cancelar task de una sesión explícitamente

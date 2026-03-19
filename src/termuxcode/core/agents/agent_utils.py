@@ -6,19 +6,21 @@ from termuxcode.core.memory.blackboard import Blackboard
 
 
 def get_missing_fields(field_map: dict[str, str], bb: Blackboard) -> dict[str, str]:
-    """Check the blackboard and return only the fields that are missing or empty.
+    """Check the blackboard and return only the fields that have never been set.
+
+    A field is considered "missing" only if it doesn't exist in the blackboard.
+    Values like None, [], or "" are valid (e.g., no test dir, no env vars required).
 
     Args:
         field_map: Mapping of blackboard paths to schema field names.
         bb: Blackboard instance to check.
 
     Returns:
-        Subset of field_map where the blackboard value is missing or empty.
+        Subset of field_map where the blackboard path doesn't exist.
     """
     missing = {}
     for bb_path, schema_field in field_map.items():
-        value = bb.get(bb_path)
-        if value is None or value == "" or value == []:
+        if not bb.exists(bb_path):
             missing[bb_path] = schema_field
     return missing
 

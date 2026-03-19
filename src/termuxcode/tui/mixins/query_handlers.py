@@ -94,18 +94,18 @@ class QueryHandlersMixin:
             # Actualizar tabs para quitar indicador de corriendo
             self.call_later(self._update_tabs)
 
-        # Crear nuevo task para esta query
+        # Crear la coroutine para esta query (NO crear el task aquí)
         coro = self._run_query_safe(state, prompt)
 
-        # Guardar referencia en SessionState
-        state.pending_task = asyncio.create_task(coro)
-
-        # Registrar en background_manager con callback
-        self.background_manager.start_task(
+        # Registrar en background_manager con callback - start_task crea el task internamente
+        task = self.background_manager.start_task(
             session_id=self._current_session_id,
-            coro=state.pending_task,
+            coro=coro,
             on_complete=on_complete
         )
+
+        # Guardar referencia en SessionState
+        state.pending_task = task
 
         # Actualizar tabs para mostrar indicador de que está corriendo
         self.call_later(self._update_tabs)
