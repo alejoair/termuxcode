@@ -7,8 +7,8 @@ import logging
 import websockets
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 
-from claude_code_mobile.ws_config import logger
-from claude_code_mobile.message_converter import MessageConverter
+from termuxcode.ws_config import logger
+from termuxcode.message_converter import MessageConverter
 
 
 class WebSocketConnection:

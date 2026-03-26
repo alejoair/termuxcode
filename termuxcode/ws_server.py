@@ -5,8 +5,8 @@ import asyncio
 
 import websockets
 
-from claude_code_mobile.ws_config import WS_HOST, WS_PORT, logger
-from claude_code_mobile.ws_connection import WebSocketConnection
+from termuxcode.ws_config import WS_HOST, WS_PORT, logger
+from termuxcode.ws_connection import WebSocketConnection
 
 
 async def handle_connection(websocket):

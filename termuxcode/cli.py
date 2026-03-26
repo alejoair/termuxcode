@@ -11,8 +11,8 @@ from pathlib import Path
 
 # Configuración
 PACKAGE_DIR = Path(__file__).parent.parent
-WS_SERVER = PACKAGE_DIR / "claude_code_mobile" / "ws_server.py"
-HTTP_SERVER = PACKAGE_DIR / "claude_code_mobile" / "serve.py"
+WS_SERVER = PACKAGE_DIR / "termuxcode" / "ws_server.py"
+HTTP_SERVER = PACKAGE_DIR / "termuxcode" / "serve.py"
 HTTP_PORT = 8000
 WS_PORT = 8769
 
