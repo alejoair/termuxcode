@@ -1,4 +1,8 @@
+__pycache__/
+*.pyc
+*.egg-info/
 .gradle/
 build/
 *.keystore
 *.jks
+commandlinetools-*.zip

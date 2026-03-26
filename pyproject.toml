@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-code-mobile"
+version = "0.1.0"
+description = "A minimal Python package"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+dependencies = [
+    "claude-agent-sdk>=0.1.48",
+    "websockets>=15.0"
+]
+
+[tool.setuptools]
+packages = ["claude_code_mobile"]
+
+[project.scripts]
+ccm = "claude_code_mobile.cli:main"
