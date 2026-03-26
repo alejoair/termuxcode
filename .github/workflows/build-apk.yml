@@ -33,11 +33,12 @@ jobs:
             -dname "CN=Claude Mobile,O=Claude,C=US"
           mv android.keystore android-project/
           
-      - name: Build APK
+      - name: Build APK with Gradle wrapper
         run: |
           cd android-project
-          curl -sL https://github.com/gradle/gradle/archive/refs/tags/v8.5.tar.gz | tar xz
-          ./gradle-8.5/bin/gradle assembleRelease
+          # Crear gradlew wrapper
+          gradle wrapper --gradle-version 8.5
+          ./gradlew assembleRelease
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
