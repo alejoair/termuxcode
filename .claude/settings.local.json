@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -c \"from termuxcode.core.history_manager import MessageHistory; print\\(''OK''\\)\")"
-    ]
-  }
-}

@@ -1,0 +1,47 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+          
+      - name: Create keystore
+        run: |
+          keytool -genkeypair -v -keystore android.keystore \
+            -alias claude -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass claude123 -keypass claude123 \
+            -dname "CN=Claude Mobile,O=Claude,C=US"
+          mv android.keystore android-project/
+          
+      - name: Build APK
+        run: |
+          cd android-project
+          curl -sL https://github.com/gradle/gradle/archive/refs/tags/v8.5.tar.gz | tar xz
+          ./gradle-8.5/bin/gradle assembleRelease
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeMobile-APK
+          path: android-project/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
