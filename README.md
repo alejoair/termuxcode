@@ -1,136 +1,187 @@
-# Guía: Convertir PWA a App Android con Bubblewrap en Termux
+# Guía: Convertir PWA a App Android desde Termux
 
-Esta guía documenta el proceso completo para convertir una Progressive Web App (PWA) en una aplicación Android nativa usando Bubblewrap directamente desde Termux en Android.
+**Método funcional probado:** WebView + GitHub Actions para compilación remota.
 
-> **⚠️ AVISO IMPORTANTE**: Bubblewrap NO soporta oficialmente Termux/Android. Esta guía incluye parches y métodos alternativos para hacerlo funcionar completamente en Termux.
+> **⚠️ PROBLEMA:** El `aapt` de Termux NO es un aapt2 real. Gradle fallará en Termux al compilar recursos.
 >
-> **⚠️ LIMITACIÓN CRÍTICA**: El paquete `aapt` de Termux NO es un aapt2 real y no puede procesar recursos Android correctamente. Gradle fallará en la etapa de `processReleaseResources`. Ver las **Soluciones Alternativas** al final.
->
-> **ÚLTIMA ACTUALIZACIÓN**: 2026-03-26 - Probado en Termux Android 14
+> **✅ SOLUCIÓN:** Usar GitHub Actions para compilar en servidores x86 gratis. Todo desde el celular, sin PC.
 
 ---
 
-## Resumen
+## Resumen del Flujo
 
-### Lo que funciona
-- ✅ Configuración de Android SDK
-- ✅ Configuración de Gradle
-- ✅ Compilación de código Java
-- ✅ Preparación de manifiestos y recursos XML
-
-### Lo que NO funciona
-- ❌ AAPT2 en Termux (el `aapt` de Termux no es un aapt2 real)
-- ❌ Compilación completa de APK con Gradle en Termux
-- ❌ Procesamiento de recursos PNG con aapt2
+```
+Termux (desarrollo) → Push a GitHub → GitHub Actions compila → Descargar APK → Instalar
+```
 
 ---
 
-## Pasos que funcionan (para referencia)
-
-### Paso 1: Instalar Java 17
+## Paso 1: Crear Repositorio GitHub
 
 ```bash
-pkg install openjdk-17 -y
-/data/data/com.termux/files/usr/lib/jvm/java-17-openjdk/bin/java -version
+# Instalar gh CLI
+pkg install gh -y
+
+# Autenticarse
+gh auth login
+
+# Crear repo
+gh repo create mi-app --public --source=. --remote=origin
 ```
 
-### Paso 2: Android SDK
+---
+
+## Paso 2: Crear Proyecto Android
 
 ```bash
-wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-mkdir -p ~/android-sdk/cmdline-tools
-unzip -q commandlinetools-linux-*.zip -d ~/android-sdk/cmdline-tools
-mv ~/android-sdk/cmdline-tools/cmdline-tools ~/android-sdk/cmdline-tools/latest
-
-export ANDROID_HOME=$HOME/android-sdk
-export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+# Estructura de carpetas
+mkdir -p android-project/app/src/main/{assets,java/com/miapp}
+cd android-project
 ```
 
-### Paso 3: Instalar componentes Android
+### 2.1 Archivos Gradle
 
-```bash
-yes | sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
-```
-
-### Paso 4: Gradle
-
-```bash
-pkg install gradle -y
-```
-
-### Paso 5: Parchear Bubblewrap (opcional)
-
-```bash
-npm install -g @bubblewrap/cli
-
-# Parches para Termux
-sed -i "s/case 'linux':/case 'linux':\n            case 'android':/" \
-  /data/data/com.termux/files/usr/lib/node_modules/@bubblewrap/cli/dist/lib/AndroidSdkToolsInstaller.js
-
-sed -i "s/process.platform === 'linux' || process.platform === 'win32'/process.platform === 'linux' || process.platform === 'android' || process.platform === 'win32'/" \
-  /data/data/com.termux/files/usr/lib/node_modules/@bubblewrap/cli/node_modules/@bubblewrap/core/dist/lib/jdk/JdkHelper.js
-
-mkdir -p ~/.bubblewrap
-cat > ~/.bubblewrap/config.json << 'EOF'
-{
-  "jdkPath": "/data/data/com.termux/files/usr/lib/jvm/java-17-openjdk",
-  "androidSdkPath": "/data/data/com.termux/files/home/android-sdk"
+**`build.gradle`** (raíz):
+```gradle
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.0'
+    }
 }
-EOF
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
 ```
 
----
+**`settings.gradle`**:
+```gradle
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
 
-## Soluciones Alternativas
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
 
-### Opción 1: Usar apktool en Termux (RECOMENDADO)
-
-`apktool` es más compatible con Termux y puede compilar APKs sin el aapt2 oficial.
-
-```bash
-pkg install apktool -y
+rootProject.name = "MiApp"
+include ':app'
 ```
 
-Proceso básico:
-1. Descompilar un APK base con `apktool d base.apk`
-2. Modificar recursos y manifiesto
-3. Recompilar con `apktool b output_dir -o nueva.apk`
-4. Firmar con `jarsigner` o `apksigner`
+**`gradle.properties`**:
+```properties
+android.useAndroidX=true
+android.enableJetifier=true
+```
 
-### Opción 2: WebView Nativo Simple
+### 2.2 App build.gradle
 
-Crear una app WebView mínima que no requiera recursos complejos:
+**`app/build.gradle`**:
+```gradle
+plugins {
+    id 'com.android.application'
+}
 
-**MainActivity.java**:
+android {
+    namespace 'com.miapp.miapp'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.miapp.miapp"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Sin dependencias externas - WebView puro
+}
+```
+
+### 2.3 MainActivity.java
+
+**`app/src/main/java/com/miapp/miapp/MainActivity.java`**:
 ```java
-package com.ejemplo.app;
+package com.miapp.miapp;
 
 import android.app.Activity;
 import android.os.Bundle;
 import android.webkit.WebView;
 import android.webkit.WebSettings;
+import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
+    private WebView webView;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        WebView webView = new WebView(this);
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        webView.loadUrl("file:///path/to/your/index.html");
+
+        webView = new WebView(this);
         setContentView(webView);
+
+        WebSettings webSettings = webView.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
+        webSettings.setAllowFileAccess(true);
+
+        webView.setWebViewClient(new WebViewClient());
+
+        // Cargar HTML desde assets
+        webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
     }
 }
 ```
 
-**AndroidManifest.xml**:
+### 2.4 AndroidManifest.xml
+
+**`app/src/main/AndroidManifest.xml`**:
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:label="Mi App">
-        <activity android:name=".MainActivity" android:exported="true">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Mi App"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -140,107 +191,212 @@ public class MainActivity extends Activity {
 </manifest>
 ```
 
-### Opción 3: Compilar en otra plataforma
-
-1. Desarrollar el proyecto en Termux
-2. Transferir el proyecto a una PC Linux/Mac/Windows
-3. Compilar allí con Gradle
-4. Transferir el APK de vuelta a Termux/Android
+### 2.5 Agregar Assets (HTML, CSS, JS)
 
 ```bash
-# En PC:
-gradle assembleRelease
-adb push app/build/outputs/apk/release/app-release.apk /sdcard/
+# Copiar tu PWA a assets
+cp -r /ruta/a/tu/pwa/* android-project/app/src/main/assets/
+
+# Estructura mínima:
+# app/src/main/assets/
+#   ├── index.html
+#   ├── app.js
+#   ├── styles.css
+#   └── manifest.json
 ```
 
-### Opción 4: Usar GitHub Actions
+### 2.6 Iconos (opcional)
 
-Crear un workflow que compile el proyecto automáticamente:
+Usa drawables vectoriales XML para evitar problemas con PNG:
 
-```yaml
-name: Build Android APK
-on: [push]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup JDK
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      - name: Build APK
-        run: |
-          ./gradlew assembleRelease
-      - name: Upload APK
-        uses: actions/upload-artifact@v3
-        with:
-          name: app-release
-          path: app/build/outputs/apk/release/*.apk
+**`app/src/main/res/drawable/ic_launcher.xml`**:
+```xml
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#1a1a2e"
+        android:pathData="M0,0h108v108h-108z" />
+</vector>
 ```
-
-### Opción 5: Usar un aapt2 ARM compilado
-
-Si puedes obtener un aapt2 real compilado para ARM64:
-
-1. Descargar desde un proyecto de terceros que compile aapt2 para ARM
-2. Colocarlo en `~/.gradle/caches/.../transformed/aapt2-*/aapt2`
-3. Asegurar permisos de ejecución
-
-**NOTA**: El paquete `aapt` en Termux NO es un aapt2, es una versión reducida que no soporta todas las funciones necesarias.
 
 ---
 
-## Estructura de proyecto WebView mínimo
+## Paso 3: GitHub Actions Workflow
+
+Crear `.github/workflows/build-apk.yml`:
+
+```yaml
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Permite ejecutar manualmente
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+
+      - name: Build APK
+        run: |
+          cd android-project
+          gradle wrapper --gradle-version 8.5
+          ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: App-APK
+          path: android-project/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+```
+
+---
+
+## Paso 4: Compilar y Obtener APK
+
+```bash
+# Subir cambios
+git add .
+git commit -m "Add Android project"
+git push origin main
+
+# Esperar a que termine el workflow (1-2 min)
+gh run list --limit 1
+
+# Descargar APK
+gh run download --name App-APK -D ~/Downloads
+
+# Copiar a ubicación accesible desde Android
+cp ~/Downloads/app-release.apk /sdcard/Download/MiApp.apk
+```
+
+---
+
+## Paso 5: Instalar en el Móvil
+
+1. Abrir **Archivos**
+2. Ir a **Descargas**
+3. Tocar `MiApp.apk`
+4. Instalar
+
+---
+
+## Modificar la App
+
+Para hacer cambios:
+
+```bash
+# 1. Editar archivos en android-project/app/src/main/assets/
+nano android-project/app/src/main/assets/index.html
+
+# 2. Subir cambios
+git add .
+git commit -m "Update UI"
+git push origin main
+
+# 3. Esperar build y descargar nuevo APK
+gh run download --name App-APK -D ~/Downloads
+```
+
+---
+
+## Estructura Final
 
 ```
-android-project/
-├── build.gradle (configuración simplificada)
-├── settings.gradle
-├── gradle.properties
-├── app/
-│   ├── build.gradle (WebView, sin dependencias externas)
-│   └── src/
-│       └── main/
-│           ├── AndroidManifest.xml
-│           ├── java/com/ejemplo/app/MainActivity.java
-│           └── res/
-│               ├── values/strings.xml
-│               ├── drawable/ic_launcher.xml (vector, no PNG)
-│               └── mipmap-anydpi-v26/ic_launcher.xml (vector)
-└── android.keystore
+mi-proyecto/
+├── .github/
+│   └── workflows/
+│       └── build-apk.yml
+├── android-project/
+│   ├── app/
+│   │   ├── build.gradle
+│   │   └── src/
+│   │       └── main/
+│   │           ├── AndroidManifest.xml
+│   │           ├── assets/          ← Tu PWA va aquí
+│   │           │   ├── index.html
+│   │           │   ├── app.js
+│   │           │   └── styles.css
+│   │           ├── java/com/miapp/
+│   │           │   └── MainActivity.java
+│   │           └── res/
+│   │               ├── values/
+│   │               └── drawable/
+│   ├── build.gradle
+│   ├── settings.gradle
+│   └── gradle.properties
+└── README.md
+```
+
+---
+
+## Comandos Útiles con gh CLI
+
+```bash
+# Ver estado del último build
+gh run view --log
+
+# Disparar build manualmente
+gh workflow run build-apk.yml
+
+# Ver todos los builds
+gh run list
+
+# Descargar APK de un build específico
+gh run download <run-id> --name App-APK
 ```
 
 ---
 
 ## Troubleshooting
 
-### "aapt2: Syntax error: Unterminated quoted string"
-El `aapt` de Termux no es compatible con aapt2. Use una de las soluciones alternativas.
+### "The webpage could not be loaded"
+- **Causa:** Ruta de archivo incorrecta o assets no incluidos
+- **Solución:** Asegúrate de copiar archivos a `app/src/main/assets/` y que `MainActivity.java` use `file:///android_asset/index.html`
 
-### "Daemon startup failed"
-AAPT2 daemon no puede ejecutarse en Termux. Las opciones de gradle no resuelven esto porque el binario subyacente es incorrecto.
+### "Build failed"
+- Verifica los logs: `gh run view --log-failed`
+- Errores comunes: sintaxis de Java, nombres de paquete incorrectos
 
-### Build avanza pero falla en processReleaseResources
-El código Java compila pero los recursos no pueden procesarse. Confirma que estás usando recursos XML vectoriales, no PNG.
+### APK no instala
+- Desinstala la versión anterior primero
+- Habilita "Fuentes desconocidas" en Ajustes de seguridad
 
 ---
 
-## Conclusión
+## Ventajas de este Método
 
-**La compilación completa de APK con Gradle en Termux NO es actualmente viable** debido a la falta de un aapt2 nativo para ARM64.
-
-Para convertir una PWA a app Android desde Termux, se recomienda:
-1. **Usar apktool** (Opción 1)
-2. **Compilar en otra plataforma** (Opción 3)
-3. **Usar GitHub Actions** (Opción 4)
+| Aspecto | Termux Directo | GitHub Actions |
+|---------|----------------|----------------|
+| **Compilación** | ❌ No funciona (aapt2) | ✅ Servidores x86 gratis |
+| **Velocidad** | - | ~1-2 min |
+| **PC requerida** | ❌ Sí | ❌ No |
+| **Costo** | Gratis | Gratis |
+| **Assets en APK** | Difícil | Fácil |
 
 ---
 
 ## Referencias
 
-- [Bubblewrap Documentation](https://github.com/GoogleChromeLabs/bubblewrap)
-- [apktool](https://ibotpeaches.github.io/Apktool/)
-- [Android Gradle Plugin](https://developer.android.com/studio/build)
-- [AAPT2](https://developer.android.com/studio/command-line/aapt2)
+- [GitHub Actions](https://docs.github.com/en/actions)
+- [WebView Android](https://developer.android.com/guide/webapps/webview)
+- [GitHub CLI](https://cli.github.com/manual/)
