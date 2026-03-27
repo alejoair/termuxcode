@@ -3,6 +3,10 @@ name = "termuxcode"
 version = "1.0.5"
 edition = "2021"
 
+[lib]
+name = "termuxcode"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -14,7 +14,6 @@ package-lock.json
 # Tauri
 src-tauri/target/
 src-tauri/binaries/
-src-tauri/icons/
 src-tauri/gen/
 
 # PyInstaller
