@@ -28,12 +28,12 @@ jobs:
       - name: Build APK
         run: |
           cd android-project
-          curl -sL https://github.com/gradle/gradle/archive/refs/tags/v8.5.tar.gz | tar xz
-          ./gradle-8.5/bin/gradle assembleRelease
+          gradle wrapper --gradle-version 8.5
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ClaudeMobile-Dev
-          path: android-project/app/build/outputs/apk/release/app-release.apk
+          name: termuxcode-Dev
+          path: android-project/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
