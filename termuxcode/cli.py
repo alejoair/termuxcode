@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI para Claude Code Mobile - Inicia todos los servidores."""
+"""CLI para termuxcode - Inicia todos los servidores."""
 
 import argparse
 import asyncio
@@ -20,7 +20,7 @@ WS_PORT = 8769
 def print_banner():
     """Muestra el banner de inicio."""
     print("\n" + "=" * 50)
-    print("  Claude Code Mobile")
+    print("  termuxcode")
     print("=" * 50)
     print(f"  HTTP: http://localhost:{HTTP_PORT}")
     print(f"  WebSocket: ws://localhost:{WS_PORT}")
@@ -77,7 +77,7 @@ def run_servers(mode="both"):
 def main():
     """Punto de entrada del comando ccm."""
     parser = argparse.ArgumentParser(
-        description="Claude Code Mobile - Cliente web para Claude",
+        description="termuxcode - Cliente web para Claude",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos:
@@ -103,7 +103,7 @@ Ejemplos:
     parser.add_argument(
         "--version", "-v",
         action="version",
-        version="claude-code-mobile 0.1.0"
+        version="termuxcode 0.1.0"
     )
 
     args = parser.parse_args()
