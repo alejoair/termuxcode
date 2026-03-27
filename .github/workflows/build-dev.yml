@@ -6,7 +6,78 @@ on:
   pull_request:
 
 jobs:
-  build:
+  # ============================================
+  # Desktop (Linux only for fast CI)
+  # ============================================
+  build-desktop:
+    name: Desktop Linux (dev)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          pip install pyinstaller
+          pip install -e .
+
+      - name: Build Python sidecar
+        run: pyinstaller pyinstaller.spec --distpath src-tauri/binaries
+
+      - name: Rename sidecar with target triple
+        run: mv src-tauri/binaries/termuxcode-server "src-tauri/binaries/termuxcode-server-x86_64-unknown-linux-gnu"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Generate icons
+        run: python scripts/generate-icons.py
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        with:
+          tauriScript: npx tauri
+
+      - name: Upload Desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: termuxcode-Dev-Desktop
+          path: src-tauri/target/release/bundle/deb/*.deb
+          retention-days: 7
+
+  # ============================================
+  # Android (Tauri)
+  # ============================================
+  build-android:
+    name: Android APK (dev)
     runs-on: ubuntu-latest
 
     steps:
@@ -25,15 +96,41 @@ jobs:
           api-level: 34
           build-tools: 34.0.0
 
-      - name: Build APK
-        run: |
-          cd android-project
-          gradle wrapper --gradle-version 8.5
-          ./gradlew assembleDebug
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate icons
+        run: python scripts/generate-icons.py
+
+      - name: Initialize Tauri Android
+        run: npx tauri android init
+
+      - name: Build Tauri Android APK
+        run: npx tauri android build --apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: termuxcode-Dev
-          path: android-project/app/build/outputs/apk/debug/app-debug.apk
+          name: termuxcode-Dev-APK
+          path: "src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk"
           retention-days: 7

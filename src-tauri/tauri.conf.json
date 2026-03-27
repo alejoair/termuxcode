@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
+  "productName": "TermuxCode",
+  "version": "1.0.5",
+  "identifier": "com.termuxcode.app",
+  "build": {
+    "frontendDist": "../static"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "TermuxCode",
+        "width": 1024,
+        "height": 768,
+        "minWidth": 400,
+        "minHeight": 300,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/termuxcode-server"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "sidecar": true,
+      "scope": [
+        {
+          "name": "binaries/termuxcode-server",
+          "sidecar": true
+        }
+      ]
+    }
+  }
+}

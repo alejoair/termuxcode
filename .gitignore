@@ -6,3 +6,17 @@ build/
 *.keystore
 *.jks
 commandlinetools-*.zip
+
+# Node
+node_modules/
+package-lock.json
+
+# Tauri
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/icons/
+src-tauri/gen/
+
+# PyInstaller
+dist/
+*.spec.build/

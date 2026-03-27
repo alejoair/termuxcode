@@ -1,0 +1,205 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================
+  # Build all platforms via Tauri
+  # ============================================
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            target: windows
+            runner: windows-latest
+            rust-target: x86_64-pc-windows-msvc
+            sidecar-suffix: x86_64-pc-windows-msvc.exe
+            platform: desktop
+            artifact-glob: "src-tauri/target/release/bundle/msi/*.msi"
+
+          - name: macOS (Intel)
+            target: macos-intel
+            runner: macos-latest
+            rust-target: x86_64-apple-darwin
+            sidecar-suffix: x86_64-apple-darwin
+            platform: desktop
+            artifact-glob: "src-tauri/target/release/bundle/dmg/*.dmg"
+
+          - name: macOS (ARM)
+            target: macos-arm
+            runner: macos-latest
+            rust-target: aarch64-apple-darwin
+            sidecar-suffix: aarch64-apple-darwin
+            platform: desktop
+            artifact-glob: "src-tauri/target/release/bundle/dmg/*.dmg"
+
+          - name: Linux
+            target: linux
+            runner: ubuntu-22.04
+            rust-target: x86_64-unknown-linux-gnu
+            sidecar-suffix: x86_64-unknown-linux-gnu
+            platform: desktop
+            artifact-glob: "src-tauri/target/release/bundle/deb/*.deb"
+
+          - name: Android
+            target: android
+            runner: ubuntu-latest
+            rust-target: aarch64-linux-android
+            platform: android
+            artifact-glob: "src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- System dependencies (Linux desktop) ---
+      - name: Install Linux dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      # --- JDK + Android SDK (Android only) ---
+      - name: Setup JDK 17
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        if: matrix.platform == 'android'
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+
+      # --- Python + PyInstaller sidecar (desktop only) ---
+      - name: Setup Python
+        if: matrix.platform == 'desktop'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        if: matrix.platform == 'desktop'
+        run: |
+          pip install pyinstaller
+          pip install -e .
+
+      - name: Build Python sidecar
+        if: matrix.platform == 'desktop'
+        run: pyinstaller pyinstaller.spec --distpath src-tauri/binaries
+
+      - name: Rename sidecar with target triple
+        if: matrix.platform == 'desktop'
+        shell: bash
+        run: |
+          cd src-tauri/binaries
+          if [ "${{ matrix.target }}" = "windows" ]; then
+            mv termuxcode-server.exe "termuxcode-server-${{ matrix.sidecar-suffix }}"
+          else
+            mv termuxcode-server "termuxcode-server-${{ matrix.sidecar-suffix }}"
+          fi
+
+      # --- Node.js + Rust + Tauri (all platforms) ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Generate icons
+        shell: bash
+        run: |
+          if command -v python3 &>/dev/null; then
+            python3 scripts/generate-icons.py
+          else
+            python scripts/generate-icons.py
+          fi
+
+      # --- Initialize Tauri Android project ---
+      - name: Initialize Tauri Android
+        if: matrix.platform == 'android'
+        run: npx tauri android init
+
+      # --- Build: Desktop ---
+      - name: Build Tauri (desktop)
+        if: matrix.platform == 'desktop'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npx tauri
+
+      # --- Build: Android ---
+      - name: Build Tauri (android)
+        if: matrix.platform == 'android'
+        run: npx tauri android build --apk
+
+      # --- Upload artifacts ---
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: termuxcode-${{ matrix.target }}
+          path: ${{ matrix.artifact-glob }}
+          retention-days: 90
+
+  # ============================================
+  # Create GitHub Release with all assets
+  # ============================================
+  release:
+    name: Create Release
+    needs: [build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | head -50
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
