@@ -7,7 +7,7 @@ from pathlib import Path
 block_cipher = None
 
 a = Analysis(
-    ['desktop_server.py'],
+    ['termuxcode/desktop_server.py'],
     pathex=[],
     binaries=[],
     datas=[],
