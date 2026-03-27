@@ -1,0 +1,18 @@
+{
+  "bundle": {
+    "externalBin": [
+      "binaries/termuxcode-server"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "sidecar": true,
+      "scope": [
+        {
+          "name": "binaries/termuxcode-server",
+          "sidecar": true
+        }
+      ]
+    }
+  }
+}

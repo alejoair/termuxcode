@@ -129,7 +129,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.rust-target }}
+          targets: ${{ matrix.platform == 'android' && 'aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android' || matrix.rust-target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -156,7 +156,7 @@ jobs:
       # --- Build: Android ---
       - name: Build Tauri (android)
         if: matrix.platform == 'android'
-        run: npx tauri android build --apk
+        run: npx tauri android build --apk --target aarch64
 
       # --- Upload artifacts ---
       - name: Upload artifact

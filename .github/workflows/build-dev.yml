@@ -6,92 +6,64 @@ on:
   pull_request:
 
 jobs:
-  # ============================================
-  # Desktop (Linux only for fast CI)
-  # ============================================
-  build-desktop:
-    name: Desktop Linux (dev)
-    runs-on: ubuntu-22.04
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runner: windows-latest
+            platform: desktop
+            sidecar-suffix: x86_64-pc-windows-msvc.exe
+
+          - name: Android
+            runner: ubuntu-latest
+            platform: android
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install Python dependencies
-        run: |
-          pip install pyinstaller
-          pip install -e .
-
-      - name: Build Python sidecar
-        run: pyinstaller pyinstaller.spec --distpath src-tauri/binaries
-
-      - name: Rename sidecar with target triple
-        run: mv src-tauri/binaries/termuxcode-server "src-tauri/binaries/termuxcode-server-x86_64-unknown-linux-gnu"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: Install npm dependencies
-        run: npm install
-
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        with:
-          tauriScript: npx tauri
-
-      - name: Upload Desktop artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: termuxcode-Dev-Desktop
-          path: src-tauri/target/release/bundle/deb/*.deb
-          retention-days: 7
-
-  # ============================================
-  # Android (Tauri)
-  # ============================================
-  build-android:
-    name: Android APK (dev)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      # --- JDK + Android SDK (Android only) ---
       - name: Setup JDK 17
+        if: matrix.platform == 'android'
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Android SDK
+        if: matrix.platform == 'android'
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0 ndk;27.0.12077973'
 
+      # --- Python + PyInstaller sidecar (desktop only) ---
+      - name: Setup Python
+        if: matrix.platform == 'desktop'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        if: matrix.platform == 'desktop'
+        run: |
+          pip install pyinstaller
+          pip install -e .
+
+      - name: Build Python sidecar
+        if: matrix.platform == 'desktop'
+        run: pyinstaller pyinstaller.spec --distpath src-tauri/binaries
+
+      - name: Rename sidecar with target triple
+        if: matrix.platform == 'desktop'
+        shell: bash
+        run: mv src-tauri/binaries/termuxcode-server.exe "src-tauri/binaries/termuxcode-server-${{ matrix.sidecar-suffix }}"
+
+      # --- Node.js + Rust + Tauri ---
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -100,7 +72,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android
+          targets: ${{ matrix.platform == 'android' && 'aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -110,15 +82,26 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
+      # --- Android init ---
       - name: Initialize Tauri Android
+        if: matrix.platform == 'android'
         run: npx tauri android init
 
-      - name: Build Tauri Android APK
-        run: npx tauri android build --apk
+      # --- Build ---
+      - name: Build Tauri (desktop)
+        if: matrix.platform == 'desktop'
+        uses: tauri-apps/tauri-action@v0
+        with:
+          tauriScript: npx tauri
 
-      - name: Upload APK
+      - name: Build Tauri (android)
+        if: matrix.platform == 'android'
+        run: npx tauri android build --apk --target aarch64
+
+      # --- Upload ---
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: termuxcode-Dev-APK
-          path: "src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk"
+          name: termuxcode-Dev-${{ matrix.name }}
+          path: ${{ matrix.platform == 'android' && 'src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk' || 'src-tauri/target/release/bundle/msi/*.msi' }}
           retention-days: 7
