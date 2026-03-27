@@ -12,17 +12,12 @@ from termuxcode.ws_connection import WebSocketConnection
 
 async def handle_connection(websocket):
     """Punto de entrada para nuevas conexiones WebSocket."""
-    resume_id = None
+    # Obtener session_id del query param
+    params = dict(pair.split("=") for pair in (websocket.request.path.split("?", 1)[1:] or [""])[0].split("&") if "=" in pair)
+    resume_id = params.get("session_id") or None
 
-    # Esperar primer mensaje para obtener resume_id si existe
-    try:
-        first_msg = await websocket.recv()
-        data = json.loads(first_msg)
-        if data.get("type") == "resume":
-            resume_id = data.get("session_id")
-            logger.info(f"Cliente quiere reanudar sesión: {resume_id}")
-    except (json.JSONDecodeError, KeyError):
-        pass
+    if resume_id:
+        logger.info(f"Reanudando sesion SDK: {resume_id}")
 
     connection = WebSocketConnection(websocket, resume_id=resume_id)
     await connection.handle()

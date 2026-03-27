@@ -25,4 +25,4 @@ Repository = "https://github.com/alejoair/termuxcode"
 packages = ["termuxcode"]
 
 [project.scripts]
-ccm = "termuxcode.cli:main"
+termuxcode = "termuxcode.cli:main"

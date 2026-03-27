@@ -54,9 +54,9 @@ def run_servers(mode="both"):
             )
             processes.append(("HTTP", http_proc))
 
-        print(f"\n[✓] Servidor(es) iniciado(s)")
+        print(f"\n[OK] Servidor(es) iniciado(s)")
         print(f"\nAbre en tu navegador:")
-        print(f"  http://localhost:{HTTP_PORT}/chat")
+        print(f"  http://localhost:{HTTP_PORT}")
         print(f"\nPresiona Ctrl+C para detener...\n")
 
         # Esperar a que los procesos terminen
@@ -71,7 +71,7 @@ def run_servers(mode="both"):
                 proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        print("[✓] Servidores detenidos")
+        print("[OK] Servidores detenidos")
 
 
 def main():

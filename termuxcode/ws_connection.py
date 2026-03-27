@@ -27,14 +27,18 @@ class WebSocketConnection:
 
         try:
             await self._initialize_client()
-            await self._send_system_message("Conectado")
-            await self._send_session_id()
             await self._message_loop()
 
         except websockets.exceptions.ConnectionClosed:
-            logger.info("[Conexión cerrada]")
+            logger.info("[Conexion cerrada]")
         except Exception as e:
             logger.error(f"Error: {e}", exc_info=True)
+            try:
+                await self._send_system_message(f"Error: {e}")
+                # Mantener la conexion abierta para evitar reconnect loop
+                await self.websocket.wait_closed()
+            except Exception:
+                pass
         finally:
             await self._cleanup()
 
@@ -48,8 +52,6 @@ class WebSocketConnection:
 
         self.client = ClaudeSDKClient(options)
         await self.client.connect()
-        # Obtener el session_id para futuras reconexiones
-        self.session_id = getattr(self.client, '_session_id', None) or self.resume_id
         logger.info("Cliente conectado")
 
     async def _send_system_message(self, message: str):
@@ -57,7 +59,7 @@ class WebSocketConnection:
         await self.websocket.send(json.dumps({"type": "system", "message": message}))
 
     async def _send_session_id(self):
-        """Envía el session_id al frontend para persistencia."""
+        """Envia el session_id del SDK al frontend."""
         if self.session_id:
             await self.websocket.send(json.dumps({
                 "type": "session_id",
@@ -104,6 +106,11 @@ class WebSocketConnection:
             logger.info(f"Msg: {msg_type}")
 
             if msg_type == "ResultMessage":
+                # Capturar session_id del SDK y enviarlo al frontend
+                if hasattr(msg, 'session_id') and msg.session_id:
+                    self.session_id = msg.session_id
+                    logger.info(f"Session ID del SDK: {self.session_id}")
+                    await self._send_session_id()
                 await self._send_result(msg)
                 break
 
