@@ -2,6 +2,7 @@
 """Servidor WebSocket principal para Claude Agent SDK."""
 
 import asyncio
+import json
 
 import websockets
 
@@ -11,7 +12,19 @@ from termuxcode.ws_connection import WebSocketConnection
 
 async def handle_connection(websocket):
     """Punto de entrada para nuevas conexiones WebSocket."""
-    connection = WebSocketConnection(websocket)
+    resume_id = None
+
+    # Esperar primer mensaje para obtener resume_id si existe
+    try:
+        first_msg = await websocket.recv()
+        data = json.loads(first_msg)
+        if data.get("type") == "resume":
+            resume_id = data.get("session_id")
+            logger.info(f"Cliente quiere reanudar sesión: {resume_id}")
+    except (json.JSONDecodeError, KeyError):
+        pass
+
+    connection = WebSocketConnection(websocket, resume_id=resume_id)
     await connection.handle()
 
 

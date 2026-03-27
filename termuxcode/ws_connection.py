@@ -14,10 +14,12 @@ from termuxcode.message_converter import MessageConverter
 class WebSocketConnection:
     """Maneja una conexión WebSocket con su propio cliente SDK."""
 
-    def __init__(self, websocket):
+    def __init__(self, websocket, resume_id: str = None):
         self.websocket = websocket
         self.client = None
         self.remote_address = websocket.remote_address
+        self.resume_id = resume_id
+        self.session_id = None
 
     async def handle(self):
         """Maneja el ciclo de vida de la conexión."""
@@ -26,6 +28,7 @@ class WebSocketConnection:
         try:
             await self._initialize_client()
             await self._send_system_message("Conectado")
+            await self._send_session_id()
             await self._message_loop()
 
         except websockets.exceptions.ConnectionClosed:
@@ -38,15 +41,28 @@ class WebSocketConnection:
     async def _initialize_client(self):
         """Inicializa el cliente SDK."""
         logger.info("Creando cliente SDK...")
-        self.client = ClaudeSDKClient(
-            ClaudeAgentOptions(permission_mode="acceptEdits")
-        )
+        options = ClaudeAgentOptions(permission_mode="acceptEdits")
+        if self.resume_id:
+            logger.info(f"Reanudando sesión: {self.resume_id}")
+            options.resume = self.resume_id
+
+        self.client = ClaudeSDKClient(options)
         await self.client.connect()
+        # Obtener el session_id para futuras reconexiones
+        self.session_id = getattr(self.client, '_session_id', None) or self.resume_id
         logger.info("Cliente conectado")
 
     async def _send_system_message(self, message: str):
         """Envía un mensaje del sistema al cliente."""
         await self.websocket.send(json.dumps({"type": "system", "message": message}))
+
+    async def _send_session_id(self):
+        """Envía el session_id al frontend para persistencia."""
+        if self.session_id:
+            await self.websocket.send(json.dumps({
+                "type": "session_id",
+                "session_id": self.session_id
+            }))
 
     async def _message_loop(self):
         """Procesa mensajes entrantes."""

@@ -5,7 +5,7 @@ const STORAGE_KEY = 'ccm_tabs';
 
 // Estado global
 const state = {
-    tabs: new Map(),  // tabId -> { ws, reconnectTimeout, messages, isConnected }
+    tabs: new Map(),  // tabId -> { ws, reconnectTimeout, messages, isConnected, sessionId }
     activeTabId: null,
     tabCounter: 0,
 };
@@ -27,8 +27,10 @@ function createTab(name) {
         name: tabName,
         ws: null,
         reconnectTimeout: null,
-        messages: [],
+        messages: [],          // Mensajes pendientes (cuando pestaña inactiva)
+        renderedMessages: [],  // Todos los mensajes ya renderizados
         isConnected: false,
+        sessionId: null,
     });
 
     createTabElement(tabId, tabName);
@@ -79,18 +81,60 @@ function switchTab(tabId) {
     messagesEl.innerHTML = '';
     const tab = state.tabs.get(tabId);
 
-    // Mostrar mensajes pendientes
+    // Renderizar todos los mensajes guardados
+    for (const msg of tab.renderedMessages) {
+        renderMessage(msg, tabId);
+    }
+
+    // Procesar mensajes pendientes (ya estarán en renderedMessages desde handleMessage)
     while (tab.messages.length > 0) {
         const data = tab.messages.shift();
-        handleMessage(data, tabId);
+        renderMessage(data, tabId);
     }
 
     if (!tab.isConnected && tab.ws === null) {
-        addSystemMessage('Conectando...', tabId);
+        renderSystemMessage('Conectando...', tabId);
         connectTab(tabId);
     }
 
     updateGlobalStatus();
+}
+
+// ===== Renderizar mensaje sin guardar (para switchTab) =====
+function renderMessage(data, tabId) {
+    if (state.activeTabId !== tabId) return;
+
+    if (data.type === 'user') {
+        addMessage('user', data.content, tabId);
+    } else if (data.type === 'assistant') {
+        for (const block of data.blocks) {
+            if (block.type === 'text') {
+                addMessage('assistant', block.text, tabId);
+            } else if (block.type === 'thinking') {
+                addMessage('thinking', block.thinking, tabId);
+            } else if (block.type === 'tool_use') {
+                addToolUse(block.name, block.input, tabId);
+            } else if (block.type === 'tool_result') {
+                const content = typeof block.content === 'string'
+                    ? block.content.substring(0, 200)
+                    : JSON.stringify(block.content).substring(0, 200);
+                addMessage('tool', `Resultado: ${content}...`, tabId);
+            }
+        }
+    } else if (data.type === 'result') {
+        renderSystemMessage(`Fin | Turnos: ${data.num_turns} | Razón: ${data.stop_reason}`, tabId);
+    } else if (data.type === 'system') {
+        renderSystemMessage(data.message, tabId);
+    }
+}
+
+function renderSystemMessage(text, tabId) {
+    if (state.activeTabId !== tabId) return;
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'message system';
+    msgDiv.innerHTML = `<div class="bubble">${text}</div>`;
+    messagesEl.appendChild(msgDiv);
+    scrollToBottom();
 }
 
 // ===== Cerrar pestaña =====
@@ -156,6 +200,14 @@ function connectTab(tabId) {
         tab.ws.onopen = () => {
             tab.isConnected = true;
             updateTabStatus(tabId, 'connected');
+
+            // Enviar sessionId para reanudar sesión si existe
+            if (tab.sessionId) {
+                tab.ws.send(JSON.stringify({
+                    type: 'resume',
+                    session_id: tab.sessionId
+                }));
+            }
 
             if (state.activeTabId === tabId) {
                 globalStatusDot.classList.add('connected');
@@ -262,6 +314,22 @@ function updateGlobalStatus() {
 function handleMessage(data, tabId) {
     console.log('Recibido:', data);
 
+    const tab = state.tabs.get(tabId);
+    if (!tab) return;
+
+    if (data.type === 'session_id') {
+        // Guardar sessionId para futuras reconexiones
+        tab.sessionId = data.session_id;
+        saveTabs();
+        return;
+    }
+
+    // Guardar mensaje en renderedMessages (excepto system repetitivos)
+    if (data.type !== 'system' || data.message.includes('Conectado')) {
+        tab.renderedMessages.push(data);
+        saveTabs();  // Persistir cambios
+    }
+
     if (data.type === 'assistant') {
         for (const block of data.blocks) {
             if (block.type === 'text') {
@@ -358,6 +426,9 @@ function send() {
     const content = inputEl.value.trim();
     if (!content) return;
 
+    // Guardar mensaje del usuario en renderedMessages
+    tab.renderedMessages.push({ type: 'user', content });
+    saveTabs();  // Persistir cambios
     addMessage('user', content, state.activeTabId);
 
     if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
@@ -412,6 +483,8 @@ function saveTabs() {
     const data = Array.from(state.tabs.entries()).map(([id, tab]) => ({
         id,
         name: tab.name,
+        sessionId: tab.sessionId,
+        renderedMessages: tab.renderedMessages,
     }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
@@ -422,14 +495,16 @@ function loadTabs() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             const data = JSON.parse(saved);
-            data.forEach(({ id, name }) => {
+            data.forEach(({ id, name, sessionId, renderedMessages }) => {
                 state.tabs.set(id, {
                     id,
                     name,
                     ws: null,
                     reconnectTimeout: null,
                     messages: [],
+                    renderedMessages: renderedMessages || [],
                     isConnected: false,
+                    sessionId: sessionId || null,
                 });
                 createTabElement(id, name);
 

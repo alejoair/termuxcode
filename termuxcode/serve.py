@@ -36,6 +36,8 @@ class ChatHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def main():
+    # Permitir reutilizar la dirección inmediatamente después de cerrar
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), ChatHTTPRequestHandler) as httpd:
         print(f"[HTTP] Servidor corriendo en http://localhost:{PORT}")
         print(f"[HTTP] Chat disponible en http://localhost:{PORT}/chat")
