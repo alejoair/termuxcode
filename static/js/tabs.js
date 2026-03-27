@@ -26,7 +26,23 @@ function createTabElement(tabId, tabName) {
     document.getElementById('tabsHeader').appendChild(tabEl);
 }
 
-export function createTab(name) {
+export async function createTab(name, cwd) {
+    // Si no se proporciona cwd, abrir diálogo de carpeta (solo en Tauri)
+    if (!cwd && window.__TAURI__) {
+        try {
+            const selected = await window.__TAURI__.dialog.open({
+                directory: true,
+                multiple: false,
+                title: 'Seleccionar carpeta de trabajo',
+            });
+            if (!selected) return null; // Usuario canceló
+            cwd = selected;
+        } catch (e) {
+            console.warn('Dialog not available:', e);
+        }
+    }
+    // En navegador: cwd queda null, el backend usa su propio directorio
+
     state.tabCounter++;
     const tabId = `tab_${Date.now()}_${state.tabCounter}`;
     const tabName = name || `Chat ${state.tabCounter}`;
@@ -34,6 +50,7 @@ export function createTab(name) {
     state.tabs.set(tabId, {
         id: tabId,
         name: tabName,
+        cwd: cwd || null,
         ws: null,
         reconnectTimeout: null,
         messages: [],
@@ -180,10 +197,11 @@ export function clearChat() {
 
 export function loadTabs() {
     const data = loadTabsData();
-    data.forEach(({ id, name, sessionId, renderedMessages }) => {
+    data.forEach(({ id, name, cwd, sessionId, renderedMessages }) => {
         state.tabs.set(id, {
             id,
             name,
+            cwd: cwd || null,
             ws: null,
             reconnectTimeout: null,
             messages: [],

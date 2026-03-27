@@ -1,3 +1,5 @@
+.claude/
+
 __pycache__/
 *.pyc
 *.egg-info/
@@ -19,3 +21,4 @@ src-tauri/gen/
 # PyInstaller
 dist/
 *.spec.build/
+termuxcode/websocket_server.log

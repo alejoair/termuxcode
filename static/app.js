@@ -3,11 +3,11 @@
 import { state, dom } from './js/state.js';
 import { createTab, switchTab, loadTabs, send, sendStop, sendDisconnect, clearChat } from './js/tabs.js';
 
-function init() {
+async function init() {
     loadTabs();
 
     if (state.tabs.size === 0) {
-        createTab('Chat 1');
+        await createTab('Chat 1');
     } else {
         const firstTab = state.tabs.keys().next().value;
         switchTab(firstTab);

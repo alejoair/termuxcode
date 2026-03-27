@@ -14,7 +14,10 @@ export function connectTab(tabId) {
     updateTabStatus(tabId, 'connecting');
 
     try {
-        const wsUrl = tab.sessionId ? `${WS_URL}?session_id=${tab.sessionId}` : WS_URL;
+        const params = new URLSearchParams();
+        if (tab.sessionId) params.set('session_id', tab.sessionId);
+        if (tab.cwd) params.set('cwd', tab.cwd);
+        const wsUrl = params.toString() ? `${WS_URL}?${params.toString()}` : WS_URL;
         tab.ws = new WebSocket(wsUrl);
 
         tab.ws.onopen = () => {

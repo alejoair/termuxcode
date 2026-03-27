@@ -12,14 +12,18 @@ from termuxcode.ws_connection import WebSocketConnection
 
 async def handle_connection(websocket):
     """Punto de entrada para nuevas conexiones WebSocket."""
-    # Obtener session_id del query param
+    # Obtener session_id y cwd del query param
+    from urllib.parse import unquote
     params = dict(pair.split("=") for pair in (websocket.request.path.split("?", 1)[1:] or [""])[0].split("&") if "=" in pair)
     resume_id = params.get("session_id") or None
+    cwd = unquote(params["cwd"]) if "cwd" in params else None
 
     if resume_id:
         logger.info(f"Reanudando sesion SDK: {resume_id}")
+    if cwd:
+        logger.info(f"CWD del cliente: {cwd}")
 
-    connection = WebSocketConnection(websocket, resume_id=resume_id)
+    connection = WebSocketConnection(websocket, resume_id=resume_id, cwd=cwd)
     await connection.handle()
 
 

@@ -14,11 +14,12 @@ from termuxcode.message_converter import MessageConverter
 class WebSocketConnection:
     """Maneja una conexión WebSocket con su propio cliente SDK."""
 
-    def __init__(self, websocket, resume_id: str = None):
+    def __init__(self, websocket, resume_id: str = None, cwd: str = None):
         self.websocket = websocket
         self.client = None
         self.remote_address = websocket.remote_address
         self.resume_id = resume_id
+        self.cwd = cwd
         self.session_id = None
 
     async def handle(self):
@@ -46,13 +47,30 @@ class WebSocketConnection:
         """Inicializa el cliente SDK."""
         logger.info("Creando cliente SDK...")
         options = ClaudeAgentOptions(permission_mode="acceptEdits")
+        if self.cwd:
+            options.cwd = self.cwd
+            logger.info(f"Usando cwd: {self.cwd}")
         if self.resume_id:
             logger.info(f"Reanudando sesión: {self.resume_id}")
             options.resume = self.resume_id
 
-        self.client = ClaudeSDKClient(options)
-        await self.client.connect()
-        logger.info("Cliente conectado")
+        try:
+            self.client = ClaudeSDKClient(options)
+            await self.client.connect()
+            logger.info("Cliente conectado")
+        except Exception as e:
+            if self.resume_id:
+                logger.warning(f"Falló reanudar sesión {self.resume_id}: {e}. Creando nueva sesión.")
+                await self._send_system_message("Sesión anterior corrupta, creando nueva sesión...")
+                self.resume_id = None
+                options = ClaudeAgentOptions(permission_mode="acceptEdits")
+                if self.cwd:
+                    options.cwd = self.cwd
+                self.client = ClaudeSDKClient(options)
+                await self.client.connect()
+                logger.info("Nueva sesión creada")
+            else:
+                raise
 
     async def _send_system_message(self, message: str):
         """Envía un mensaje del sistema al cliente."""

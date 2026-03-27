@@ -6,6 +6,7 @@ export function saveTabs() {
     const data = Array.from(state.tabs.entries()).map(([id, tab]) => ({
         id,
         name: tab.name,
+        cwd: tab.cwd,
         sessionId: tab.sessionId,
         renderedMessages: tab.renderedMessages,
     }));
