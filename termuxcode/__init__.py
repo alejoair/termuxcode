@@ -1,3 +1,3 @@
 """termuxcode - Cliente web para Claude Code."""
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
