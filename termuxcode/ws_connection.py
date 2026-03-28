@@ -180,7 +180,66 @@ class WebSocketConnection:
                 break
 
             elif msg_type == "AssistantMessage":
+                # Detectar si hay AskUserQuestion
+                tool_id, questions = MessageConverter.extract_ask_user_question(msg)
+                if questions:
+                    logger.info(f"AskUserQuestion detectado: {len(questions)} preguntas")
+                    # Enviar pregunta al frontend y esperar respuesta
+                    responses = await self.send_ask_user_question(questions)
+                    # Enviar respuesta al SDK
+                    await self._send_question_response_to_sdk(tool_id, responses)
+                    continue  # Continuar recibiendo mensajes
+
                 await self._send_assistant_message(msg)
+
+    async def _send_question_response_to_sdk(self, tool_id: str, responses: list):
+        """Envía la respuesta del usuario al SDK como tool_result."""
+        logger.info(f"Enviando respuesta de pregunta al SDK: {responses}")
+
+        # Formatear respuestas como contenido del tool_result
+        # El SDK espera el contenido en formato específico
+        if len(responses) == 1 and not isinstance(responses[0], list):
+            # Single select: string simple
+            content = responses[0]
+        else:
+            # Multi-select o múltiples preguntas: lista de annotations
+            content = []
+            for answer in responses:
+                if isinstance(answer, list):
+                    for a in answer:
+                        content.append({"type": "string", "value": a})
+                else:
+                    content.append({"type": "string", "value": answer})
+
+        # Crear mensaje en el formato que espera el SDK
+        message = {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": content
+                    }
+                ]
+            },
+            "parent_tool_use_id": tool_id,
+            "session_id": "default"
+        }
+
+        try:
+            # Enviar directamente al transporte del SDK
+            if hasattr(self.client, '_transport') and self.client._transport:
+                import json
+                await self.client._transport.write(json.dumps(message) + "\n")
+                logger.info("Respuesta enviada via transporte")
+            else:
+                # Fallback: usar query con string
+                logger.warning("No hay transporte directo, usando query string")
+                await self.client.query(str(responses))
+        except Exception as e:
+            logger.error(f"Error enviando respuesta de pregunta: {e}", exc_info=True)
 
     async def _send_result(self, msg):
         """Envía un mensaje de resultado."""

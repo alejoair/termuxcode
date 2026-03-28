@@ -208,7 +208,7 @@ export function loadTabs() {
             messages: [],
             renderedMessages: renderedMessages || [],
             isConnected: false,
-            sessionId: sessionId || id,
+            sessionId: sessionId || null,
         });
         createTabElement(id, name);
 

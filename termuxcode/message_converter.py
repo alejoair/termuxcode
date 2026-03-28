@@ -12,17 +12,26 @@ BLOCK_TYPES = {
     "ThinkingBlock": "thinking",
 }
 
+# Tools que se manejan de forma especial (no se envían como tool_use normal)
+SPECIAL_TOOLS = {"AskUserQuestion"}
+
 
 class MessageConverter:
     """Convierte mensajes del SDK al formato WebSocket."""
 
     @staticmethod
-    def convert_assistant_message(msg: AssistantMessage) -> dict[str, Any]:
+    def convert_assistant_message(msg: AssistantMessage, exclude_special_tools: bool = True) -> dict[str, Any]:
         """Convierte un AssistantMessage a diccionario WebSocket."""
         blocks = []
 
         for block in msg.content:
             block_type = block.__class__.__name__
+
+            # Saltar tools especiales si se solicita
+            if exclude_special_tools and block_type == "ToolUseBlock":
+                if hasattr(block, 'name') and block.name in SPECIAL_TOOLS:
+                    continue
+
             block_data = MessageConverter._convert_block(block, block_type)
             if block_data:
                 blocks.append(block_data)
@@ -71,3 +80,17 @@ class MessageConverter:
             "num_turns": msg.num_turns,
             "is_error": msg.is_error,
         }
+
+    @staticmethod
+    def extract_ask_user_question(msg: AssistantMessage) -> tuple[str | None, list | None]:
+        """
+        Extrae AskUserQuestion de un AssistantMessage.
+        Returns: (tool_use_id, questions) o (None, None) si no hay
+        """
+        for block in msg.content:
+            if block.__class__.__name__ == "ToolUseBlock":
+                if block.name == "AskUserQuestion":
+                    input_data = block.input
+                    questions = input_data.get("questions", [])
+                    return block.id, questions
+        return None, None
