@@ -191,6 +191,26 @@
     transform: none;
 }
 
+.question-btn-deny {
+    background: linear-gradient(135deg, var(--color-danger), var(--color-danger-end));
+    color: var(--text-primary);
+}
+
+.question-btn-deny:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.question-btn-allow {
+    background: linear-gradient(135deg, var(--color-success), var(--color-success-end));
+    color: var(--text-primary);
+}
+
+.question-btn-allow:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
 /* Multi-select info */
 .question-multiselect-hint {
     color: var(--text-muted);
@@ -229,6 +249,31 @@
     .question-option {
         padding: var(--spacing-sm);
     }
+}
+
+/* File View Modal */
+.file-view-modal {
+    max-width: 700px;
+    max-height: 85vh;
+}
+
+.file-view-path {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-view-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    margin-bottom: var(--spacing-md);
 }
 
 /* Chat question display */

@@ -2,6 +2,9 @@
 
 import { state, dom } from './state.js';
 import { saveTabs } from './storage.js';
+import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView } from './modals.js';
+
+export { showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView };
 
 export function scrollToBottom() {
     dom.messages.scrollTop = dom.messages.scrollHeight;
@@ -9,7 +12,7 @@ export function scrollToBottom() {
 
 export function showLoading(tabId) {
     if (state.activeTabId !== tabId) return;
-    hideLoading(tabId);
+    hideTypingIndicator();
 
     const indicator = document.createElement('div');
     indicator.className = 'typing-indicator';
@@ -24,11 +27,24 @@ export function showLoading(tabId) {
     `;
     dom.messages.appendChild(indicator);
     scrollToBottom();
+    setWorking(true);
 }
 
 export function hideLoading(tabId) {
+    hideTypingIndicator();
+    setWorking(false);
+}
+
+function hideTypingIndicator() {
     const indicator = document.getElementById('typing-indicator');
     if (indicator) indicator.remove();
+}
+
+function setWorking(active) {
+    if (window.setStarfieldWorking) window.setStarfieldWorking(active);
+    if (window.setHeaderWorking) window.setHeaderWorking(active);
+    const title = document.querySelector('.terminal-title');
+    if (title) title.classList.toggle('working', active);
 }
 
 export function addMessage(type, text, tabId) {
@@ -129,43 +145,6 @@ export function renderMessage(data, tabId) {
     }
 }
 
-export function renderAskUserQuestionInChat(questions, tabId) {
-    if (state.activeTabId !== tabId) return;
-
-    const msgDiv = document.createElement('div');
-    msgDiv.className = 'message assistant';
-
-    const label = document.createElement('div');
-    label.className = 'message-label';
-    label.textContent = 'Claude';
-    msgDiv.appendChild(label);
-
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'markdown-content';
-
-    let html = '<div class="chat-question">';
-    questions.forEach(q => {
-        html += `<strong>${escapeHtml(q.header || 'Pregunta')}:</strong> ${escapeHtml(q.question)}<br>`;
-        html += '<ul>';
-        q.options.forEach(opt => {
-            html += `<li><strong>${escapeHtml(opt.label)}</strong>`;
-            if (opt.description) html += ` - ${escapeHtml(opt.description)}`;
-            html += '</li>';
-        });
-        html += '</ul>';
-    });
-    html += '</div>';
-
-    contentDiv.innerHTML = html;
-    bubble.appendChild(contentDiv);
-    msgDiv.appendChild(bubble);
-    dom.messages.appendChild(msgDiv);
-    scrollToBottom();
-}
-
 export function renderAssistantBlocks(blocks, tabId) {
     for (const block of blocks) {
         if (block.type === 'text') {
@@ -196,15 +175,26 @@ export function handleMessage(data, tabId) {
         return;
     }
 
+    // Manejar file view (plan approval)
+    if (data.type === 'file_view') {
+        hideLoading(tabId);
+        showFileView(data.file_path, data.content, tabId, tab.ws);
+        return;
+    }
+
+    // Manejar tool approval request
+    if (data.type === 'tool_approval_request') {
+        hideLoading(tabId);
+        showToolApproval(data.tool_name, data.input, tabId, tab.ws);
+        return;
+    }
+
     // Manejar AskUserQuestion
     if (data.type === 'ask_user_question') {
         hideLoading(tabId);
-        // Guardar en historial para persistencia
         tab.renderedMessages.push(data);
         saveTabs();
-        // Mostrar en el chat
         renderAskUserQuestionInChat(data.questions, tabId);
-        // Mostrar modal
         showAskUserQuestion(data.questions, tabId, tab.ws);
         return;
     }
@@ -215,198 +205,17 @@ export function handleMessage(data, tabId) {
     }
 
     if (data.type === 'assistant') {
-        hideLoading(tabId);
+        hideTypingIndicator();
         renderAssistantBlocks(data.blocks, tabId);
+        // Si tiene tool_use, el agente sigue trabajando → re-mostrar typing
+        const hasToolUse = data.blocks && data.blocks.some(b => b.type === 'tool_use');
+        if (hasToolUse) {
+            showLoading(tabId);
+        }
     } else if (data.type === 'result') {
+        // Resultado final: apagar todo
         hideLoading(tabId);
     } else if (data.type === 'system') {
         addSystemMessage(data.message, tabId);
     }
-}
-
-// ===== AskUserQuestion Component =====
-
-let currentQuestionModal = null;
-
-export function showAskUserQuestion(questions, tabId, ws) {
-    // Remover modal existente si hay
-    hideAskUserQuestion();
-
-    const overlay = document.createElement('div');
-    overlay.className = 'question-overlay';
-    overlay.id = 'questionOverlay';
-
-    const selectedAnswers = new Map(); // questionIndex -> Set of selected option indices
-
-    questions.forEach((_, idx) => selectedAnswers.set(idx, new Set()));
-
-    const questionsHtml = questions.map((q, qIdx) => `
-        <div class="question-block" data-question-index="${qIdx}">
-            <div class="question-header">
-                <span class="question-chip">${escapeHtml(q.header || 'Pregunta')}</span>
-            </div>
-            <div class="question-text">${escapeHtml(q.question)}</div>
-            ${q.multiSelect ? '<div class="question-multiselect-hint">Puedes seleccionar varias opciones</div>' : ''}
-            <div class="question-options">
-                ${q.options.map((opt, oIdx) => `
-                    <div class="question-option"
-                         data-question-index="${qIdx}"
-                         data-option-index="${oIdx}"
-                         data-multi-select="${q.multiSelect}">
-                        <div class="question-option-checkbox">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                        </div>
-                        <div class="question-option-content">
-                            <div class="question-option-label">${escapeHtml(opt.label)}</div>
-                            ${opt.description ? `<div class="question-option-description">${escapeHtml(opt.description)}</div>` : ''}
-                        </div>
-                    </div>
-                    ${opt.preview ? `
-                        <div class="question-preview" data-preview-for="${qIdx}-${oIdx}" style="display:none">
-                            ${escapeHtml(opt.preview)}
-                        </div>
-                    ` : ''}
-                `).join('')}
-            </div>
-        </div>
-    `).join('');
-
-    overlay.innerHTML = `
-        <div class="question-modal">
-            ${questionsHtml}
-            <div class="question-actions">
-                <button class="question-btn question-btn-cancel" id="questionCancelBtn">
-                    Cancelar
-                </button>
-                <button class="question-btn question-btn-submit" id="questionSubmitBtn">
-                    Responder
-                </button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(overlay);
-    currentQuestionModal = { overlay, questions, selectedAnswers, ws, tabId };
-
-    // Agregar event listeners
-    overlay.querySelectorAll('.question-option').forEach(opt => {
-        opt.addEventListener('click', (e) => {
-            const qIdx = parseInt(opt.dataset.questionIndex);
-            const oIdx = parseInt(opt.dataset.optionIndex);
-            const multiSelect = opt.dataset.multiSelect === 'true';
-
-            const answers = currentQuestionModal.selectedAnswers.get(qIdx);
-            if (multiSelect) {
-                if (answers.has(oIdx)) {
-                    answers.delete(oIdx);
-                } else {
-                    answers.add(oIdx);
-                }
-            } else {
-                answers.clear();
-                answers.add(oIdx);
-            }
-            updateOptionUI(qIdx);
-        });
-    });
-
-    overlay.querySelector('#questionCancelBtn').addEventListener('click', () => {
-        hideAskUserQuestion();
-    });
-
-    overlay.querySelector('#questionSubmitBtn').addEventListener('click', () => {
-        const { questions, selectedAnswers, ws, tabId } = currentQuestionModal;
-
-        const responses = questions.map((q, qIdx) => {
-            const selected = Array.from(selectedAnswers.get(qIdx));
-            const selectedLabels = selected.map(oIdx => q.options[oIdx].label);
-
-            if (q.multiSelect) {
-                return selectedLabels;
-            } else {
-                return selectedLabels[0] || null;
-            }
-        });
-
-        // Formatear respuesta para mostrar en el chat
-        let responseText = '';
-        questions.forEach((q, qIdx) => {
-            const r = responses[qIdx];
-            if (Array.isArray(r)) {
-                responseText += `${q.header || 'Pregunta'}: ${r.join(', ')}\n`;
-            } else if (r) {
-                responseText += `${q.header || 'Pregunta'}: ${r}\n`;
-            }
-        });
-        responseText = responseText.trim();
-
-        // Enviar respuesta al backend
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'question_response',
-                responses
-            }));
-        }
-
-        // Mostrar respuesta en el chat como mensaje del usuario
-        addMessage('user', responseText, tabId);
-
-        // Guardar en historial
-        const tab = state.tabs.get(tabId);
-        if (tab) {
-            tab.renderedMessages.push({ type: 'user', content: responseText });
-            saveTabs();
-        }
-
-        hideAskUserQuestion();
-    });
-
-    console.log('AskUserQuestion modal shown, questions:', questions.length);
-}
-
-function updateOptionUI(qIdx) {
-    const { overlay, selectedAnswers, questions } = currentQuestionModal;
-    const answers = selectedAnswers.get(qIdx);
-    const multiSelect = questions[qIdx].multiSelect;
-
-    // Actualizar todas las opciones de esta pregunta
-    const options = overlay.querySelectorAll(`.question-option[data-question-index="${qIdx}"]`);
-    options.forEach(opt => {
-        const oIdx = parseInt(opt.dataset.optionIndex);
-        const isSelected = answers.has(oIdx);
-        opt.classList.toggle('selected', isSelected);
-
-        // Mostrar/ocultar preview
-        const preview = overlay.querySelector(`.question-preview[data-preview-for="${qIdx}-${oIdx}"]`);
-        if (preview) {
-            preview.style.display = isSelected ? 'block' : 'none';
-        }
-
-        // En single-select, desmarcar otras
-        if (!multiSelect && isSelected) {
-            options.forEach(other => {
-                if (other !== opt) {
-                    other.classList.remove('selected');
-                    const otherIdx = parseInt(other.dataset.optionIndex);
-                    const otherPreview = overlay.querySelector(`.question-preview[data-preview-for="${qIdx}-${otherIdx}"]`);
-                    if (otherPreview) otherPreview.style.display = 'none';
-                }
-            });
-        }
-    });
-}
-
-export function hideAskUserQuestion() {
-    if (currentQuestionModal) {
-        currentQuestionModal.overlay.remove();
-        currentQuestionModal = null;
-    }
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }

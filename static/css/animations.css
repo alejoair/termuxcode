@@ -19,6 +19,15 @@
     }
 }
 
+@keyframes glowPulse {
+    0%, 100% {
+        text-shadow: 0 0 8px rgba(196, 181, 253, 0.5), 0 0 16px rgba(196, 181, 253, 0.2);
+    }
+    50% {
+        text-shadow: 0 0 16px rgba(233, 213, 255, 1), 0 0 32px rgba(196, 181, 253, 0.6), 0 0 48px rgba(167, 139, 250, 0.3);
+    }
+}
+
 @keyframes bounce {
     0%, 80%, 100% {
         transform: translateY(0);

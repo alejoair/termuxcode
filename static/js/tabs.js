@@ -2,7 +2,7 @@
 
 import { state, dom } from './state.js';
 import { saveTabs, loadTabsData } from './storage.js';
-import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, showLoading, hideLoading, showAskUserQuestion } from './ui.js';
+import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, showLoading, hideLoading, showAskUserQuestion, showToolApproval } from './ui.js';
 import { connectTab, disconnectTab } from './connection.js';
 
 function createTabElement(tabId, tabName) {

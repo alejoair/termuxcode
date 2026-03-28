@@ -23,10 +23,25 @@ LOG_FILE = Path.home() / ".termuxcode" / "websocket_server.log"
 def setup_logging():
     """Configura el sistema de logging."""
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # Configurar handlers
+    handlers = [
+        logging.FileHandler(LOG_FILE, encoding='utf-8')
+    ]
+
+    # Agregar handler de consola con soporte UTF-8 (necesario para emojis en Windows)
+    # Reconfigurar stdout para usar UTF-8
+    if sys.platform == 'win32':
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+    handlers.append(logging.StreamHandler())
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[logging.FileHandler(LOG_FILE)]
+        handlers=handlers
     )
     return logging.getLogger(__name__)
 

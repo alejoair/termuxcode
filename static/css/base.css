@@ -46,6 +46,21 @@ body {
     animation: blink 1s step-end infinite;
 }
 
+/* Header working state */
+.terminal-title.working {
+    animation: glowPulse 2s ease-in-out infinite;
+    color: #c4b5fd !important;
+}
+
+.terminal-title.working .terminal-cursor {
+    animation: blink 0.5s step-end infinite;
+    color: #c4b5fd;
+}
+
+.terminal-title.working .terminal-prompt {
+    color: #e9d5ff;
+}
+
 @keyframes blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0; }

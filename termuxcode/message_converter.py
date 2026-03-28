@@ -82,15 +82,16 @@ class MessageConverter:
         }
 
     @staticmethod
-    def extract_ask_user_question(msg: AssistantMessage) -> tuple[str | None, list | None]:
+    def extract_ask_user_question(msg: AssistantMessage) -> list[tuple[str, list]]:
         """
-        Extrae AskUserQuestion de un AssistantMessage.
-        Returns: (tool_use_id, questions) o (None, None) si no hay
+        Extrae todos los AskUserQuestion de un AssistantMessage.
+        Returns: Lista de (tool_use_id, questions) o lista vacía si no hay
         """
+        questions = []
         for block in msg.content:
             if block.__class__.__name__ == "ToolUseBlock":
                 if block.name == "AskUserQuestion":
                     input_data = block.input
-                    questions = input_data.get("questions", [])
-                    return block.id, questions
-        return None, None
+                    question_list = input_data.get("questions", [])
+                    questions.append((block.id, question_list))
+        return questions

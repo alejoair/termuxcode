@@ -11,6 +11,14 @@
     --color-disconnected: #ff4757;
     --color-connecting: #ffc107;
 
+    /* Acciones */
+    --color-danger: #ff4757;
+    --color-danger-end: #c0392b;
+    --color-danger-bg: rgba(255, 71, 87, 0.15);
+    --color-success: #2ed573;
+    --color-success-end: #27ae60;
+    --color-success-bg: rgba(46, 213, 115, 0.15);
+
     /* Mensajes */
     --color-user-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --color-assistant-bg: rgba(255, 255, 255, 0.08);

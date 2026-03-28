@@ -7,7 +7,7 @@ import json
 import websockets
 
 from termuxcode.ws_config import WS_HOST, WS_PORT, logger
-from termuxcode.ws_connection import WebSocketConnection
+from termuxcode.connection import WebSocketConnection
 
 
 async def handle_connection(websocket):
