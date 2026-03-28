@@ -1,6 +1,6 @@
 {
-  "name": "Claude Code Mobile",
-  "short_name": "ClaudeCode",
+  "name": "termux-code",
+  "short_name": "termux-code",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a2e",

@@ -1,0 +1,10 @@
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+    .bubble {
+        max-width: 90%;
+    }
+
+    .btn-action span {
+        display: none;
+    }
+}

@@ -1,0 +1,78 @@
+/* ===== Variables CSS ===== */
+:root {
+    /* Colores primarios */
+    --color-primary: #667eea;
+    --color-primary-end: #764ba2;
+    --color-primary-bg: rgba(102, 126, 234, 0.3);
+    --color-primary-bg-hover: rgba(102, 126, 234, 0.5);
+
+    /* Status */
+    --color-connected: #2ed573;
+    --color-disconnected: #ff4757;
+    --color-connecting: #ffc107;
+
+    /* Mensajes */
+    --color-user-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --color-assistant-bg: rgba(255, 255, 255, 0.1);
+    --color-system-bg: rgba(255, 193, 7, 0.15);
+    --color-tool-bg: rgba(233, 69, 96, 0.15);
+    --color-thinking-bg: transparent;
+
+    /* Fondos */
+    --bg-body-start: #1a1a2e;
+    --bg-body-end: #16213e;
+    --bg-surface: rgba(255, 255, 255, 0.05);
+    --bg-surface-hover: rgba(255, 255, 255, 0.1);
+    --bg-toolbar: rgba(0, 0, 0, 0.2);
+    --bg-code: rgba(0, 0, 0, 0.3);
+    --bg-code-block: rgba(0, 0, 0, 0.4);
+
+    /* Textos */
+    --text-primary: #fff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-muted: rgba(255, 255, 255, 0.5);
+    --text-faint: rgba(255, 255, 255, 0.4);
+    --text-link: #a78bfa;
+
+    /* Bordes */
+    --border-color: rgba(255, 255, 255, 0.1);
+    --border-light: rgba(255, 255, 255, 0.3);
+    --focus-ring: rgba(102, 126, 234, 0.5);
+
+    /* Espaciado */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 10px;
+    --spacing-lg: 15px;
+    --spacing-xl: 20px;
+
+    /* Radios */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 16px;
+    --radius-full: 20px;
+
+    /* Sombras */
+    --shadow-focus: 0 0 0 2px var(--focus-ring);
+
+    /* Transiciones */
+    --transition-fast: 0.2s;
+    --transition-normal: 0.3s;
+
+    /* Tamaños */
+    --max-width: 900px;
+    --input-height: 36px;
+
+    /* Framework7 theme overrides */
+    --f7-theme-color: #667eea;
+    --f7-theme-color-rgb: 102, 126, 234;
+    --f7-navbar-bg-color: rgba(26, 26, 46, 0.85);
+    --f7-navbar-link-color: var(--text-primary);
+    --f7-navbar-text-color: var(--text-primary);
+    --f7-subnavbar-bg-color: rgba(26, 26, 46, 0.85);
+    --f7-toolbar-bg-color: rgba(26, 26, 46, 0.9);
+    --f7-page-bg-color: transparent;
+    --f7-bars-shadow: none;
+    --f7-messagebar-bg-color: rgba(26, 26, 46, 0.9);
+    --f7-messagebar-border-color: var(--border-color);
+}

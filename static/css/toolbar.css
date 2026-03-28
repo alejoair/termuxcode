@@ -1,0 +1,37 @@
+/* ===== Action Toolbar (stop, limpiar, reconectar) ===== */
+.action-toolbar {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    bottom: 48px !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+}
+
+.action-toolbar .toolbar-inner {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: 6px var(--spacing-lg);
+}
+
+.btn-action {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-full);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.btn-action:hover {
+    background: var(--bg-surface-hover);
+}
+
+.btn-action svg {
+    flex-shrink: 0;
+}

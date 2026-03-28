@@ -1,0 +1,129 @@
+/* ===== Reset y Base ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: linear-gradient(135deg, var(--bg-body-start) 0%, var(--bg-body-end) 100%);
+    min-height: 100dvh;
+    height: 100dvh;
+    overflow: hidden;
+    color: var(--text-primary);
+}
+
+/* Framework7 navbar: glassmorphism */
+.navbar-bg {
+    background: var(--f7-navbar-bg-color) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+.navbar .title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary) !important;
+    letter-spacing: 0.3px;
+}
+
+/* Status indicator en navbar */
+.status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-right: var(--spacing-sm);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-disconnected);
+    animation: pulse 2s infinite;
+}
+
+.status-dot.connected {
+    background: var(--color-connected);
+    animation: none;
+}
+
+/* Subnavbar: misma glassmorphism */
+.subnavbar {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+.subnavbar-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    overflow: visible;
+}
+
+/* Page content: fondo transparente */
+.page-content {
+    background: transparent !important;
+}
+
+/* Messagebar: glassmorphism */
+.messagebar {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: none !important;
+    box-shadow: none !important;
+}
+
+.messagebar .toolbar-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: 6px 8px;
+}
+
+.messagebar-area {
+    flex: 1;
+}
+
+.messagebar-area input {
+    width: 100%;
+    height: var(--input-height);
+    padding: 0 14px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.messagebar-area input:focus {
+    box-shadow: var(--shadow-focus);
+}
+
+.messagebar-area input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Boton enviar */
+.btn-send {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--color-user-gradient);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.btn-send:active {
+    opacity: 0.8;
+}

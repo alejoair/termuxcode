@@ -1,0 +1,124 @@
+/* ===== Messages Area ===== */
+.messages-area {
+    padding-left: var(--spacing-lg);
+    padding-right: var(--spacing-lg);
+    padding-bottom: 110px;
+    position: relative;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.messages-area > * {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: var(--max-width);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.messages-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messages-area::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+/* ===== Message bubbles ===== */
+.message {
+    margin-bottom: 12px;
+    animation: fadeIn var(--transition-normal) ease;
+}
+
+.bubble {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: var(--radius-lg);
+    line-height: 1.4;
+    display: inline-block;
+}
+
+/* User messages: alineados a la derecha */
+.message.user {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.message.user .bubble {
+    background: var(--color-user-gradient);
+    color: var(--text-primary);
+    border-bottom-right-radius: var(--radius-sm);
+}
+
+/* Assistant messages: alineados a la izquierda */
+.message.assistant {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.message.assistant .bubble {
+    background: var(--color-assistant-bg);
+    color: var(--text-primary);
+    border-bottom-left-radius: var(--radius-sm);
+}
+
+/* System messages: centrados */
+.message.system {
+    display: flex;
+    justify-content: center;
+}
+
+.message.system .bubble {
+    background: var(--color-system-bg);
+    color: var(--color-connecting);
+    font-size: 0.75rem;
+    text-align: center;
+    max-width: 100%;
+    border-radius: var(--radius-md);
+}
+
+/* Tool messages */
+.message.tool {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.message.tool .bubble {
+    background: var(--color-tool-bg);
+    color: var(--color-disconnected);
+    font-family: monospace;
+    font-size: 0.75rem;
+    border-radius: var(--radius-md);
+}
+
+/* Thinking messages */
+.message.thinking {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.message.thinking .bubble {
+    background: transparent;
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.85rem;
+    padding: var(--spacing-xs) 0;
+}
+
+/* Labels */
+.message-label {
+    font-size: 0.65rem;
+    color: var(--text-faint);
+    margin-bottom: 2px;
+    padding: 0 var(--spacing-xs);
+}
+
+.message.user .message-label {
+    text-align: right;
+}

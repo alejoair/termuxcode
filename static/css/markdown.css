@@ -1,0 +1,62 @@
+/* ===== Markdown Content ===== */
+.markdown-content {
+    line-height: 1.5;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+    margin-top: 0.8em;
+    margin-bottom: 0.4em;
+    font-weight: 600;
+}
+
+.markdown-content h1 { font-size: 1.4em; }
+.markdown-content h2 { font-size: 1.2em; }
+
+.markdown-content p {
+    margin-bottom: 0.6em;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin-bottom: 0.6em;
+    padding-left: 1.3em;
+}
+
+.markdown-content code {
+    background: var(--bg-code);
+    padding: 2px 5px;
+    border-radius: var(--radius-sm);
+    font-family: monospace;
+    font-size: 0.85em;
+}
+
+.markdown-content pre {
+    background: var(--bg-code-block);
+    padding: 10px;
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    margin: var(--spacing-sm) 0;
+}
+
+.markdown-content pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.markdown-content blockquote {
+    border-left: 3px solid var(--border-light);
+    padding-left: 10px;
+    margin: var(--spacing-sm) 0;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.markdown-content a {
+    color: var(--text-link);
+}
+
+.message.user .markdown-content {
+    white-space: pre-wrap;
+}
