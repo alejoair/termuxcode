@@ -5,31 +5,54 @@
     bottom: 48px !important;
     border-bottom: none !important;
     box-shadow: none !important;
+    min-height: 44px !important;
+    overflow: visible !important;
 }
 
 .action-toolbar .toolbar-inner {
     display: flex;
     justify-content: center;
-    gap: var(--spacing-sm);
     padding: 6px var(--spacing-lg);
+    overflow: visible !important;
+}
+
+.action-toolbar .toolbar-inner::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-surface);
+    border-radius: var(--radius-full);
+    padding: 0;
+    width: fit-content;
+}
+
+.action-pill {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: transparent;
+    border-radius: var(--radius-full);
+    padding: 3px;
 }
 
 .btn-action {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
-    padding: 6px 12px;
+    padding: 5px 12px;
     background: transparent;
     border: none;
     border-radius: var(--radius-full);
-    color: var(--text-secondary);
-    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
     cursor: pointer;
-    transition: background var(--transition-fast);
+    transition: all var(--transition-fast);
 }
 
 .btn-action:hover {
     background: var(--bg-surface-hover);
+    color: var(--text-secondary);
 }
 
 .btn-action svg {

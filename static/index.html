@@ -30,7 +30,7 @@
                 <div class="navbar">
                     <div class="navbar-bg"></div>
                     <div class="navbar-inner">
-                        <div class="title">termux-code</div>
+                        <div class="title terminal-title"><span class="terminal-prompt">&gt;</span> TERMUX-CODE<span class="terminal-cursor">_</span></div>
                         <div class="right">
                             <div class="status">
                                 <div class="status-dot" id="globalStatusDot"></div>
@@ -55,25 +55,27 @@
                 <!-- Toolbar bottom: botones de accion -->
                 <div class="toolbar toolbar-bottom action-toolbar">
                     <div class="toolbar-inner">
-                        <button class="btn-action" onclick="sendStop()" title="Detener">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <rect x="6" y="6" width="12" height="12" rx="2"/>
-                            </svg>
-                            <span>Stop</span>
-                        </button>
-                        <button class="btn-action" onclick="clearChat()" title="Limpiar">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                            </svg>
-                            <span>Limpiar</span>
-                        </button>
-                        <button class="btn-action" onclick="sendDisconnect()" title="Reconectar">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M23 4v6h-6M1 20v-6h6"/>
-                                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-                            </svg>
-                            <span>Reconectar</span>
-                        </button>
+                        <div class="action-pill">
+                            <button class="btn-action" onclick="sendStop()" title="Detener">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                                </svg>
+                                <span>Stop</span>
+                            </button>
+                            <button class="btn-action" onclick="clearChat()" title="Limpiar">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                </svg>
+                                <span>Limpiar</span>
+                            </button>
+                            <button class="btn-action" onclick="sendDisconnect()" title="Reconectar">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                                </svg>
+                                <span>Reconectar</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 

@@ -28,6 +28,29 @@ body {
     letter-spacing: 0.3px;
 }
 
+/* Terminal-style title */
+.terminal-title {
+    font-family: 'Courier New', 'Fira Code', 'Cascadia Code', monospace !important;
+    font-size: 1.2rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 2px;
+}
+
+.terminal-prompt {
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+.terminal-cursor {
+    color: var(--color-primary);
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
 /* Status indicator en navbar */
 .status {
     display: flex;
@@ -67,6 +90,18 @@ body {
 /* Page content: fondo transparente */
 .page-content {
     background: transparent !important;
+}
+
+/* Eliminar hairlines de Framework7 */
+.navbar::before,
+.navbar::after,
+.subnavbar::before,
+.subnavbar::after,
+.toolbar::before,
+.toolbar::after,
+.messagebar::before,
+.messagebar::after {
+    display: none !important;
 }
 
 /* Messagebar: glassmorphism */

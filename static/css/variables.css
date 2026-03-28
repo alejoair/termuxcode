@@ -13,19 +13,19 @@
 
     /* Mensajes */
     --color-user-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --color-assistant-bg: rgba(255, 255, 255, 0.1);
+    --color-assistant-bg: rgba(255, 255, 255, 0.08);
     --color-system-bg: rgba(255, 193, 7, 0.15);
     --color-tool-bg: rgba(233, 69, 96, 0.15);
     --color-thinking-bg: transparent;
 
     /* Fondos */
-    --bg-body-start: #1a1a2e;
-    --bg-body-end: #16213e;
-    --bg-surface: rgba(255, 255, 255, 0.05);
+    --bg-body-start: #0a0a0a;
+    --bg-body-end: #141414;
+    --bg-surface: rgba(255, 255, 255, 0.06);
     --bg-surface-hover: rgba(255, 255, 255, 0.1);
-    --bg-toolbar: rgba(0, 0, 0, 0.2);
-    --bg-code: rgba(0, 0, 0, 0.3);
-    --bg-code-block: rgba(0, 0, 0, 0.4);
+    --bg-toolbar: rgba(0, 0, 0, 0.3);
+    --bg-code: rgba(0, 0, 0, 0.4);
+    --bg-code-block: rgba(0, 0, 0, 0.5);
 
     /* Textos */
     --text-primary: #fff;
@@ -66,13 +66,17 @@
     /* Framework7 theme overrides */
     --f7-theme-color: #667eea;
     --f7-theme-color-rgb: 102, 126, 234;
-    --f7-navbar-bg-color: rgba(26, 26, 46, 0.85);
+    --f7-navbar-bg-color: rgba(14, 14, 14, 0.9);
     --f7-navbar-link-color: var(--text-primary);
     --f7-navbar-text-color: var(--text-primary);
-    --f7-subnavbar-bg-color: rgba(26, 26, 46, 0.85);
-    --f7-toolbar-bg-color: rgba(26, 26, 46, 0.9);
+    --f7-subnavbar-bg-color: rgba(14, 14, 14, 0.9);
+    --f7-toolbar-bg-color: rgba(14, 14, 14, 0.95);
     --f7-page-bg-color: transparent;
     --f7-bars-shadow: none;
-    --f7-messagebar-bg-color: rgba(26, 26, 46, 0.9);
-    --f7-messagebar-border-color: var(--border-color);
+    --f7-bars-border-color: transparent;
+    --f7-messagebar-bg-color: rgba(14, 14, 14, 0.95);
+    --f7-messagebar-border-color: transparent;
+    --f7-toolbar-border-color: transparent;
+    --f7-navbar-border-color: transparent;
+    --f7-subnavbar-border-color: transparent;
 }

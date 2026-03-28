@@ -2,7 +2,7 @@
 
 import { state, dom } from './state.js';
 import { saveTabs, loadTabsData } from './storage.js';
-import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus } from './ui.js';
+import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, showLoading, hideLoading } from './ui.js';
 import { connectTab, disconnectTab } from './connection.js';
 
 function createTabElement(tabId, tabName) {
@@ -154,6 +154,7 @@ export function send() {
 
     if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
         tab.ws.send(JSON.stringify({ content }));
+        showLoading(state.activeTabId);
     } else {
         addSystemMessage('No conectado. Reintentando...', state.activeTabId);
         connectTab(state.activeTabId);

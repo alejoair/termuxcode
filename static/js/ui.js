@@ -7,6 +7,30 @@ export function scrollToBottom() {
     dom.messages.scrollTop = dom.messages.scrollHeight;
 }
 
+export function showLoading(tabId) {
+    if (state.activeTabId !== tabId) return;
+    hideLoading(tabId);
+
+    const indicator = document.createElement('div');
+    indicator.className = 'typing-indicator';
+    indicator.id = 'typing-indicator';
+    indicator.innerHTML = `
+        <div class="typing-label">Claude</div>
+        <div class="typing-bubble">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+        </div>
+    `;
+    dom.messages.appendChild(indicator);
+    scrollToBottom();
+}
+
+export function hideLoading(tabId) {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) indicator.remove();
+}
+
 export function addMessage(type, text, tabId) {
     if (state.activeTabId !== tabId) return;
 
@@ -139,9 +163,10 @@ export function handleMessage(data, tabId) {
     }
 
     if (data.type === 'assistant') {
+        hideLoading(tabId);
         renderAssistantBlocks(data.blocks, tabId);
     } else if (data.type === 'result') {
-        // Ignorar mensaje de resultado
+        hideLoading(tabId);
     } else if (data.type === 'system') {
         addSystemMessage(data.message, tabId);
     }
