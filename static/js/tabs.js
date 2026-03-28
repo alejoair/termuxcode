@@ -2,7 +2,7 @@
 
 import { state, dom } from './state.js';
 import { saveTabs, loadTabsData } from './storage.js';
-import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, showLoading, hideLoading } from './ui.js';
+import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, showLoading, hideLoading, showAskUserQuestion } from './ui.js';
 import { connectTab, disconnectTab } from './connection.js';
 
 function createTabElement(tabId, tabName) {
@@ -88,6 +88,12 @@ export function switchTab(tabId) {
     while (tab.messages.length > 0) {
         const data = tab.messages.shift();
         renderMessage(data, tabId);
+    }
+
+    // Restaurar modal de pregunta pendiente si existe
+    const lastMsg = tab.renderedMessages[tab.renderedMessages.length - 1];
+    if (lastMsg && lastMsg.type === 'ask_user_question' && tab.ws && tab.ws.readyState === WebSocket.OPEN) {
+        showAskUserQuestion(lastMsg.questions, tabId, tab.ws);
     }
 
     if (!tab.isConnected && tab.ws === null) {

@@ -377,7 +377,7 @@ function updateOptionUI(qIdx) {
     });
 }
 
-function hideAskUserQuestion() {
+export function hideAskUserQuestion() {
     if (currentQuestionModal) {
         currentQuestionModal.overlay.remove();
         currentQuestionModal = null;
