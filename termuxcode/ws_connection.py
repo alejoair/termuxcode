@@ -24,6 +24,9 @@ class WebSocketConnection:
         self.session_id = None
         self.question_response = None
         self.question_event = asyncio.Event()
+        self.message_queue = asyncio.Queue()
+        self._processor_task = None
+        self._stop_processing = asyncio.Event()
 
     async def handle(self):
         """Maneja el ciclo de vida de la conexión."""
@@ -31,6 +34,11 @@ class WebSocketConnection:
 
         try:
             await self._initialize_client()
+
+            # Iniciar tarea de fondo para procesar mensajes
+            self._processor_task = asyncio.create_task(self._process_messages_continuously())
+
+            # Iniciar loop de mensajes del WebSocket
             await self._message_loop()
 
         except websockets.exceptions.ConnectionClosed:
@@ -44,6 +52,13 @@ class WebSocketConnection:
             except Exception:
                 pass
         finally:
+            self._stop_processing.set()
+            if self._processor_task:
+                self._processor_task.cancel()
+                try:
+                    await self._processor_task
+                except asyncio.CancelledError:
+                    pass
             await self._cleanup()
 
     async def _initialize_client(self):
@@ -96,7 +111,20 @@ class WebSocketConnection:
         """Procesa mensajes entrantes."""
         async for message in self.websocket:
             data = json.loads(message)
-            await self._process_message(data)
+            logger.info(f"Mensaje recibido: {data.get('type', data.get('command', 'unknown'))}")
+            await self.message_queue.put(data)
+
+    async def _process_messages_continuously(self):
+        """Procesa mensajes de la cola continuamente (tarea de fondo)."""
+        while not self._stop_processing.is_set():
+            try:
+                # Esperar por un mensaje con timeout para poder verificar _stop_processing
+                data = await asyncio.wait_for(self.message_queue.get(), timeout=0.1)
+                await self._process_message(data)
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                logger.error(f"Error procesando mensaje: {e}", exc_info=True)
 
     async def _process_message(self, data: dict):
         """Procesa un mensaje recibido."""
@@ -156,8 +184,36 @@ class WebSocketConnection:
             "questions": questions
         }))
 
-        # Esperar respuesta del usuario
-        await self.question_event.wait()
+        # Esperar respuesta del usuario - mientras tanto, procesar otros mensajes
+        while not self.question_event.is_set():
+            # Esperar por: evento de respuesta O un mensaje en la cola
+            event_task = asyncio.create_task(self.question_event.wait())
+            queue_task = asyncio.create_task(self.message_queue.get())
+
+            done, pending = await asyncio.wait(
+                [event_task, queue_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            # Cancelar tareas que no terminaron
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+            # Si el evento se seteó, salir
+            if self.question_event.is_set():
+                break
+
+            # Si llegó un mensaje, procesarlo
+            for task in done:
+                if task == queue_task:
+                    data = queue_task.result()
+                    logger.info(f"Procesando mensaje mientras espero respuesta: {data.get('type', 'unknown')}")
+                    await self._process_message(data)
+
         return self.question_response
 
     async def _handle_query(self, content: str):
@@ -184,6 +240,10 @@ class WebSocketConnection:
                 tool_id, questions = MessageConverter.extract_ask_user_question(msg)
                 if questions:
                     logger.info(f"AskUserQuestion detectado: {len(questions)} preguntas")
+                    # Enviar bloques de texto antes de la pregunta (si los hay)
+                    await self._send_assistant_message(msg, exclude_ask_user_question=True)
+                    # Detener la generación del SDK
+                    await self.client.interrupt()
                     # Enviar pregunta al frontend y esperar respuesta
                     responses = await self.send_ask_user_question(questions)
                     # Enviar respuesta al SDK
@@ -246,9 +306,9 @@ class WebSocketConnection:
         result_data = MessageConverter.convert_result_message(msg)
         await self.websocket.send(json.dumps(result_data))
 
-    async def _send_assistant_message(self, msg):
+    async def _send_assistant_message(self, msg, exclude_ask_user_question=False):
         """Envía un mensaje del asistente."""
-        assistant_data = MessageConverter.convert_assistant_message(msg)
+        assistant_data = MessageConverter.convert_assistant_message(msg, exclude_special_tools=exclude_ask_user_question)
         if assistant_data["blocks"]:
             await self.websocket.send(json.dumps(assistant_data))
 

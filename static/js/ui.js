@@ -317,7 +317,7 @@ export function showAskUserQuestion(questions, tabId, ws) {
     });
 
     overlay.querySelector('#questionSubmitBtn').addEventListener('click', () => {
-        const { questions, selectedAnswers, ws } = currentQuestionModal;
+        const { questions, selectedAnswers, ws, tabId } = currentQuestionModal;
 
         const responses = questions.map((q, qIdx) => {
             const selected = Array.from(selectedAnswers.get(qIdx));
@@ -330,6 +330,18 @@ export function showAskUserQuestion(questions, tabId, ws) {
             }
         });
 
+        // Formatear respuesta para mostrar en el chat
+        let responseText = '';
+        questions.forEach((q, qIdx) => {
+            const r = responses[qIdx];
+            if (Array.isArray(r)) {
+                responseText += `${q.header || 'Pregunta'}: ${r.join(', ')}\n`;
+            } else if (r) {
+                responseText += `${q.header || 'Pregunta'}: ${r}\n`;
+            }
+        });
+        responseText = responseText.trim();
+
         // Enviar respuesta al backend
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
@@ -338,7 +350,16 @@ export function showAskUserQuestion(questions, tabId, ws) {
             }));
         }
 
-        addSystemMessage('Respuesta enviada', currentQuestionModal.tabId);
+        // Mostrar respuesta en el chat como mensaje del usuario
+        addMessage('user', responseText, tabId);
+
+        // Guardar en historial
+        const tab = state.tabs.get(tabId);
+        if (tab) {
+            tab.renderedMessages.push({ type: 'user', content: responseText });
+            saveTabs();
+        }
+
         hideAskUserQuestion();
     });
 
