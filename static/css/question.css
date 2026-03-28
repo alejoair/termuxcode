@@ -227,3 +227,22 @@
         padding: var(--spacing-sm);
     }
 }
+
+/* Chat question display */
+.chat-question {
+    background: var(--color-primary-bg);
+    border-left: 3px solid var(--color-primary);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-sm);
+    margin-top: var(--spacing-xs);
+}
+
+.chat-question ul {
+    margin: var(--spacing-sm) 0;
+    padding-left: var(--spacing-lg);
+}
+
+.chat-question li {
+    margin: var(--spacing-xs) 0;
+    color: var(--text-secondary);
+}

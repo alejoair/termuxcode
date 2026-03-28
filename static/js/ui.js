@@ -124,7 +124,46 @@ export function renderMessage(data, tabId) {
         // Ignorar mensaje de resultado
     } else if (data.type === 'system') {
         addSystemMessage(data.message, tabId);
+    } else if (data.type === 'ask_user_question') {
+        renderAskUserQuestionInChat(data.questions, tabId);
     }
+}
+
+export function renderAskUserQuestionInChat(questions, tabId) {
+    if (state.activeTabId !== tabId) return;
+
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'message assistant';
+
+    const label = document.createElement('div');
+    label.className = 'message-label';
+    label.textContent = 'Claude';
+    msgDiv.appendChild(label);
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'markdown-content';
+
+    let html = '<div class="chat-question">';
+    questions.forEach(q => {
+        html += `<strong>${escapeHtml(q.header || 'Pregunta')}:</strong> ${escapeHtml(q.question)}<br>`;
+        html += '<ul>';
+        q.options.forEach(opt => {
+            html += `<li><strong>${escapeHtml(opt.label)}</strong>`;
+            if (opt.description) html += ` - ${escapeHtml(opt.description)}`;
+            html += '</li>';
+        });
+        html += '</ul>';
+    });
+    html += '</div>';
+
+    contentDiv.innerHTML = html;
+    bubble.appendChild(contentDiv);
+    msgDiv.appendChild(bubble);
+    dom.messages.appendChild(msgDiv);
+    scrollToBottom();
 }
 
 export function renderAssistantBlocks(blocks, tabId) {
@@ -160,6 +199,12 @@ export function handleMessage(data, tabId) {
     // Manejar AskUserQuestion
     if (data.type === 'ask_user_question') {
         hideLoading(tabId);
+        // Guardar en historial para persistencia
+        tab.renderedMessages.push(data);
+        saveTabs();
+        // Mostrar en el chat
+        renderAskUserQuestionInChat(data.questions, tabId);
+        // Mostrar modal
         showAskUserQuestion(data.questions, tabId, tab.ws);
         return;
     }
