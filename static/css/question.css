@@ -3,17 +3,17 @@
 .question-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1300;
+    z-index: 20000;
     animation: fadeIn 0.2s ease;
 }
 
 .question-modal {
-    background: var(--bg-surface);
+    background: rgba(20, 20, 20, 0.98);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: var(--spacing-xl);
@@ -22,6 +22,7 @@
     max-height: 80vh;
     overflow-y: auto;
     animation: slideUp 0.3s ease;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 .question-header {

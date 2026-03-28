@@ -207,7 +207,7 @@ export function showAskUserQuestion(questions, tabId, ws) {
                     <div class="question-option"
                          data-question-index="${qIdx}"
                          data-option-index="${oIdx}"
-                         onclick="window.toggleQuestionOption(${qIdx}, ${oIdx}, ${q.multiSelect})">
+                         data-multi-select="${q.multiSelect}">
                         <div class="question-option-checkbox">
                             <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
                                 <polyline points="20 6 9 17 4 12"></polyline>
@@ -232,10 +232,10 @@ export function showAskUserQuestion(questions, tabId, ws) {
         <div class="question-modal">
             ${questionsHtml}
             <div class="question-actions">
-                <button class="question-btn question-btn-cancel" onclick="window.hideAskUserQuestion()">
+                <button class="question-btn question-btn-cancel" id="questionCancelBtn">
                     Cancelar
                 </button>
-                <button class="question-btn question-btn-submit" id="questionSubmitBtn" onclick="window.submitAskUserQuestion()">
+                <button class="question-btn question-btn-submit" id="questionSubmitBtn">
                     Responder
                 </button>
             </div>
@@ -245,25 +245,33 @@ export function showAskUserQuestion(questions, tabId, ws) {
     document.body.appendChild(overlay);
     currentQuestionModal = { overlay, questions, selectedAnswers, ws, tabId };
 
-    // Exponer funciones globalmente
-    window.toggleQuestionOption = (qIdx, oIdx, multiSelect) => {
-        const answers = currentQuestionModal.selectedAnswers.get(qIdx);
+    // Agregar event listeners
+    overlay.querySelectorAll('.question-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+            const qIdx = parseInt(opt.dataset.questionIndex);
+            const oIdx = parseInt(opt.dataset.optionIndex);
+            const multiSelect = opt.dataset.multiSelect === 'true';
 
-        if (multiSelect) {
-            if (answers.has(oIdx)) {
-                answers.delete(oIdx);
+            const answers = currentQuestionModal.selectedAnswers.get(qIdx);
+            if (multiSelect) {
+                if (answers.has(oIdx)) {
+                    answers.delete(oIdx);
+                } else {
+                    answers.add(oIdx);
+                }
             } else {
+                answers.clear();
                 answers.add(oIdx);
             }
-        } else {
-            answers.clear();
-            answers.add(oIdx);
-        }
+            updateOptionUI(qIdx);
+        });
+    });
 
-        updateOptionUI(qIdx);
-    };
+    overlay.querySelector('#questionCancelBtn').addEventListener('click', () => {
+        hideAskUserQuestion();
+    });
 
-    window.submitAskUserQuestion = () => {
+    overlay.querySelector('#questionSubmitBtn').addEventListener('click', () => {
         const { questions, selectedAnswers, ws } = currentQuestionModal;
 
         const responses = questions.map((q, qIdx) => {
@@ -287,11 +295,9 @@ export function showAskUserQuestion(questions, tabId, ws) {
 
         addSystemMessage('Respuesta enviada', currentQuestionModal.tabId);
         hideAskUserQuestion();
-    };
+    });
 
-    window.hideAskUserQuestion = () => {
-        hideAskUserQuestion();
-    };
+    console.log('AskUserQuestion modal shown, questions:', questions.length);
 }
 
 function updateOptionUI(qIdx) {
