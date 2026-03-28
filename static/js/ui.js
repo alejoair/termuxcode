@@ -157,6 +157,13 @@ export function handleMessage(data, tabId) {
         return;
     }
 
+    // Manejar AskUserQuestion
+    if (data.type === 'ask_user_question') {
+        hideLoading(tabId);
+        showAskUserQuestion(data.questions, tabId, tab.ws);
+        return;
+    }
+
     // Guardar en renderedMessages (excepto system repetitivos)
     if (data.type !== 'system' || data.message.includes('Conectado')) {
         tab.renderedMessages.push(data);
@@ -170,4 +177,164 @@ export function handleMessage(data, tabId) {
     } else if (data.type === 'system') {
         addSystemMessage(data.message, tabId);
     }
+}
+
+// ===== AskUserQuestion Component =====
+
+let currentQuestionModal = null;
+
+export function showAskUserQuestion(questions, tabId, ws) {
+    // Remover modal existente si hay
+    hideAskUserQuestion();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'question-overlay';
+    overlay.id = 'questionOverlay';
+
+    const selectedAnswers = new Map(); // questionIndex -> Set of selected option indices
+
+    questions.forEach((_, idx) => selectedAnswers.set(idx, new Set()));
+
+    const questionsHtml = questions.map((q, qIdx) => `
+        <div class="question-block" data-question-index="${qIdx}">
+            <div class="question-header">
+                <span class="question-chip">${escapeHtml(q.header || 'Pregunta')}</span>
+            </div>
+            <div class="question-text">${escapeHtml(q.question)}</div>
+            ${q.multiSelect ? '<div class="question-multiselect-hint">Puedes seleccionar varias opciones</div>' : ''}
+            <div class="question-options">
+                ${q.options.map((opt, oIdx) => `
+                    <div class="question-option"
+                         data-question-index="${qIdx}"
+                         data-option-index="${oIdx}"
+                         onclick="window.toggleQuestionOption(${qIdx}, ${oIdx}, ${q.multiSelect})">
+                        <div class="question-option-checkbox">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                        <div class="question-option-content">
+                            <div class="question-option-label">${escapeHtml(opt.label)}</div>
+                            ${opt.description ? `<div class="question-option-description">${escapeHtml(opt.description)}</div>` : ''}
+                        </div>
+                    </div>
+                    ${opt.preview ? `
+                        <div class="question-preview" data-preview-for="${qIdx}-${oIdx}" style="display:none">
+                            ${escapeHtml(opt.preview)}
+                        </div>
+                    ` : ''}
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+
+    overlay.innerHTML = `
+        <div class="question-modal">
+            ${questionsHtml}
+            <div class="question-actions">
+                <button class="question-btn question-btn-cancel" onclick="window.hideAskUserQuestion()">
+                    Cancelar
+                </button>
+                <button class="question-btn question-btn-submit" id="questionSubmitBtn" onclick="window.submitAskUserQuestion()">
+                    Responder
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    currentQuestionModal = { overlay, questions, selectedAnswers, ws, tabId };
+
+    // Exponer funciones globalmente
+    window.toggleQuestionOption = (qIdx, oIdx, multiSelect) => {
+        const answers = currentQuestionModal.selectedAnswers.get(qIdx);
+
+        if (multiSelect) {
+            if (answers.has(oIdx)) {
+                answers.delete(oIdx);
+            } else {
+                answers.add(oIdx);
+            }
+        } else {
+            answers.clear();
+            answers.add(oIdx);
+        }
+
+        updateOptionUI(qIdx);
+    };
+
+    window.submitAskUserQuestion = () => {
+        const { questions, selectedAnswers, ws } = currentQuestionModal;
+
+        const responses = questions.map((q, qIdx) => {
+            const selected = Array.from(selectedAnswers.get(qIdx));
+            const selectedLabels = selected.map(oIdx => q.options[oIdx].label);
+
+            if (q.multiSelect) {
+                return selectedLabels;
+            } else {
+                return selectedLabels[0] || null;
+            }
+        });
+
+        // Enviar respuesta al backend
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'question_response',
+                responses
+            }));
+        }
+
+        addSystemMessage('Respuesta enviada', currentQuestionModal.tabId);
+        hideAskUserQuestion();
+    };
+
+    window.hideAskUserQuestion = () => {
+        hideAskUserQuestion();
+    };
+}
+
+function updateOptionUI(qIdx) {
+    const { overlay, selectedAnswers, questions } = currentQuestionModal;
+    const answers = selectedAnswers.get(qIdx);
+    const multiSelect = questions[qIdx].multiSelect;
+
+    // Actualizar todas las opciones de esta pregunta
+    const options = overlay.querySelectorAll(`.question-option[data-question-index="${qIdx}"]`);
+    options.forEach(opt => {
+        const oIdx = parseInt(opt.dataset.optionIndex);
+        const isSelected = answers.has(oIdx);
+        opt.classList.toggle('selected', isSelected);
+
+        // Mostrar/ocultar preview
+        const preview = overlay.querySelector(`.question-preview[data-preview-for="${qIdx}-${oIdx}"]`);
+        if (preview) {
+            preview.style.display = isSelected ? 'block' : 'none';
+        }
+
+        // En single-select, desmarcar otras
+        if (!multiSelect && isSelected) {
+            options.forEach(other => {
+                if (other !== opt) {
+                    other.classList.remove('selected');
+                    const otherIdx = parseInt(other.dataset.optionIndex);
+                    const otherPreview = overlay.querySelector(`.question-preview[data-preview-for="${qIdx}-${otherIdx}"]`);
+                    if (otherPreview) otherPreview.style.display = 'none';
+                }
+            });
+        }
+    });
+}
+
+function hideAskUserQuestion() {
+    if (currentQuestionModal) {
+        currentQuestionModal.overlay.remove();
+        currentQuestionModal = null;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

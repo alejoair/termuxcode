@@ -3,6 +3,7 @@
 
 import json
 import logging
+import asyncio
 
 import websockets
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
@@ -21,6 +22,8 @@ class WebSocketConnection:
         self.resume_id = resume_id
         self.cwd = cwd
         self.session_id = None
+        self.question_response = None
+        self.question_event = asyncio.Event()
 
     async def handle(self):
         """Maneja el ciclo de vida de la conexión."""
@@ -58,6 +61,11 @@ class WebSocketConnection:
             self.client = ClaudeSDKClient(options)
             await self.client.connect()
             logger.info("Cliente conectado")
+            # Enviar session_id inmediatamente despues de conectar
+            if hasattr(self.client, 'session_id') and self.client.session_id:
+                self.session_id = self.client.session_id
+                await self._send_session_id()
+                logger.info(f"Session ID enviado: {self.session_id}")
         except Exception as e:
             if self.resume_id:
                 logger.warning(f"Falló reanudar sesión {self.resume_id}: {e}. Creando nueva sesión.")
@@ -94,8 +102,11 @@ class WebSocketConnection:
         """Procesa un mensaje recibido."""
         command = data.get("command")
         content = data.get("content", "")
+        msg_type = data.get("type")
 
-        if command == "/stop":
+        if msg_type == "question_response":
+            await self._handle_question_response(data.get("responses"))
+        elif command == "/stop":
             await self._handle_stop()
         elif command == "/disconnect":
             await self._handle_disconnect()
@@ -112,6 +123,42 @@ class WebSocketConnection:
         """Maneja el comando /disconnect."""
         await self._send_system_message("Bye")
         raise websockets.exceptions.ConnectionClosed(1000, "Disconnect requested")
+
+    async def _handle_question_response(self, responses):
+        """Maneja la respuesta del usuario a una pregunta."""
+        self.question_response = responses
+        self.question_event.set()
+        logger.info(f"Respuesta recibida: {responses}")
+
+    async def send_ask_user_question(self, questions: list) -> list:
+        """
+        Envia preguntas al frontend y espera las respuestas.
+
+        Args:
+            questions: Lista de preguntas con el formato:
+                [{
+                    "question": "Texto de la pregunta?",
+                    "header": "Header",
+                    "multiSelect": False,
+                    "options": [
+                        {"label": "Opcion 1", "description": "Desc", "preview": "codigo"}
+                    ]
+                }]
+
+        Returns:
+            Lista de respuestas (string o lista de strings segun multiSelect)
+        """
+        self.question_response = None
+        self.question_event.clear()
+
+        await self.websocket.send(json.dumps({
+            "type": "ask_user_question",
+            "questions": questions
+        }))
+
+        # Esperar respuesta del usuario
+        await self.question_event.wait()
+        return self.question_response
 
     async def _handle_query(self, content: str):
         """Maneja una consulta del usuario."""
