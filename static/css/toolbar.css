@@ -55,6 +55,39 @@
     color: var(--text-secondary);
 }
 
+/* Colores por botón */
+.btn-action[title="Detener"] {
+    color: var(--color-danger);
+}
+.btn-action[title="Detener"]:hover,
+.btn-action[title="Detener"]:active {
+    background: var(--color-danger-bg);
+}
+
+.btn-action[title="Limpiar"] {
+    color: #ffc107;
+}
+.btn-action[title="Limpiar"]:hover,
+.btn-action[title="Limpiar"]:active {
+    background: rgba(255, 193, 7, 0.15);
+}
+
+.btn-action[title="Reconectar"] {
+    color: var(--color-success);
+}
+.btn-action[title="Reconectar"]:hover,
+.btn-action[title="Reconectar"]:active {
+    background: var(--color-success-bg);
+}
+
+.btn-action[title="Configuración"] {
+    color: var(--color-primary);
+}
+.btn-action[title="Configuración"]:hover,
+.btn-action[title="Configuración"]:active {
+    background: var(--color-primary-bg);
+}
+
 .btn-action svg {
     flex-shrink: 0;
 }

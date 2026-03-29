@@ -17,6 +17,16 @@ export function connectTab(tabId) {
         const params = new URLSearchParams();
         if (tab.sessionId) params.set('session_id', tab.sessionId);
         if (tab.cwd) params.set('cwd', tab.cwd);
+        const s = tab.settings || {};
+        const opts = {};
+        if (s.permission_mode) opts.permission_mode = s.permission_mode;
+        if (s.model) opts.model = s.model;
+        if (s.system_prompt) opts.system_prompt = s.system_prompt;
+        if (s.append_system_prompt) opts.append_system_prompt = s.append_system_prompt;
+        if (s.max_turns) opts.max_turns = parseInt(s.max_turns);
+        if (s.allowed_tools) opts.allowed_tools = s.allowed_tools.split(',').map(t => t.trim()).filter(Boolean);
+        if (s.disallowed_tools) opts.disallowed_tools = s.disallowed_tools.split(',').map(t => t.trim()).filter(Boolean);
+        if (Object.keys(opts).length) params.set('options', JSON.stringify(opts));
         const wsUrl = params.toString() ? `${WS_URL}?${params.toString()}` : WS_URL;
         tab.ws = new WebSocket(wsUrl);
 

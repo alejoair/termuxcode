@@ -1,6 +1,6 @@
 // ===== Gestion de pestanas =====
 
-import { state, dom } from './state.js';
+import { state, dom, DEFAULT_SETTINGS } from './state.js';
 import { saveTabs, loadTabsData } from './storage.js';
 import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, showLoading, hideLoading, showAskUserQuestion, showToolApproval } from './ui.js';
 import { connectTab, disconnectTab } from './connection.js';
@@ -57,6 +57,7 @@ export async function createTab(name, cwd) {
         renderedMessages: [],
         isConnected: false,
         sessionId: null,
+        settings: { ...DEFAULT_SETTINGS },
     });
 
     createTabElement(tabId, tabName);
@@ -101,6 +102,12 @@ export function switchTab(tabId) {
     }
 
     updateGlobalStatus();
+
+    // Actualizar selector de modelo
+    const modelSelect = document.getElementById('modelSelector');
+    if (modelSelect && tab.settings) {
+        modelSelect.value = tab.settings.model || 'glm-5';
+    }
 }
 
 export function closeTab(tabId) {
@@ -204,7 +211,7 @@ export function clearChat() {
 
 export function loadTabs() {
     const data = loadTabsData();
-    data.forEach(({ id, name, cwd, sessionId, renderedMessages }) => {
+    data.forEach(({ id, name, cwd, sessionId, renderedMessages, settings }) => {
         state.tabs.set(id, {
             id,
             name,
@@ -215,6 +222,7 @@ export function loadTabs() {
             renderedMessages: renderedMessages || [],
             isConnected: false,
             sessionId: sessionId || null,
+            settings: settings || { ...DEFAULT_SETTINGS },
         });
         createTabElement(id, name);
 

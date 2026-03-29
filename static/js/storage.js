@@ -1,6 +1,6 @@
 // ===== Persistencia en localStorage =====
 
-import { state, STORAGE_KEY } from './state.js';
+import { state, STORAGE_KEY, DEFAULT_SETTINGS } from './state.js';
 
 export function saveTabs() {
     const data = Array.from(state.tabs.entries()).map(([id, tab]) => ({
@@ -9,6 +9,7 @@ export function saveTabs() {
         cwd: tab.cwd,
         sessionId: tab.sessionId,
         renderedMessages: tab.renderedMessages,
+        settings: tab.settings,
     }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }

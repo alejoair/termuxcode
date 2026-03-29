@@ -15,18 +15,20 @@ from termuxcode.connection.message_processor import MessageProcessor
 class WebSocketConnection:
     """Maneja una conexión WebSocket con sus componentes asociados."""
 
-    def __init__(self, websocket, resume_id: str = None, cwd: str = None):
+    def __init__(self, websocket, resume_id: str = None, cwd: str = None, agent_options: dict = None):
         """Inicializa la conexión.
 
         Args:
             websocket: Conexión WebSocket
             resume_id: ID de sesión para reanudar
             cwd: Directorio de trabajo
+            agent_options: Opciones del agente desde el frontend
         """
         self.websocket = websocket
         self.remote_address = websocket.remote_address
         self.resume_id = resume_id
         self.cwd = cwd
+        self.agent_options = agent_options or {}
 
         # Componentes
         self._sdk_client = None
@@ -80,7 +82,8 @@ class WebSocketConnection:
         self._sdk_client = SDKClient(
             resume_id=self.resume_id,
             cwd=self.cwd,
-            can_use_tool=self._tool_approval_handler.can_use_tool
+            can_use_tool=self._tool_approval_handler.can_use_tool,
+            agent_options=self.agent_options,
         )
         session_id = await self._sdk_client.connect()
         logger.info("Cliente conectado")

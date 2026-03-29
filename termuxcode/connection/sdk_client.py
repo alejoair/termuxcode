@@ -15,18 +15,20 @@ async def _dummy_hook(input_data, tool_use_id, context):
 class SDKClient:
     """Encapsula la inicialización y comunicación con el Claude SDK."""
 
-    def __init__(self, resume_id: str = None, cwd: str = None, can_use_tool=None):
+    def __init__(self, resume_id: str = None, cwd: str = None, can_use_tool=None, agent_options: dict = None):
         """Inicializa el cliente SDK.
 
         Args:
             resume_id: ID de sesión para reanudar
             cwd: Directorio de trabajo
             can_use_tool: Callback async para aprobación de herramientas
+            agent_options: Opciones del agente desde el frontend
         """
         self._client = None
         self.resume_id = resume_id
         self.cwd = cwd
         self._can_use_tool = can_use_tool
+        self._agent_options = agent_options or {}
         self._session_id = None
 
     def _build_options(self, resume: bool = True) -> ClaudeAgentOptions:
@@ -38,12 +40,23 @@ class SDKClient:
         Returns:
             ClaudeAgentOptions configurado
         """
+        o = self._agent_options
         options = ClaudeAgentOptions(
-            permission_mode="acceptEdits",
-            model="sonnet",
+            permission_mode=o.get("permission_mode", "acceptEdits"),
+            model=o.get("model", "glm-5"),
             setting_sources=["user", "project", "local"],
             stderr=lambda line: logger.error(f"Claude CLI stderr: {line}"),
         )
+        if o.get("system_prompt"):
+            options.system_prompt = o["system_prompt"]
+        if o.get("append_system_prompt"):
+            options.append_system_prompt = o["append_system_prompt"]
+        if o.get("max_turns"):
+            options.max_turns = int(o["max_turns"])
+        if o.get("allowed_tools"):
+            options.allowed_tools = o["allowed_tools"]
+        if o.get("disallowed_tools"):
+            options.disallowed_tools = o["disallowed_tools"]
 
         if self._can_use_tool:
             options.can_use_tool = self._can_use_tool

@@ -251,6 +251,59 @@
     }
 }
 
+/* Settings Modal */
+.settings-modal { max-width: 520px; }
+
+.settings-field { margin-bottom: var(--spacing-md); }
+
+.settings-label {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.settings-hint {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.7;
+}
+
+.settings-input,
+.settings-select,
+.settings-textarea {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+    padding: 8px 12px;
+    box-sizing: border-box;
+    transition: border-color var(--transition-fast);
+    font-family: inherit;
+}
+
+.settings-input:focus,
+.settings-select:focus,
+.settings-textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.settings-textarea { resize: vertical; min-height: 70px; }
+
+.settings-note {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+    margin-bottom: var(--spacing-sm);
+}
+
 /* File View Modal */
 .file-view-modal {
     max-width: 700px;
