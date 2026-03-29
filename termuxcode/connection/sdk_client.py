@@ -29,17 +29,21 @@ class SDKClient:
         self._can_use_tool = can_use_tool
         self._session_id = None
 
-    async def connect(self) -> str | None:
-        """Conecta al SDK y retorna el session_id.
+    def _build_options(self, resume: bool = True) -> ClaudeAgentOptions:
+        """Construye las opciones del agente.
+
+        Args:
+            resume: Si True, incluye resume_id en las opciones
 
         Returns:
-            El session_id del SDK o None si no está disponible
-
-        Raises:
-            Exception: Si falla la conexión y no hay resume_id
+            ClaudeAgentOptions configurado
         """
-        logger.info("Creando cliente SDK...")
-        options = ClaudeAgentOptions(permission_mode="acceptEdits")
+        options = ClaudeAgentOptions(
+            permission_mode="acceptEdits",
+            model="sonnet",
+            setting_sources=["user", "project", "local"],
+            stderr=lambda line: logger.error(f"Claude CLI stderr: {line}"),
+        )
 
         if self._can_use_tool:
             options.can_use_tool = self._can_use_tool
@@ -50,9 +54,23 @@ class SDKClient:
             options.cwd = self.cwd
             logger.info(f"Usando cwd: {self.cwd}")
 
-        if self.resume_id:
+        if resume and self.resume_id:
             logger.info(f"Reanudando sesión: {self.resume_id}")
             options.resume = self.resume_id
+
+        return options
+
+    async def connect(self) -> str | None:
+        """Conecta al SDK y retorna el session_id.
+
+        Returns:
+            El session_id del SDK o None si no está disponible
+
+        Raises:
+            Exception: Si falla la conexión y no hay resume_id
+        """
+        logger.info("Creando cliente SDK...")
+        options = self._build_options()
 
         try:
             self._client = ClaudeSDKClient(options)
@@ -68,12 +86,7 @@ class SDKClient:
             if self.resume_id:
                 logger.warning(f"Falló reanudar sesión {self.resume_id}: {e}. Creando nueva sesión.")
                 self.resume_id = None
-                options = ClaudeAgentOptions(permission_mode="acceptEdits")
-                if self._can_use_tool:
-                    options.can_use_tool = self._can_use_tool
-                    options.hooks = {"PreToolUse": [HookMatcher(matcher=None, hooks=[_dummy_hook])]}
-                if self.cwd:
-                    options.cwd = self.cwd
+                options = self._build_options(resume=False)
                 self._client = ClaudeSDKClient(options)
                 await self._client.connect()
                 logger.info("Nueva sesión creada")
