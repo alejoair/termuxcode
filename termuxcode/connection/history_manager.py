@@ -17,8 +17,10 @@ def get_history_path(cwd: str, session_id: str) -> Path | None:
     Returns:
         Path al archivo JSONL o None si no existe
     """
-    # Transformar cwd a nombre de carpeta: /a/b/c -> -a-b-c (también . -> -)
-    project_name = cwd.replace("/", "-").replace(".", "-")
+    # Transformar cwd a nombre de carpeta igual que Claude Code:
+    # C:\Users\foo\bar -> C--Users-foo-bar  (: -> -, \ -> -)
+    # /home/foo/bar -> -home-foo-bar
+    project_name = cwd.replace(":", "-").replace("\\", "-").replace("/", "-").replace(".", "-")
     claude_dir = Path.home() / ".claude" / "projects" / project_name
     history_file = claude_dir / f"{session_id}.jsonl"
 
@@ -53,7 +55,7 @@ def truncate_history(cwd: str, session_id: str, keep_last: int = 100) -> bool:
 
         if total_lines <= keep_last:
             logger.info(f"Historial tiene {total_lines} líneas, no necesita truncado")
-            return True
+            return False  # No se truncó
 
         # Conservar solo las últimas N líneas
         truncated_lines = lines[-keep_last:]

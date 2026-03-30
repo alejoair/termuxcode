@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import os
 
 import websockets
 
@@ -19,7 +20,7 @@ async def handle_connection(websocket):
 
     resume_id = qs.get("session_id", [None])[0]
     cwd_raw = qs.get("cwd", [None])[0]
-    cwd = unquote(cwd_raw) if cwd_raw else None
+    cwd = unquote(cwd_raw) if cwd_raw else os.getcwd()
     options_raw = qs.get("options", [None])[0]
     agent_options = json.loads(options_raw) if options_raw else {}
 

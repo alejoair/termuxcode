@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Gestión del cliente SDK para Claude Agent."""
 
+import asyncio
+
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from claude_agent_sdk.types import HookMatcher
 
@@ -100,13 +102,44 @@ class SDKClient:
             logger.error(f"Error conectando SDK: {e}")
             raise
 
+    async def reconnect(self, session_id: str = None) -> str | None:
+        """Crea un nuevo cliente SDK.
+
+        Args:
+            session_id: ID de sesión para reanudar (actualiza resume_id)
+
+        Returns:
+            El session_id o None
+        """
+        if session_id:
+            self.resume_id = session_id
+
+        self._client = None
+        return await self.connect()
+
     async def disconnect(self):
         """Desconecta el cliente SDK."""
         if self._client:
             try:
+                # Verificar si el proceso está vivo antes de desconectar
+                if hasattr(self._client, '_transport') and self._client._transport:
+                    transport = self._client._transport
+                    if hasattr(transport, '_process') and transport._process:
+                        logger.info(f"Proceso CLI antes de disconnect: returncode={transport._process.returncode}")
+
                 await self._client.disconnect()
-            except Exception:
-                pass
+
+                # Verificar si el proceso murió después de desconectar
+                if hasattr(self._client, '_transport') and self._client._transport:
+                    transport = self._client._transport
+                    if hasattr(transport, '_process') and transport._process:
+                        logger.info(f"Proceso CLI después de disconnect: returncode={transport._process.returncode}")
+
+            except Exception as e:
+                logger.warning(f"Error en disconnect: {e}")
+            finally:
+                self._client = None
+                logger.info("Referencia al cliente SDK limpiada")
 
     async def query(self, content: str):
         """Envía una consulta al SDK.

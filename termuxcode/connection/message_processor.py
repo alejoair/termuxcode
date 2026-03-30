@@ -21,7 +21,7 @@ class MessageProcessor:
             tool_approval_handler: Handler para tool approval
             cwd: Directorio de trabajo
             session_id: ID de sesión inicial (del frontend, para reconexión)
-            rolling_window: Número de mensajes a conservar en historial
+            rolling_window: Número de líneas a conservar en historial
         """
         self._sdk_client = sdk_client
         self._sender = sender
@@ -54,6 +54,7 @@ class MessageProcessor:
         Args:
             data: Diccionario con el mensaje
         """
+        logger.info(f"=== Frontend request: {data} ===")
         command = data.get("command")
         content = data.get("content", "")
         msg_type = data.get("type")
@@ -87,11 +88,14 @@ class MessageProcessor:
         from termuxcode.message_converter import MessageConverter
 
         logger.info(f"Query: {content[:50]}")
+        logger.info(f"  session_id={self._session_id}, cwd={self._cwd}, rolling_window={self._rolling_window}")
         self._stop_event.clear()
 
-        # Truncar historial antes de enviar la consulta
+        # Truncar historial y reconectar para que el SDK cargue el JSONL recortado
         if self._session_id and self._cwd:
-            truncate_history(self._cwd, self._session_id, self._rolling_window)
+            did_truncate = truncate_history(self._cwd, self._session_id, self._rolling_window)
+            if did_truncate:
+                await self._sdk_client.reconnect(self._session_id)
 
         await self._sdk_client.query(content)
 

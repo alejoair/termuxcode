@@ -100,6 +100,7 @@ class WebSocketConnection:
         self._tool_approval_handler._ask_handler = self._ask_handler
 
         # Inicializar message_processor
+        rolling_window = self.agent_options.get('rolling_window', 100) if self.agent_options else 100
         self._processor = MessageProcessor(
             sdk_client=self._sdk_client,
             sender=self._sender,
@@ -107,7 +108,7 @@ class WebSocketConnection:
             tool_approval_handler=self._tool_approval_handler,
             cwd=self.cwd,
             session_id=self.resume_id,
-            rolling_window=self.agent_options.get('rolling_window', 100) if self.agent_options else 100,
+            rolling_window=rolling_window,
         )
 
         # Callback para cuando se rechaza un plan: setear stop_event del processor
