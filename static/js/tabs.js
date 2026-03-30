@@ -106,7 +106,7 @@ export function switchTab(tabId) {
     // Actualizar selector de modelo
     const modelSelect = document.getElementById('modelSelector');
     if (modelSelect && tab.settings) {
-        modelSelect.value = tab.settings.model || 'glm-5';
+        modelSelect.value = tab.settings.model || 'sonnet';
     }
 }
 
