@@ -19,8 +19,9 @@ termuxcode is a Claude Code client with two deployment modes:
   - `sdk_client.py` - `SDKClient` wrapper for `ClaudeSDKClient` (connect, query, receive, interrupt, resume)
   - `sender.py` - `MessageSender` sends typed JSON messages to the frontend WebSocket
   - `message_processor.py` - `MessageProcessor` processes user messages from the queue, iterates SDK responses, handles stop signals
-  - `ask_handler.py` - `AskHandler` detects `AskUserQuestion` tool use, sends questions to frontend, waits for response, sends tool_result back to SDK
+  - `ask_handler.py` - `AskUserQuestionHandler` detects `AskUserQuestion` tool use, sends questions to frontend, waits for response, sends tool_result back to SDK
   - `tool_approval_handler.py` - `ToolApprovalHandler` implements `can_use_tool` callback for tool approval flow
+  - `history_manager.py` - `truncate_history()` trims SDK conversation history JSONL files before each query
 - **`termuxcode/message_converter.py`**: Converts SDK messages (AssistantMessage, ResultMessage) to WebSocket JSON format. Filters out `AskUserQuestion` from normal assistant messages.
 - **`termuxcode/ws_config.py`**: Configuration and logging setup (log file: `~/.termuxcode/websocket_server.log`)
 - **`termuxcode/desktop_server.py`**: Entry point for PyInstaller-built sidecar on desktop. On Windows, patches `subprocess.Popen` with `CREATE_NO_WINDOW` to prevent ghost console windows.
@@ -93,6 +94,20 @@ The tool `AskUserQuestion` requires special handling:
 4. Frontend shows modal, user selects answers
 5. Frontend sends `question_response` message back
 6. `ask_handler.py` formats response as `tool_result` and sends to SDK via `_transport.write()`
+
+## Key Flow: Session ID
+
+The session_id enables session resumption and history management:
+
+1. **Frontend sends session_id** via WebSocket query string (`?session_id=xxx&cwd=/path`)
+2. **Backend receives as `resume_id`** in `ws_server.py`, passes to `WebSocketConnection` and `SDKClient`
+3. **SDK uses it for resume** via `ClaudeAgentOptions.resume = resume_id`
+4. **ResultMessage contains session_id** from SDK, which is:
+   - Saved in `MessageProcessor._session_id` for `truncate_history()`
+   - Sent back to frontend to persist for reconnection
+5. **History truncation** uses `session_id` to find `~/.claude/projects/{project}/{session_id}.jsonl`
+
+Note: The SDK client does NOT expose `session_id` directly after `connect()`. It only arrives in `ResultMessage` during streaming.
 
 ## Key Flow: Working State Animations
 
