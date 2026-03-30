@@ -57,12 +57,12 @@ class WebSocketConnection:
             await self._message_loop()
 
         except websockets.exceptions.ConnectionClosed:
-            logger.info("[Conexion cerrada]")
+            logger.info("[Conexión cerrada]")
         except Exception as e:
             logger.error(f"Error: {e}", exc_info=True)
             try:
                 await self._sender.send_system_message(f"Error: {e}")
-                # Mantener la conexion abierta para evitar reconnect loop
+                # Mantener la conexión abierta para evitar reconnect loop
                 await self.websocket.wait_closed()
             except Exception:
                 pass
@@ -75,7 +75,6 @@ class WebSocketConnection:
         self._sender = MessageSender(self.websocket)
 
         # Inicializar tool_approval_handler (su callback se pasa al SDK)
-        # sdk_client se asigna después de conectar
         self._tool_approval_handler = ToolApprovalHandler(self._sender)
 
         # Inicializar cliente SDK con el callback de aprobación
@@ -91,7 +90,7 @@ class WebSocketConnection:
         # Ahora que el SDK está conectado, darle referencia al approval handler
         self._tool_approval_handler._sdk_client = self._sdk_client
 
-        # Enviar session_id inmediatamente despues de conectar
+        # Enviar session_id inmediatamente después de conectar
         if session_id:
             await self._send_session_id(session_id)
             logger.info(f"Session ID enviado: {session_id}")
@@ -101,7 +100,15 @@ class WebSocketConnection:
         self._tool_approval_handler._ask_handler = self._ask_handler
 
         # Inicializar message_processor
-        self._processor = MessageProcessor(self._sdk_client, self._sender)
+        self._processor = MessageProcessor(
+            sdk_client=self._sdk_client,
+            sender=self._sender,
+            ask_handler=self._ask_handler,
+            tool_approval_handler=self._tool_approval_handler,
+            cwd=self.cwd,
+            session_id=self.resume_id,
+            rolling_window=self.agent_options.get('rolling_window', 100) if self.agent_options else 100,
+        )
 
         # Callback para cuando se rechaza un plan: setear stop_event del processor
         async def on_plan_rejected():

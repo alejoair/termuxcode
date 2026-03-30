@@ -70,14 +70,18 @@ function openSettings() {
             <div class="settings-field">
                 <label class="settings-label">Modelo</label>
                 <select class="settings-select" id="cfg-model">
-                    <option value="glm-5">glm-5</option>
-                    <option value="glm-5.1">glm-5.1</option>
-                    <option value="glm-5-turbo">glm-5-turbo</option>
+                    <option value="sonnet">sonnet</option>
+                    <option value="opus">opus</option>
+                    <option value="haiku">haiku</option>
                 </select>
             </div>
             <div class="settings-field">
                 <label class="settings-label">Máximo de turnos</label>
                 <input class="settings-input" id="cfg-max_turns" type="number" min="1" placeholder="Sin límite" value="${esc(s.max_turns)}">
+            </div>
+            <div class="settings-field">
+                <label class="settings-label">Ventana de historial <span class="settings-hint">(mensajes a conservar)</span></label>
+                <input class="settings-input" id="cfg-rolling_window" type="number" min="10" placeholder="100" value="${esc(s.rolling_window)}">
             </div>
             <div class="settings-field">
                 <label class="settings-label">Herramientas permitidas <span class="settings-hint">(separadas por coma)</span></label>
@@ -104,13 +108,14 @@ function openSettings() {
     `;
     document.body.appendChild(overlay);
     overlay.querySelector('#cfg-permission_mode').value = s.permission_mode || 'acceptEdits';
-    overlay.querySelector('#cfg-model').value = s.model || 'glm-5';
+    overlay.querySelector('#cfg-model').value = s.model || 'sonnet';
     overlay.querySelector('#settingsCancelBtn').onclick = () => overlay.remove();
     overlay.querySelector('#settingsSaveBtn').onclick = () => {
         tab.settings = {
             permission_mode: overlay.querySelector('#cfg-permission_mode').value,
             model: overlay.querySelector('#cfg-model').value,
             max_turns: overlay.querySelector('#cfg-max_turns').value.trim(),
+            rolling_window: parseInt(overlay.querySelector('#cfg-rolling_window').value) || 100,
             allowed_tools: overlay.querySelector('#cfg-allowed_tools').value.trim(),
             disallowed_tools: overlay.querySelector('#cfg-disallowed_tools').value.trim(),
             system_prompt: overlay.querySelector('#cfg-system_prompt').value,

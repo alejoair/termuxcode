@@ -11,11 +11,12 @@ from termuxcode.ws_config import logger
 class ToolApprovalHandler:
     """Maneja solicitudes de aprobación de herramientas del SDK."""
 
-    def __init__(self, sender, sdk_client=None, on_plan_rejected=None):
-        self._sender = sender
+    def __init__(self, sender=None, sdk_client=None, on_plan_rejected=None, session=None):
+        self._sender = sender  # Mantener por compatibilidad temporal
         self._sdk_client = sdk_client
         self._ask_handler = None
         self._on_plan_rejected = on_plan_rejected
+        self._session = session  # Nuevo: referencia a Session
         self._approval_event = asyncio.Event()
         self._approval_response = None
         self._waiting = False
@@ -47,7 +48,17 @@ class ToolApprovalHandler:
         self._waiting = True
 
         try:
-            await self._sender.send_tool_approval_request(tool_name, input_data)
+            # Enviar vía Session si está disponible, sino vía sender (compatibilidad)
+            if self._session:
+                await self._session.send_message({
+                    "type": "tool_approval_request",
+                    "tool_name": tool_name,
+                    "input": input_data
+                })
+            elif self._sender:
+                await self._sender.send_tool_approval_request(tool_name, input_data)
+            else:
+                raise RuntimeError("ToolApprovalHandler no tiene session ni sender configurado")
 
             # Esperar respuesta del frontend (llega via _message_loop → handle_response)
             await self._approval_event.wait()
@@ -79,7 +90,17 @@ class ToolApprovalHandler:
         self._waiting = True
 
         try:
-            await self._sender.send_file_view("Plan", plan_content)
+            # Enviar vía Session si está disponible, sino vía sender (compatibilidad)
+            if self._session:
+                await self._session.send_message({
+                    "type": "file_view",
+                    "file_path": "Plan",
+                    "content": plan_content
+                })
+            elif self._sender:
+                await self._sender.send_file_view("Plan", plan_content)
+            else:
+                raise RuntimeError("ToolApprovalHandler no tiene session ni sender configurado")
 
             await self._approval_event.wait()
 

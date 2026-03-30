@@ -29,7 +29,6 @@ class SDKClient:
         self.cwd = cwd
         self._can_use_tool = can_use_tool
         self._agent_options = agent_options or {}
-        self._session_id = None
 
     def _build_options(self, resume: bool = True) -> ClaudeAgentOptions:
         """Construye las opciones del agente.
@@ -74,13 +73,13 @@ class SDKClient:
         return options
 
     async def connect(self) -> str | None:
-        """Conecta al SDK y retorna el session_id.
+        """Conecta al SDK y retorna el session_id si está disponible.
 
         Returns:
-            El session_id del SDK o None si no está disponible
+            El session_id del SDK o None si no está disponible aún
 
         Raises:
-            Exception: Si falla la conexión y no hay resume_id
+            Exception: Si falla la conexión
         """
         logger.info("Creando cliente SDK...")
         options = self._build_options()
@@ -90,27 +89,16 @@ class SDKClient:
             await self._client.connect()
             logger.info("Cliente conectado")
 
-            if hasattr(self._client, 'session_id') and self._client.session_id:
-                self._session_id = self._client.session_id
-                logger.info(f"Session ID obtenido: {self._session_id}")
-                return self._session_id
+            # Retornar resume_id como session_id para reconexiones
+            if self.resume_id:
+                logger.info(f"Usando resume_id como session_id: {self.resume_id}")
+                return self.resume_id
+
+            return None
 
         except Exception as e:
-            if self.resume_id:
-                logger.warning(f"Falló reanudar sesión {self.resume_id}: {e}. Creando nueva sesión.")
-                self.resume_id = None
-                options = self._build_options(resume=False)
-                self._client = ClaudeSDKClient(options)
-                await self._client.connect()
-                logger.info("Nueva sesión creada")
-
-                if hasattr(self._client, 'session_id') and self._client.session_id:
-                    self._session_id = self._client.session_id
-                    return self._session_id
-            else:
-                raise
-
-        return None
+            logger.error(f"Error conectando SDK: {e}")
+            raise
 
     async def disconnect(self):
         """Desconecta el cliente SDK."""
@@ -145,13 +133,6 @@ class SDKClient:
         """Interrumpe la consulta actual del SDK."""
         if self._client:
             await self._client.interrupt()
-
-    @property
-    def session_id(self) -> str | None:
-        """Retorna el session_id actual del SDK."""
-        if self._client and hasattr(self._client, 'session_id'):
-            self._session_id = self._client.session_id
-        return self._session_id
 
     @property
     def transport(self):

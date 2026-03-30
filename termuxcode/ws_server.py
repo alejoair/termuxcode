@@ -17,12 +17,14 @@ async def handle_connection(websocket):
     parsed = urlparse(websocket.request.path)
     qs = parse_qs(parsed.query)
 
-    resume_id = qs["session_id"][0] if "session_id" in qs else None
-    cwd = unquote(qs["cwd"][0]) if "cwd" in qs else None
-    agent_options = json.loads(qs["options"][0]) if "options" in qs else {}
+    resume_id = qs.get("session_id", [None])[0]
+    cwd_raw = qs.get("cwd", [None])[0]
+    cwd = unquote(cwd_raw) if cwd_raw else None
+    options_raw = qs.get("options", [None])[0]
+    agent_options = json.loads(options_raw) if options_raw else {}
 
     if resume_id:
-        logger.info(f"Reanudando sesion SDK: {resume_id}")
+        logger.info(f"Reanudando sesión SDK: {resume_id}")
     if cwd:
         logger.info(f"CWD del cliente: {cwd}")
     if agent_options:

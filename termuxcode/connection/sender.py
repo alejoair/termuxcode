@@ -95,3 +95,11 @@ class MessageSender:
             "tool_name": tool_name,
             "input": input_data
         }))
+
+    async def send_message(self, message: dict):
+        """Envía un mensaje genérico al frontend.
+
+        Args:
+            message: Diccionario con el mensaje a enviar
+        """
+        await self._websocket.send(json.dumps(message))

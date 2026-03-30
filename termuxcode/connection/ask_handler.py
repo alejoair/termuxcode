@@ -9,13 +9,15 @@ from termuxcode.ws_config import logger
 class AskUserQuestionHandler:
     """Maneja el flujo bidireccional de AskUserQuestion."""
 
-    def __init__(self, sender):
+    def __init__(self, sender=None, session=None):
         """Inicializa el handler.
 
         Args:
-            sender: Instancia de MessageSender para enviar mensajes
+            sender: (DEPRECADO) Instancia de MessageSender para enviar mensajes
+            session: Instancia de Session para enviar mensajes (nuevo método)
         """
-        self._sender = sender
+        self._sender = sender  # Mantener por compatibilidad temporal
+        self._session = session
         self._question_response = None
         self._question_cancelled = False
         self._question_event = asyncio.Event()
@@ -47,7 +49,16 @@ class AskUserQuestionHandler:
         self._question_event.clear()
         self._waiting_for_question_response = True
 
-        await self._sender.send_ask_user_question(questions)
+        # Enviar vía Session si está disponible, sino vía sender (compatibilidad)
+        if self._session:
+            await self._session.send_message({
+                "type": "ask_user_question",
+                "questions": questions
+            })
+        elif self._sender:
+            await self._sender.send_ask_user_question(questions)
+        else:
+            raise RuntimeError("AskUserQuestionHandler no tiene session ni sender configurado")
 
         # message_processor sigue corriendo en paralelo y procesará el question_response
         await self._question_event.wait()

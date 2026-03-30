@@ -5,20 +5,31 @@ import asyncio
 import websockets
 
 from termuxcode.ws_config import logger
+from termuxcode.connection.history_manager import truncate_history
 
 
 class MessageProcessor:
     """Procesa mensajes del WebSocket y maneja la comunicación con el SDK."""
 
-    def __init__(self, sdk_client, sender):
+    def __init__(self, sdk_client, sender, ask_handler=None, tool_approval_handler=None, cwd=None, session_id=None, rolling_window=100):
         """Inicializa el procesador.
 
         Args:
             sdk_client: Instancia de SDKClient
             sender: Instancia de MessageSender
+            ask_handler: Handler para AskUserQuestion
+            tool_approval_handler: Handler para tool approval
+            cwd: Directorio de trabajo
+            session_id: ID de sesión inicial (del frontend, para reconexión)
+            rolling_window: Número de mensajes a conservar en historial
         """
         self._sdk_client = sdk_client
         self._sender = sender
+        self._ask_handler = ask_handler
+        self._tool_approval_handler = tool_approval_handler
+        self._cwd = cwd
+        self._session_id = session_id
+        self._rolling_window = rolling_window
         self._message_queue = None  # Se setea en start_processing
         self._stop_event = asyncio.Event()  # Señal de detención
 
@@ -53,7 +64,7 @@ class MessageProcessor:
             await self._handle_query(content)
 
     async def request_stop(self):
-        """Señala detención e interrumpe el SDK. Se llama desde fuera de la cola."""
+        """Señala detención e interrumpe el SDK."""
         logger.info("=== /stop detectado - Señalando detención ===")
         self._stop_event.set()
         try:
@@ -73,8 +84,14 @@ class MessageProcessor:
         Args:
             content: Contenido de la consulta
         """
+        from termuxcode.message_converter import MessageConverter
+
         logger.info(f"Query: {content[:50]}")
         self._stop_event.clear()
+
+        # Truncar historial antes de enviar la consulta
+        if self._session_id and self._cwd:
+            truncate_history(self._cwd, self._session_id, self._rolling_window)
 
         await self._sdk_client.query(content)
 
@@ -103,11 +120,12 @@ class MessageProcessor:
             if msg_type == "ResultMessage":
                 # Capturar session_id del SDK y enviarlo al frontend
                 if hasattr(msg, 'session_id') and msg.session_id:
-                    session_id = msg.session_id
-                    logger.info(f"Session ID del SDK: {session_id}")
-                    await self._sender.send_session_id(session_id)
+                    self._session_id = msg.session_id
+                    logger.info(f"Session ID del SDK: {self._session_id}")
+                    await self._sender.send_session_id(self._session_id)
                 logger.info(f"ResultMessage: stop_reason={msg.stop_reason}, num_turns={msg.num_turns}")
-                await self._sender.send_result(msg)
+                result_data = MessageConverter.convert_result_message(msg)
+                await self._sender.send_message(result_data)
                 break
 
             elif msg_type == "AssistantMessage":
@@ -130,7 +148,11 @@ class MessageProcessor:
                             logger.info(f"    ToolResult: tool_use_id={block.tool_use_id}")
                             logger.info(f"    Content: {str(block.content)[:200]}")
 
-                await self._sender.send_assistant_message(msg)
+                assistant_data = MessageConverter.convert_assistant_message(
+                    msg, exclude_special_tools=True
+                )
+                if assistant_data["blocks"]:
+                    await self._sender.send_message(assistant_data)
 
             elif msg_type == "UserMessage":
                 logger.info(f"UserMessage recibido del SDK")
@@ -141,6 +163,3 @@ class MessageProcessor:
                         if block_type == "ToolResultBlock":
                             logger.info(f"    tool_use_id: {block.tool_use_id[:8] if hasattr(block, 'tool_use_id') else 'N/A'}...")
                             logger.info(f"    content: {str(block.content)[:200] if hasattr(block, 'content') else 'N/A'}")
-
-            elif msg_type == "SystemMessage":
-                logger.info(f"SystemMessage: {str(msg)[:200] if hasattr(msg, '__str__') else 'N/A'}")
