@@ -12,6 +12,10 @@ from termuxcode.connection.tool_approval_handler import ToolApprovalHandler
 from termuxcode.connection.message_processor import MessageProcessor
 
 
+# Referencia al registry de sesiones activas (se setea desde ws_server.py)
+_active_sessions_registry: dict = None
+
+
 class WebSocketConnection:
     """Maneja una conexión WebSocket con sus componentes asociados."""
 
@@ -46,12 +50,14 @@ class WebSocketConnection:
         logger.info(f"[Nueva conexión] {self.remote_address}")
 
         try:
-            await self._initialize_components()
+            # Solo inicializar componentes si no están ya inicializados (reconexión)
+            if self._sender is None:
+                await self._initialize_components()
 
-            # Iniciar tarea de fondo para procesar mensajes
-            self._processor_task = asyncio.create_task(
-                self._processor.start_processing(self.message_queue)
-            )
+                # Iniciar tarea de fondo para procesar mensajes
+                self._processor_task = asyncio.create_task(
+                    self._processor.start_processing(self.message_queue)
+                )
 
             # Iniciar loop de mensajes del WebSocket
             await self._message_loop()
@@ -99,6 +105,16 @@ class WebSocketConnection:
         self._ask_handler = AskUserQuestionHandler(self._sender)
         self._tool_approval_handler._ask_handler = self._ask_handler
 
+        # Callback para actualizar el registry cuando el SDK genera un nuevo session_id
+        async def on_session_id_update(new_session_id: str):
+            if _active_sessions_registry is not None and new_session_id:
+                # Si teníamos un resume_id anterior y es diferente, actualizar el registry
+                if self.resume_id and self.resume_id in _active_sessions_registry:
+                    del _active_sessions_registry[self.resume_id]
+                self.resume_id = new_session_id
+                _active_sessions_registry[new_session_id] = self
+                logger.info(f"Registry actualizado con nuevo session_id: {new_session_id}")
+
         # Inicializar message_processor
         rolling_window = self.agent_options.get('rolling_window', 100) if self.agent_options else 100
         self._processor = MessageProcessor(
@@ -109,6 +125,7 @@ class WebSocketConnection:
             cwd=self.cwd,
             session_id=self.resume_id,
             rolling_window=rolling_window,
+            on_session_id_update=on_session_id_update,
         )
 
         # Callback para cuando se rechaza un plan: setear stop_event del processor
@@ -144,11 +161,23 @@ class WebSocketConnection:
                     data.get("responses"),
                     cancelled=data.get("cancelled", False)
                 )
+            elif data.get('type') == 'request_buffer_replay':
+                await self._sender.replay_buffer()
             else:
                 await self.message_queue.put(data)
 
     async def _cleanup(self):
-        """Limpia recursos de la conexión."""
+        """Limpia recursos de la conexión.
+
+        NOTA: Solo desconecta el WebSocket, mantiene el SDK activo para reconexión.
+        El SDK y el processor continúan ejecutándose para acumular mensajes en el buffer.
+        """
+        # Solo desconectar WebSocket, mantener SDK activo para reconexión
+        self._sender.set_websocket(None)
+        logger.info("WebSocket desconectado, SDK sigue activo para reconexión")
+
+    async def _full_cleanup(self):
+        """Limpieza completa cuando la sesión ya no se necesita."""
         if self._processor_task:
             self._processor_task.cancel()
             try:
@@ -164,3 +193,15 @@ class WebSocketConnection:
 
         if self._tool_approval_handler:
             self._tool_approval_handler.reset()
+
+    async def reconnect(self, new_websocket):
+        """Reconecta con un nuevo WebSocket.
+
+        Args:
+            new_websocket: Nueva conexión WebSocket
+        """
+        logger.info(f"Reconectando sesión: {self.resume_id}")
+        self.websocket = new_websocket
+        self.remote_address = new_websocket.remote_address
+        self._sender.set_websocket(new_websocket)
+        await self._sender.replay_buffer()

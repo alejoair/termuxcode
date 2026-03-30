@@ -10,6 +10,19 @@ import websockets
 from termuxcode.ws_config import WS_HOST, WS_PORT, logger
 from termuxcode.connection import WebSocketConnection
 
+# Registry de sesiones activas para reconexión
+_active_sessions: dict[str, WebSocketConnection] = {}
+
+
+def set_registry_reference():
+    """Conecta el registry con el módulo base para que pueda actualizarse."""
+    import termuxcode.connection.base as base_module
+    base_module._active_sessions_registry = _active_sessions
+
+
+# Inicializar la referencia al registry
+set_registry_reference()
+
 
 async def handle_connection(websocket):
     """Punto de entrada para nuevas conexiones WebSocket."""
@@ -31,8 +44,18 @@ async def handle_connection(websocket):
     if agent_options:
         logger.info(f"Opciones del agente: {agent_options}")
 
-    connection = WebSocketConnection(websocket, resume_id=resume_id, cwd=cwd, agent_options=agent_options)
-    await connection.handle()
+    # Verificar si es una reconexión de sesión existente
+    if resume_id and resume_id in _active_sessions:
+        logger.info(f"Reconectando sesión existente: {resume_id}")
+        conn = _active_sessions[resume_id]
+        await conn.reconnect(websocket)
+        await conn.handle()  # Entra al loop de mensajes
+    else:
+        # Crear nueva sesión
+        connection = WebSocketConnection(websocket, resume_id=resume_id, cwd=cwd, agent_options=agent_options)
+        if resume_id:
+            _active_sessions[resume_id] = connection
+        await connection.handle()
 
 
 async def main():

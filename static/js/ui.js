@@ -212,6 +212,9 @@ export function handleMessage(data, tabId) {
         if (hasToolUse) {
             showLoading(tabId);
         }
+    } else if (data.type === 'user') {
+        // UserMessage contiene ToolResultBlock con resultados de herramientas
+        renderAssistantBlocks(data.blocks, tabId);
     } else if (data.type === 'result') {
         // Resultado final: apagar todo
         hideLoading(tabId);

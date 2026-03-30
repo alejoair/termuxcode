@@ -11,7 +11,7 @@ from termuxcode.connection.history_manager import truncate_history
 class MessageProcessor:
     """Procesa mensajes del WebSocket y maneja la comunicación con el SDK."""
 
-    def __init__(self, sdk_client, sender, ask_handler=None, tool_approval_handler=None, cwd=None, session_id=None, rolling_window=100):
+    def __init__(self, sdk_client, sender, ask_handler=None, tool_approval_handler=None, cwd=None, session_id=None, rolling_window=100, on_session_id_update=None):
         """Inicializa el procesador.
 
         Args:
@@ -22,6 +22,7 @@ class MessageProcessor:
             cwd: Directorio de trabajo
             session_id: ID de sesión inicial (del frontend, para reconexión)
             rolling_window: Número de líneas a conservar en historial
+            on_session_id_update: Callback async que se llama cuando el SDK envía un nuevo session_id
         """
         self._sdk_client = sdk_client
         self._sender = sender
@@ -30,6 +31,7 @@ class MessageProcessor:
         self._cwd = cwd
         self._session_id = session_id
         self._rolling_window = rolling_window
+        self._on_session_id_update = on_session_id_update
         self._message_queue = None  # Se setea en start_processing
         self._stop_event = asyncio.Event()  # Señal de detención
 
@@ -113,7 +115,10 @@ class MessageProcessor:
                     logger.info(f"=== Drenando: {remaining_type} ===")
                     if remaining_type == "ResultMessage":
                         if hasattr(remaining, 'session_id') and remaining.session_id:
+                            self._session_id = remaining.session_id
                             await self._sender.send_session_id(remaining.session_id)
+                            if self._on_session_id_update:
+                                await self._on_session_id_update(self._session_id)
                         break
                 await self._sender.send_system_message("Query detenido")
                 break
@@ -127,6 +132,9 @@ class MessageProcessor:
                     self._session_id = msg.session_id
                     logger.info(f"Session ID del SDK: {self._session_id}")
                     await self._sender.send_session_id(self._session_id)
+                    # Notificar al callback si existe (para actualizar registry)
+                    if self._on_session_id_update:
+                        await self._on_session_id_update(self._session_id)
                 logger.info(f"ResultMessage: stop_reason={msg.stop_reason}, num_turns={msg.num_turns}")
                 result_data = MessageConverter.convert_result_message(msg)
                 await self._sender.send_message(result_data)
@@ -159,11 +167,8 @@ class MessageProcessor:
                     await self._sender.send_message(assistant_data)
 
             elif msg_type == "UserMessage":
+                # Los UserMessage contienen ToolResultBlock con los resultados de las herramientas
                 logger.info(f"UserMessage recibido del SDK")
-                if hasattr(msg, 'content'):
-                    for block in msg.content:
-                        block_type = type(block).__name__
-                        logger.info(f"  Bloque: {block_type}")
-                        if block_type == "ToolResultBlock":
-                            logger.info(f"    tool_use_id: {block.tool_use_id[:8] if hasattr(block, 'tool_use_id') else 'N/A'}...")
-                            logger.info(f"    content: {str(block.content)[:200] if hasattr(block, 'content') else 'N/A'}")
+                user_data = MessageConverter.convert_user_message(msg)
+                if user_data["blocks"]:
+                    await self._sender.send_message(user_data)

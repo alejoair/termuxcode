@@ -2,7 +2,7 @@
 """Conversión de mensajes del SDK al formato WebSocket."""
 
 from typing import Any
-from claude_agent_sdk import AssistantMessage, ResultMessage
+from claude_agent_sdk import AssistantMessage, ResultMessage, UserMessage
 
 # Tipos de bloques de contenido
 BLOCK_TYPES = {
@@ -79,6 +79,26 @@ class MessageConverter:
             "stop_reason": msg.stop_reason,
             "num_turns": msg.num_turns,
             "is_error": msg.is_error,
+        }
+
+    @staticmethod
+    def convert_user_message(msg: UserMessage) -> dict[str, Any]:
+        """Convierte un UserMessage a diccionario WebSocket.
+
+        Los UserMessage del SDK contienen ToolResultBlock con los resultados
+        de las herramientas ejecutadas.
+        """
+        blocks = []
+
+        for block in msg.content:
+            block_type = block.__class__.__name__
+            block_data = MessageConverter._convert_block(block, block_type)
+            if block_data:
+                blocks.append(block_data)
+
+        return {
+            "type": "user",
+            "blocks": blocks,
         }
 
     @staticmethod
