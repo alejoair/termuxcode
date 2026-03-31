@@ -31,22 +31,24 @@ class ToolApprovalHandler:
     def is_waiting(self) -> bool:
         return self._waiting
 
-    async def _wait_for_approval(self):
-        """Espera respuesta del frontend con timeout y soporte de cancelación."""
+    async def _wait_for_approval(self, timeout=None):
+        """Espera respuesta del frontend con timeout opcional y soporte de cancelación."""
         approval_task = asyncio.ensure_future(self._approval_event.wait())
         cancel_task = asyncio.ensure_future(self._cancel_event.wait())
 
         done, pending = await asyncio.wait(
             {approval_task, cancel_task},
-            timeout=self.APPROVAL_TIMEOUT,
+            timeout=timeout,
             return_when=asyncio.FIRST_COMPLETED
         )
 
         for task in pending:
             task.cancel()
 
-        if cancel_task in done or not done:
-            return None  # Cancelado o timeout
+        if cancel_task in done:
+            return None  # Cancelado
+        if not done:
+            return None  # Timeout
         return self._approval_response
 
     async def can_use_tool(self, tool_name: str, input_data: dict, context):
@@ -131,7 +133,7 @@ class ToolApprovalHandler:
             else:
                 raise RuntimeError("ToolApprovalHandler no tiene session ni sender configurado")
 
-            response = await self._wait_for_approval()
+            response = await self._wait_for_approval(timeout=None)  # Sin timeout para planes
             if response and response.get("allow"):
                 logger.info("=== Plan APROBADO ===")
                 return PermissionResultAllow(updated_input=input_data)
