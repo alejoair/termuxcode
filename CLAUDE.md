@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-termuxcode is a Claude Code client with two deployment modes:
+TERMUXCODE is a Claude Code client with two deployment modes:
 1. **Termux/Android**: Python package (`pip install termuxcode`) running WebSocket + HTTP servers
 2. **Desktop**: Tauri app (Windows/macOS/Linux) with embedded Python sidecar
 

@@ -4,6 +4,7 @@ import { state, dom, DEFAULT_SETTINGS } from './state.js';
 import { saveTabs, loadTabsData } from './storage.js';
 import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, showLoading, hideLoading, showAskUserQuestion, showToolApproval } from './ui.js';
 import { connectTab, disconnectTab } from './connection.js';
+import { vibrateSend, vibrateError } from './haptics.js';
 
 function createTabElement(tabId, tabName) {
     const template = document.getElementById('tabTemplate');
@@ -164,12 +165,14 @@ export function send() {
     tab.renderedMessages.push({ type: 'user', content });
     saveTabs();
     addMessage('user', content, state.activeTabId);
+    vibrateSend();
 
     if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
         tab.ws.send(JSON.stringify({ content }));
         showLoading(state.activeTabId);
     } else {
         addSystemMessage('No conectado. Reintentando...', state.activeTabId);
+        vibrateError();
         connectTab(state.activeTabId);
     }
 
@@ -181,6 +184,7 @@ export function sendStop() {
     if (tab && tab.ws && tab.ws.readyState === WebSocket.OPEN) {
         tab.ws.send(JSON.stringify({ command: '/stop' }));
         addSystemMessage('Comando /stop enviado', state.activeTabId);
+        vibrateSend();
     }
 }
 

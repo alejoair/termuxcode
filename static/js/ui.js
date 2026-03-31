@@ -3,6 +3,7 @@
 import { state, dom } from './state.js';
 import { saveTabs } from './storage.js';
 import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView } from './modals.js';
+import { vibrateReceive, vibrateResult, vibrateAttention } from './haptics.js';
 
 export { showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView };
 
@@ -269,6 +270,7 @@ export function handleMessage(data, tabId) {
     if (data.type === 'file_view') {
         hideLoading(tabId);
         showFileView(data.file_path, data.content, tabId, tab.ws);
+        vibrateAttention();
         return;
     }
 
@@ -276,6 +278,7 @@ export function handleMessage(data, tabId) {
     if (data.type === 'tool_approval_request') {
         hideLoading(tabId);
         showToolApproval(data.tool_name, data.input, tabId, tab.ws);
+        vibrateAttention();
         return;
     }
 
@@ -286,6 +289,7 @@ export function handleMessage(data, tabId) {
         saveTabs();
         renderAskUserQuestionInChat(data.questions, tabId);
         showAskUserQuestion(data.questions, tabId, tab.ws);
+        vibrateAttention();
         return;
     }
 
@@ -297,6 +301,7 @@ export function handleMessage(data, tabId) {
     if (data.type === 'assistant') {
         hideTypingIndicator();
         renderAssistantBlocks(data.blocks, tabId);
+        vibrateReceive();
         // Si tiene tool_use, el agente sigue trabajando → re-mostrar typing
         const hasToolUse = data.blocks && data.blocks.some(b => b.type === 'tool_use');
         if (hasToolUse) {
@@ -308,6 +313,7 @@ export function handleMessage(data, tabId) {
     } else if (data.type === 'result') {
         // Resultado final: apagar todo
         hideLoading(tabId);
+        vibrateResult();
     } else if (data.type === 'system') {
         addSystemMessage(data.message, tabId);
     }
