@@ -127,7 +127,7 @@
 
 .message.tool-call .bubble {
     background: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    border: 1px solid rgba(139, 92, 246, 0.4);
     border-radius: var(--radius-md);
     padding: 8px 12px;
     margin-left: 24px;

@@ -16,8 +16,8 @@ export function initPipeline() {
     // Config
     const IDLE = {
         pipeCount: 30,
-        baseSpeed: 0.5,
-        rangeSpeed: 1,
+        baseSpeed: 0.2,
+        rangeSpeed: 0.4,
         baseHue: 180,
         rangeHue: 60,
         backgroundColor: 'hsla(160, 60%, 3%, 1)',
@@ -44,7 +44,7 @@ export function initPipeline() {
     const rangeWidth = 4;
     const baseTTL = 100;
     const rangeTTL = 300;
-    const FADE_ALPHA = 0.15; // Velocidad de desvanecimiento (mayor = líneas más cortas)
+    const FADE_ALPHA = 0.04; // Velocidad de desvanecimiento (mayor = líneas más cortas)
 
     let working = false;
     let transitionProgress = 0;
@@ -166,7 +166,7 @@ export function initPipeline() {
 
     function drawPipe(x, y, life, ttl, width, hue) {
         ctx.a.save();
-        ctx.a.strokeStyle = `hsla(${hue}, 75%, 50%, ${fadeInOut(life, ttl) * 0.125})`;
+        ctx.a.strokeStyle = `hsla(${hue}, 75%, 50%, ${fadeInOut(life, ttl) * 0.6})`;
         ctx.a.beginPath();
         ctx.a.arc(x, y, width, 0, TAU);
         ctx.a.stroke();
