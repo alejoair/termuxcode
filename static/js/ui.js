@@ -2,10 +2,11 @@
 
 import { state, dom } from './state.js';
 import { saveTabs } from './storage.js';
-import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView } from './modals.js';
+import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion } from './modals.js';
 import { vibrateReceive, vibrateResult, vibrateAttention } from './haptics.js';
+import { notifyResult, notifyAskUserQuestion, notifyToolApproval, notifyPlanApproval } from './notifications.js';
 
-export { showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView };
+export { showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion };
 
 export function scrollToBottom() {
     dom.messages.scrollTop = dom.messages.scrollHeight;
@@ -271,6 +272,7 @@ export function handleMessage(data, tabId) {
         hideLoading(tabId);
         showFileView(data.file_path, data.content, tabId, tab.ws);
         vibrateAttention();
+        notifyPlanApproval();
         return;
     }
 
@@ -279,6 +281,7 @@ export function handleMessage(data, tabId) {
         hideLoading(tabId);
         showToolApproval(data.tool_name, data.input, tabId, tab.ws);
         vibrateAttention();
+        notifyToolApproval(data.tool_name);
         return;
     }
 
@@ -290,6 +293,7 @@ export function handleMessage(data, tabId) {
         renderAskUserQuestionInChat(data.questions, tabId);
         showAskUserQuestion(data.questions, tabId, tab.ws);
         vibrateAttention();
+        notifyAskUserQuestion();
         return;
     }
 
@@ -314,6 +318,7 @@ export function handleMessage(data, tabId) {
         // Resultado final: apagar todo
         hideLoading(tabId);
         vibrateResult();
+        notifyResult();
     } else if (data.type === 'system') {
         addSystemMessage(data.message, tabId);
     }

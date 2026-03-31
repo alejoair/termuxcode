@@ -19,6 +19,8 @@ _active_sessions_registry: dict = None
 class WebSocketConnection:
     """Maneja una conexión WebSocket con sus componentes asociados."""
 
+    SESSION_CLEANUP_TIMEOUT = 3600.0  # 1 hora sin reconexión → limpieza completa
+
     def __init__(self, websocket, resume_id: str = None, cwd: str = None, agent_options: dict = None):
         """Inicializa la conexión.
 
@@ -43,8 +45,9 @@ class WebSocketConnection:
         self._processor = None
 
         # Control de flujo
-        self.message_queue = asyncio.Queue()
+        self.message_queue = asyncio.Queue(maxsize=100)
         self._processor_task = None
+        self._cleanup_timer = None
 
     async def handle(self):
         """Maneja el ciclo de vida de la conexión."""
@@ -172,7 +175,12 @@ class WebSocketConnection:
             elif data.get('type') == 'request_buffer_replay':
                 await self._sender.replay_buffer()
             else:
-                await self.message_queue.put(data)
+                try:
+                    self.message_queue.put_nowait(data)
+                except asyncio.QueueFull:
+                    logger.warning("Cola de mensajes llena, descartando mensaje antiguo")
+                    await self.message_queue.get()
+                    await self.message_queue.put(data)
 
     async def _cleanup(self):
         """Limpia recursos de la conexión.
@@ -188,7 +196,20 @@ class WebSocketConnection:
             self._tool_approval_handler.cancel()
         if self._ask_handler:
             self._ask_handler.cancel()
+
+        # Iniciar timer de limpieza completa
+        if self._cleanup_timer and not self._cleanup_timer.done():
+            self._cleanup_timer.cancel()
+        self._cleanup_timer = asyncio.create_task(self._delayed_cleanup())
+
         logger.info("WebSocket desconectado, SDK sigue activo para reconexión")
+
+    async def _delayed_cleanup(self):
+        """Limpieza completa después de timeout sin reconexión."""
+        await asyncio.sleep(self.SESSION_CLEANUP_TIMEOUT)
+        if self.websocket is None:  # No se reconectó
+            logger.info(f"Timeout de limpieza alcanzado para sesión {self.resume_id}, eliminando")
+            await self._full_cleanup()
 
     async def _full_cleanup(self):
         """Limpieza completa cuando la sesión ya no se necesita."""
@@ -220,6 +241,17 @@ class WebSocketConnection:
         Args:
             new_websocket: Nueva conexión WebSocket
         """
+        # Cancelar timer de limpieza si existe
+        if self._cleanup_timer and not self._cleanup_timer.done():
+            self._cleanup_timer.cancel()
+            self._cleanup_timer = None
+
+        # Resetear handlers para estado limpio
+        if self._ask_handler:
+            self._ask_handler.reset()
+        if self._tool_approval_handler:
+            self._tool_approval_handler.reset()
+
         logger.info(f"Reconectando sesión: {self.resume_id}")
         self.websocket = new_websocket
         self.remote_address = new_websocket.remote_address

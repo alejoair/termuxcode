@@ -3,6 +3,7 @@
 import { state, dom, WS_URL } from './state.js';
 import { addSystemMessage, updateTabStatus, updateGlobalStatus, handleMessage, hideLoading } from './ui.js';
 import { vibrateConnect, vibrateDisconnect, vibrateError } from './haptics.js';
+import { notifyDisconnect, notifyConnectionError } from './notifications.js';
 
 export function connectTab(tabId) {
     const tab = state.tabs.get(tabId);
@@ -75,6 +76,7 @@ export function connectTab(tabId) {
                 dom.statusText.textContent = 'Desconectado';
                 addSystemMessage('Desconectado del servidor', tabId);
                 vibrateDisconnect();
+                notifyDisconnect();
             }
 
             updateGlobalStatus();
@@ -92,6 +94,7 @@ export function connectTab(tabId) {
             if (state.activeTabId === tabId) {
                 addSystemMessage('Error de conexion', tabId);
                 vibrateError();
+                notifyConnectionError();
             }
         };
 

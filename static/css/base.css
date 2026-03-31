@@ -158,22 +158,24 @@ body {
     color: var(--text-muted);
 }
 
-/* Boton enviar */
+/* Boton enviar — transparente con borde neon */
 .btn-send {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    border: none;
-    background: var(--color-user-gradient);
-    color: var(--text-primary);
+    border: 1.5px solid var(--color-primary);
+    background: transparent;
+    color: var(--color-primary);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: opacity var(--transition-fast);
+    transition: all var(--transition-fast);
+    box-shadow: 0 0 8px rgba(124, 142, 245, 0.25), inset 0 0 8px rgba(124, 142, 245, 0.08);
 }
 
 .btn-send:active {
     opacity: 0.8;
+    box-shadow: 0 0 14px rgba(124, 142, 245, 0.45), inset 0 0 10px rgba(124, 142, 245, 0.15);
 }

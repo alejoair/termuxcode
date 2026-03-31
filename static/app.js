@@ -5,6 +5,9 @@ import { createTab, switchTab, loadTabs, send, sendStop, sendDisconnect, clearCh
 import { connectTab, disconnectTab } from './js/connection.js';
 import { saveTabs } from './js/storage.js';
 import { initPipeline } from './js/pipeline.js';
+import { initInputFeedback } from './js/input-feedback.js';
+import { initScrollFeedback } from './js/scroll-feedback.js';
+import { initNotifications } from './js/notifications.js';
 
 // Inicializar Framework7
 const f7 = new Framework7({
@@ -15,6 +18,7 @@ const f7 = new Framework7({
 
 async function init() {
     loadTabs();
+    initNotifications();
 
     if (state.tabs.size === 0) {
         await createTab('Chat 1');
@@ -177,3 +181,5 @@ function initTypewriter() {
 init();
 initPipeline();
 initTypewriter();
+initInputFeedback();
+initScrollFeedback();

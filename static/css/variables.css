@@ -20,10 +20,10 @@
     --color-success-bg: rgba(74, 222, 128, 0.1);
 
     /* Mensajes */
-    --color-user-gradient: linear-gradient(135deg, #7c8ef5 0%, #9b6dc6 100%);
-    --color-assistant-bg: rgba(255, 255, 255, 0.04);
+    --color-user-gradient: linear-gradient(135deg, #4a5cd4 0%, #6b4a9e 100%);
+    --color-assistant-bg: rgba(255, 255, 255, 0.08);
     --color-system-bg: rgba(251, 191, 36, 0.08);
-    --color-tool-bg: rgba(248, 113, 113, 0.08);
+    --color-tool-bg: rgba(248, 113, 113, 0.12);
     --color-thinking-bg: transparent;
 
     /* Fondos — negro puro para OLED */
@@ -37,9 +37,9 @@
 
     /* Textos — niveles sutiles, evitando blanco puro excesivo */
     --text-primary: #e4e4e7;
-    --text-secondary: rgba(228, 228, 231, 0.6);
-    --text-muted: rgba(228, 228, 231, 0.4);
-    --text-faint: rgba(228, 228, 231, 0.25);
+    --text-secondary: rgba(228, 228, 231, 0.75);
+    --text-muted: rgba(228, 228, 231, 0.55);
+    --text-faint: rgba(228, 228, 231, 0.4);
     --text-link: #c4b5fd;
 
     /* Bordes */
@@ -67,11 +67,10 @@
     --transition-fast: 0.2s;
     --transition-normal: 0.3s;
 
-    /* Tamaños */
-    --max-width: 900px;
-    --input-height: 36px;
+    /* ===== Input Feedback — Variables ===== */
+    --input-glow-color: var(--color-primary);
+    --particle-color: var(--color-primary);
 
-    /* Framework7 theme overrides — negro puro */
     --f7-theme-color: #7c8ef5;
     --f7-theme-color-rgb: 124, 142, 245;
     --f7-navbar-bg-color: rgba(0, 0, 0, 0.85);
@@ -98,4 +97,53 @@
     padding: 3px 8px;
     margin-right: var(--spacing-md);
     cursor: pointer;
+}
+
+/* ===== Input Feedback — Animaciones inmersivas ===== */
+
+/* Destello activo en el input */
+.input-glow-active {
+    box-shadow: 0 0 20px var(--input-glow-color), 0 0 40px var(--input-glow-color), inset 0 0 10px var(--input-glow-color) !important;
+    border-color: var(--input-glow-color) !important;
+}
+
+/* Contenedor de particulas */
+.input-particles {
+    position: absolute;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 1000;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+}
+
+/* Particulas individuales */
+.input-particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--particle-color);
+    pointer-events: none;
+    opacity: 1;
+    box-shadow: 0 0 10px var(--particle-color), 0 0 20px var(--particle-color);
+}
+
+/* Boton enviar activo (respira cuando hay contenido) */
+.btn-send-active {
+    animation: btnBreathe 1.5s ease-in-out infinite;
+    box-shadow: 0 0 16px var(--color-primary), inset 0 0 10px var(--color-primary) !important;
+}
+
+@keyframes btnBreathe {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 16px var(--color-primary), inset 0 0 10px var(--color-primary);
+    }
+    50% {
+        transform: scale(1.08);
+        box-shadow: 0 0 20px var(--color-primary), inset 0 0 14px var(--color-primary);
+    }
 }

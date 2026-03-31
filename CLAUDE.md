@@ -33,9 +33,11 @@ TERMUXCODE is a Claude Code client with two deployment modes:
 - **`static/js/state.js`**: Global state and DOM references
 - **`static/js/ui.js`**: Message rendering, loading/working state management
 - **`static/js/tabs.js`**: Tab management, send/stop/disconnect commands
-- **`static/js/connection.js`**: WebSocket connection lifecycle per tab
+- **`static/js/connection.js`**: WebSocket connection lifecycle per tab, auto-reconnect with timer cancellation
 - **`static/js/modals.js`**: AskUserQuestion, tool approval, and file view modals
 - **`static/js/storage.js`**: Tab persistence via localStorage
+- **`static/js/haptics.js`**: Haptic feedback (vibration) for connect/disconnect/error events on mobile
+- **`static/js/pipeline.js`**: Ambient pipeline background canvas animation (replaces starfield), transitions between idle/work states
 
 ### Desktop (Tauri)
 - **`src-tauri/src/lib.rs`**: On desktop only, spawns Python `termuxcode-server` sidecar via Tauri's shell plugin
@@ -163,6 +165,18 @@ When the agent is processing, visual feedback is provided:
 - `{type: "ask_user_question", questions}`: AskUserQuestion modal
 - `{type: "tool_approval_request", tool_name, input}`: Tool approval modal
 - `{type: "file_view", file_path, content}`: File content for viewing
+
+## Design: OLED Dark Theme
+
+The UI is optimized for OLED screens (Android/Termux nighttime use):
+- **Pure black `#000000`** backgrounds — pixels off, zero battery drain
+- **Text `#e4e4e7`** instead of pure white — less eye strain at night
+- **Low-opacity surfaces** (4-7%) for subtle depth without pixel illumination
+- **Muted accents** — primary blues/purples slightly desaturated to reduce glare
+- **Reduced glow intensity** — working state animations use dimmer text-shadows
+- **Pipeline canvas** — pure black fill, pipe strokes at 40% opacity/45% lightness
+
+All colors flow through `static/css/variables.css`. The only hardcoded exceptions are the pipeline canvas in `pipeline.js` and a few `base.css` glow colors. The `manifest.json` also uses `background_color: #000000`.
 
 ## Version Sync
 

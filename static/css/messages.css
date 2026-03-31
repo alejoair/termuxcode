@@ -48,9 +48,11 @@
 }
 
 .message.user .bubble {
-    background: var(--color-user-gradient);
+    background: transparent;
     color: var(--text-primary);
+    border: 1.5px solid var(--color-primary);
     border-bottom-right-radius: var(--radius-sm);
+    box-shadow: 0 0 10px rgba(124, 142, 245, 0.15), inset 0 0 10px rgba(124, 142, 245, 0.05);
 }
 
 /* Assistant messages: alineados a la izquierda */
@@ -58,6 +60,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    animation: messageArrival 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .message.assistant .bubble {
@@ -118,6 +121,7 @@
     align-items: flex-start;
     margin-top: 8px;
     margin-bottom: 8px;
+    animation: messageArrival 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .bubble.tool-call-bubble {
@@ -126,14 +130,15 @@
 }
 
 .message.tool-call .bubble {
-    background: rgba(139, 92, 246, 0.08);
-    border: 1px solid rgba(139, 92, 246, 0.2);
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.35);
     border-radius: var(--radius-md);
     padding: 8px 12px;
     margin-left: 24px;
     font-family: monospace;
     font-size: 0.75rem;
     max-width: 90%;
+    color: var(--text-secondary);
 }
 
 .bubble.tool-call-bubble {
@@ -168,13 +173,13 @@
 /* ===== Tool blocks (accordion nativo F7, dentro de la burbuja del asistente) ===== */
 .tool-block {
     margin: 6px 0 2px 0;
-    border-left: 2px solid rgba(255, 255, 255, 0.06);
+    border-left: 2px solid rgba(139, 92, 246, 0.3);
     padding-left: 8px;
 }
 
 .tool-result-block {
     margin-left: 16px;
-    border-left-color: rgba(255, 255, 255, 0.03);
+    border-left-color: rgba(74, 222, 128, 0.25);
 }
 
 .tool-header {
@@ -182,7 +187,7 @@
     align-items: center;
     gap: 5px;
     padding: 2px 0;
-    color: var(--text-faint);
+    color: var(--text-secondary);
     font-size: 0.72rem;
     font-family: monospace;
     cursor: pointer;
@@ -190,7 +195,7 @@
 }
 
 .tool-header:hover {
-    color: var(--text-muted);
+    color: var(--text-primary);
 }
 
 .tool-chevron {
@@ -212,13 +217,13 @@
 }
 
 .tool-result-label {
-    color: rgba(255, 255, 255, 0.12);
+    color: var(--text-muted);
     font-style: italic;
 }
 
 .tool-content {
     padding: 4px 0 6px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     font-family: monospace;
     font-size: 0.72rem;
     white-space: pre-wrap;

@@ -12,7 +12,10 @@ function escapeHtml(text) {
 
 // ===== AskUserQuestion =====
 
-let currentQuestionModal = null;
+// Map tabId -> modal state (so multiple tabs can have modals simultaneously)
+const questionModals = new Map();
+const approvalModals = new Map();
+const fileViewModals = new Map();
 
 export function renderAskUserQuestionInChat(questions, tabId) {
     if (state.activeTabId !== tabId) return;
@@ -52,7 +55,7 @@ export function renderAskUserQuestionInChat(questions, tabId) {
 }
 
 export function showAskUserQuestion(questions, tabId, ws) {
-    hideAskUserQuestion();
+    hideAskUserQuestion(tabId);
 
     const overlay = document.createElement('div');
     overlay.className = 'question-overlay';
@@ -109,7 +112,7 @@ export function showAskUserQuestion(questions, tabId, ws) {
     `;
 
     document.body.appendChild(overlay);
-    currentQuestionModal = { overlay, questions, selectedAnswers, ws, tabId };
+    questionModals.set(tabId, { overlay, questions, selectedAnswers, ws, tabId });
 
     overlay.querySelectorAll('.question-option').forEach(opt => {
         opt.addEventListener('click', () => {
@@ -117,7 +120,9 @@ export function showAskUserQuestion(questions, tabId, ws) {
             const oIdx = parseInt(opt.dataset.optionIndex);
             const multiSelect = opt.dataset.multiSelect === 'true';
 
-            const answers = currentQuestionModal.selectedAnswers.get(qIdx);
+            const modalState = questionModals.get(tabId);
+            if (!modalState) return;
+            const answers = modalState.selectedAnswers.get(qIdx);
             if (multiSelect) {
                 if (answers.has(oIdx)) {
                     answers.delete(oIdx);
@@ -128,7 +133,7 @@ export function showAskUserQuestion(questions, tabId, ws) {
                 answers.clear();
                 answers.add(oIdx);
             }
-            updateOptionUI(qIdx);
+            updateOptionUI(qIdx, tabId);
         });
     });
 
@@ -139,11 +144,13 @@ export function showAskUserQuestion(questions, tabId, ws) {
             ws.send(JSON.stringify({ type: 'question_response', responses: emptyResponses, cancelled: true }));
         }
         addSystemMessage('Pregunta cancelada', tabId);
-        hideAskUserQuestion();
+        hideAskUserQuestion(tabId);
     });
 
     overlay.querySelector('#questionSubmitBtn').addEventListener('click', () => {
-        const { questions, selectedAnswers, ws, tabId } = currentQuestionModal;
+        const modalState = questionModals.get(tabId);
+        if (!modalState) return;
+        const { questions, selectedAnswers, ws, tabId: modalTabId } = modalState;
 
         const responses = questions.map((q, qIdx) => {
             const selected = Array.from(selectedAnswers.get(qIdx));
@@ -175,12 +182,14 @@ export function showAskUserQuestion(questions, tabId, ws) {
         }
 
         showLoading(tabId);
-        hideAskUserQuestion();
+        hideAskUserQuestion(tabId);
     });
 }
 
-function updateOptionUI(qIdx) {
-    const { overlay, selectedAnswers, questions } = currentQuestionModal;
+function updateOptionUI(qIdx, tabId) {
+    const modalState = questionModals.get(tabId);
+    if (!modalState) return;
+    const { overlay, selectedAnswers, questions } = modalState;
     const answers = selectedAnswers.get(qIdx);
     const multiSelect = questions[qIdx].multiSelect;
 
@@ -208,16 +217,17 @@ function updateOptionUI(qIdx) {
     });
 }
 
-export function hideAskUserQuestion() {
-    if (currentQuestionModal) {
-        currentQuestionModal.overlay.remove();
-        currentQuestionModal = null;
+export function hideAskUserQuestion(tabId) {
+    const modalState = questionModals.get(tabId);
+    if (modalState) {
+        modalState.overlay.remove();
+        questionModals.delete(tabId);
     }
 }
 
 // ===== Tool Approval =====
 
-let currentApprovalModal = null;
+// (approvalModals Map already declared at top)
 
 function getToolDisplayInfo(toolName, input) {
     if (toolName === 'Bash') {
@@ -247,7 +257,7 @@ function getToolDisplayInfo(toolName, input) {
 }
 
 export function showToolApproval(toolName, input, tabId, ws) {
-    hideToolApproval();
+    hideToolApproval(tabId);
 
     const info = getToolDisplayInfo(toolName, input);
 
@@ -275,7 +285,7 @@ export function showToolApproval(toolName, input, tabId, ws) {
     `;
 
     document.body.appendChild(overlay);
-    currentApprovalModal = { overlay, ws, tabId };
+    approvalModals.set(tabId, { overlay, ws, tabId });
 
     overlay.querySelector('#approvalAllowBtn').addEventListener('click', () => {
         sendApprovalResponse(true);
@@ -291,23 +301,24 @@ export function showToolApproval(toolName, input, tabId, ws) {
         }
         addSystemMessage(`${toolName}: ${allow ? 'Permitido' : 'Denegado'}`, tabId);
         showLoading(tabId);
-        hideToolApproval();
+        hideToolApproval(tabId);
     }
 }
 
-export function hideToolApproval() {
-    if (currentApprovalModal) {
-        currentApprovalModal.overlay.remove();
-        currentApprovalModal = null;
+export function hideToolApproval(tabId) {
+    const modalState = approvalModals.get(tabId);
+    if (modalState) {
+        modalState.overlay.remove();
+        approvalModals.delete(tabId);
     }
 }
 
 // ===== File View (Plan Viewer) =====
 
-let currentFileViewModal = null;
+// (fileViewModals Map already declared at top)
 
 export function showFileView(filePath, content, tabId, ws) {
-    hideFileView();
+    hideFileView(tabId);
 
     const fileName = filePath.split('/').pop().split('\\').pop();
 
@@ -336,7 +347,7 @@ export function showFileView(filePath, content, tabId, ws) {
     `;
 
     document.body.appendChild(overlay);
-    currentFileViewModal = { overlay, ws, tabId };
+    fileViewModals.set(tabId, { overlay, ws, tabId });
 
     overlay.querySelector('#fileViewApproveBtn').addEventListener('click', () => {
         sendFileViewResponse(true);
@@ -352,13 +363,30 @@ export function showFileView(filePath, content, tabId, ws) {
         }
         addSystemMessage(`Plan: ${allow ? 'Aprobado' : 'Rechazado'}`, tabId);
         if (allow) showLoading(tabId);
-        hideFileView();
+        hideFileView(tabId);
     }
 }
 
-export function hideFileView() {
-    if (currentFileViewModal) {
-        currentFileViewModal.overlay.remove();
-        currentFileViewModal = null;
+export function hideFileView(tabId) {
+    const modalState = fileViewModals.get(tabId);
+    if (modalState) {
+        modalState.overlay.remove();
+        fileViewModals.delete(tabId);
     }
+}
+
+// ===== Cleanup =====
+
+export function cleanupTabModals(tabId) {
+    hideAskUserQuestion(tabId);
+    hideToolApproval(tabId);
+    hideFileView(tabId);
+}
+
+export function hasPendingQuestionModal(tabId) {
+    return questionModals.has(tabId);
+}
+
+export function getPendingQuestion(tabId) {
+    return questionModals.get(tabId);
 }
