@@ -3,7 +3,7 @@
 .question-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.92);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -13,8 +13,8 @@
 }
 
 .question-modal {
-    background: #1a1a1a;
-    border: 2px solid var(--color-primary);
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-lg);
     padding: var(--spacing-xl);
     max-width: 500px;
@@ -22,7 +22,7 @@
     max-height: 80vh;
     overflow-y: auto;
     animation: slideUp 0.3s ease;
-    box-shadow: 0 10px 60px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
     pointer-events: auto;
 }
 
@@ -62,7 +62,7 @@
 }
 
 .question-option {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
@@ -277,7 +277,7 @@
 .settings-select,
 .settings-textarea {
     width: 100%;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     color: var(--text-primary);
@@ -323,7 +323,7 @@
     max-height: 60vh;
     overflow-y: auto;
     padding: var(--spacing-md);
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.6);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     margin-bottom: var(--spacing-md);

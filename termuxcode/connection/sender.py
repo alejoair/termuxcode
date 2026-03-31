@@ -12,6 +12,8 @@ from termuxcode.ws_config import logger
 class MessageSender:
     """Envía mensajes al cliente WebSocket."""
 
+    MAX_BUFFER_SIZE = 1000
+
     def __init__(self, websocket):
         """Inicializa el sender.
 
@@ -42,16 +44,33 @@ class MessageSender:
                 # Si falla el envío (conexión rota), bufferizar
                 logger.warning(f"Error enviando mensaje, bufferizando: {e}")
                 self._buffer.append(message)
+                self._evict_if_needed()
         else:
             self._buffer.append(message)
+            self._evict_if_needed()
 
     async def replay_buffer(self):
         """Envía todos los mensajes acumulados en el buffer."""
-        if self._websocket and self._buffer:
-            logger.info(f"Replay de {len(self._buffer)} mensajes del buffer")
-            for msg in self._buffer:
+        if not self._websocket or not self._buffer:
+            return
+        logger.info(f"Replay de {len(self._buffer)} mensajes del buffer")
+        sent_count = 0
+        for i, msg in enumerate(self._buffer):
+            try:
                 await self._websocket.send(json.dumps(msg))
-            self._buffer.clear()
+                sent_count = i + 1
+            except Exception as e:
+                logger.error(f"Replay falló en mensaje {i}/{len(self._buffer)}: {e}")
+                self._buffer = self._buffer[sent_count:]
+                raise
+        self._buffer.clear()
+
+    def _evict_if_needed(self):
+        """Evict oldest messages if buffer exceeds MAX_BUFFER_SIZE."""
+        if len(self._buffer) > self.MAX_BUFFER_SIZE:
+            evicted = len(self._buffer) - self.MAX_BUFFER_SIZE
+            self._buffer = self._buffer[evicted:]
+            logger.warning(f"Buffer evicted {evicted} oldest messages (limit: {self.MAX_BUFFER_SIZE})")
 
     async def send_system_message(self, message: str):
         """Envía un mensaje del sistema al cliente.

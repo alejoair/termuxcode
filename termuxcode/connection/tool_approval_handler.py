@@ -11,19 +11,43 @@ from termuxcode.ws_config import logger
 class ToolApprovalHandler:
     """Maneja solicitudes de aprobación de herramientas del SDK."""
 
-    def __init__(self, sender=None, sdk_client=None, on_plan_rejected=None, session=None):
+    APPROVAL_TIMEOUT = 30.0  # segundos
+
+    AUTO_APPROVE_MODES = {"bypassPermissions", "acceptEdits"}
+
+    def __init__(self, sender=None, sdk_client=None, on_plan_rejected=None, session=None, agent_options=None):
         self._sender = sender  # Mantener por compatibilidad temporal
         self._sdk_client = sdk_client
         self._ask_handler = None
         self._on_plan_rejected = on_plan_rejected
         self._session = session  # Nuevo: referencia a Session
+        self._agent_options = agent_options or {}
         self._approval_event = asyncio.Event()
+        self._cancel_event = asyncio.Event()
         self._approval_response = None
         self._waiting = False
 
     @property
     def is_waiting(self) -> bool:
         return self._waiting
+
+    async def _wait_for_approval(self):
+        """Espera respuesta del frontend con timeout y soporte de cancelación."""
+        approval_task = asyncio.ensure_future(self._approval_event.wait())
+        cancel_task = asyncio.ensure_future(self._cancel_event.wait())
+
+        done, pending = await asyncio.wait(
+            {approval_task, cancel_task},
+            timeout=self.APPROVAL_TIMEOUT,
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+        for task in pending:
+            task.cancel()
+
+        if cancel_task in done or not done:
+            return None  # Cancelado o timeout
+        return self._approval_response
 
     async def can_use_tool(self, tool_name: str, input_data: dict, context):
         """Callback para el SDK. Envía solicitud al frontend y espera respuesta."""
@@ -43,6 +67,12 @@ class ToolApprovalHandler:
         if tool_name == "ExitPlanMode":
             return await self._handle_exit_plan_mode(input_data)
 
+        # Auto-aprobar si el permission_mode lo indica
+        permission_mode = self._agent_options.get("permission_mode", "bypassPermissions")
+        if permission_mode in self.AUTO_APPROVE_MODES:
+            logger.info(f"=== Auto-aprobando {tool_name} (modo: {permission_mode}) ===")
+            return PermissionResultAllow(updated_input=input_data)
+
         self._approval_event.clear()
         self._approval_response = None
         self._waiting = True
@@ -61,9 +91,8 @@ class ToolApprovalHandler:
                 raise RuntimeError("ToolApprovalHandler no tiene session ni sender configurado")
 
             # Esperar respuesta del frontend (llega via _message_loop → handle_response)
-            await self._approval_event.wait()
+            response = await self._wait_for_approval()
 
-            response = self._approval_response
             if response and response.get("allow"):
                 logger.info(f"=== Tool {tool_name} PERMITIDA ===")
                 return PermissionResultAllow(updated_input=input_data)
@@ -102,9 +131,7 @@ class ToolApprovalHandler:
             else:
                 raise RuntimeError("ToolApprovalHandler no tiene session ni sender configurado")
 
-            await self._approval_event.wait()
-
-            response = self._approval_response
+            response = await self._wait_for_approval()
             if response and response.get("allow"):
                 logger.info("=== Plan APROBADO ===")
                 return PermissionResultAllow(updated_input=input_data)
@@ -128,8 +155,15 @@ class ToolApprovalHandler:
         self._approval_event.set()
         logger.info(f"Approval response recibida: allow={data.get('allow')}")
 
+    def cancel(self):
+        """Cancela la espera activa (llamado al desconectar WebSocket)."""
+        self._approval_response = None
+        self._cancel_event.set()
+        self._waiting = False
+
     def reset(self):
         """Resetea el estado del handler."""
         self._approval_response = None
         self._approval_event.clear()
+        self._cancel_event.clear()
         self._waiting = False

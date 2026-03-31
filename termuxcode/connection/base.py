@@ -33,6 +33,7 @@ class WebSocketConnection:
         self.resume_id = resume_id
         self.cwd = cwd
         self.agent_options = agent_options or {}
+        self._known_session_ids: set = set()
 
         # Componentes
         self._sdk_client = None
@@ -89,7 +90,7 @@ class WebSocketConnection:
         self._sender = MessageSender(self.websocket)
 
         # Inicializar tool_approval_handler (su callback se pasa al SDK)
-        self._tool_approval_handler = ToolApprovalHandler(self._sender)
+        self._tool_approval_handler = ToolApprovalHandler(self._sender, agent_options=self.agent_options)
 
         # Inicializar cliente SDK con el callback de aprobación
         self._sdk_client = SDKClient(
@@ -116,11 +117,10 @@ class WebSocketConnection:
         # Callback para actualizar el registry cuando el SDK genera un nuevo session_id
         async def on_session_id_update(new_session_id: str):
             if _active_sessions_registry is not None and new_session_id:
-                # Si teníamos un resume_id anterior y es diferente, actualizar el registry
-                if self.resume_id and self.resume_id in _active_sessions_registry:
-                    del _active_sessions_registry[self.resume_id]
-                self.resume_id = new_session_id
+                # Agregar nueva key, mantener las anteriores para reconexión
                 _active_sessions_registry[new_session_id] = self
+                self._known_session_ids.add(new_session_id)
+                self.resume_id = new_session_id
                 logger.info(f"Registry actualizado con nuevo session_id: {new_session_id}")
 
         # Inicializar message_processor
@@ -182,10 +182,22 @@ class WebSocketConnection:
         """
         # Solo desconectar WebSocket, mantener SDK activo para reconexión
         self._sender.set_websocket(None)
+
+        # Cancelar esperas activas para desbloquear el SDK si está esperando respuesta
+        if self._tool_approval_handler:
+            self._tool_approval_handler.cancel()
+        if self._ask_handler:
+            self._ask_handler.cancel()
         logger.info("WebSocket desconectado, SDK sigue activo para reconexión")
 
     async def _full_cleanup(self):
         """Limpieza completa cuando la sesión ya no se necesita."""
+        # Remover todos los session_ids del registry
+        if _active_sessions_registry is not None:
+            for sid in self._known_session_ids:
+                if sid in _active_sessions_registry and _active_sessions_registry[sid] is self:
+                    del _active_sessions_registry[sid]
+
         if self._processor_task:
             self._processor_task.cancel()
             try:

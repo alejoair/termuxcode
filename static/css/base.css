@@ -49,16 +49,16 @@ body {
 /* Header working state */
 .terminal-title.working {
     animation: glowPulse 2s ease-in-out infinite;
-    color: #c4b5fd !important;
+    color: #b4a0f4 !important;
 }
 
 .terminal-title.working .terminal-cursor {
     animation: blink 0.5s step-end infinite;
-    color: #c4b5fd;
+    color: #b4a0f4;
 }
 
 .terminal-title.working .terminal-prompt {
-    color: #e9d5ff;
+    color: #d4c5f9;
 }
 
 @keyframes blink {

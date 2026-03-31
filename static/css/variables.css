@@ -1,51 +1,51 @@
-/* ===== Variables CSS ===== */
+/* ===== Variables CSS — OLED-optimized dark theme ===== */
 :root {
-    /* Colores primarios */
-    --color-primary: #667eea;
-    --color-primary-end: #764ba2;
-    --color-primary-bg: rgba(102, 126, 234, 0.3);
-    --color-primary-bg-hover: rgba(102, 126, 234, 0.5);
+    /* Colores primarios (tonos apagados para reducir fatiga nocturna) */
+    --color-primary: #7c8ef5;
+    --color-primary-end: #9b6dc6;
+    --color-primary-bg: rgba(124, 142, 245, 0.18);
+    --color-primary-bg-hover: rgba(124, 142, 245, 0.3);
 
     /* Status */
-    --color-connected: #2ed573;
-    --color-disconnected: #ff4757;
-    --color-connecting: #ffc107;
+    --color-connected: #4ade80;
+    --color-disconnected: #f87171;
+    --color-connecting: #fbbf24;
 
     /* Acciones */
-    --color-danger: #ff4757;
-    --color-danger-end: #c0392b;
-    --color-danger-bg: rgba(255, 71, 87, 0.15);
-    --color-success: #2ed573;
-    --color-success-end: #27ae60;
-    --color-success-bg: rgba(46, 213, 115, 0.15);
+    --color-danger: #f87171;
+    --color-danger-end: #dc2626;
+    --color-danger-bg: rgba(248, 113, 113, 0.1);
+    --color-success: #4ade80;
+    --color-success-end: #22c55e;
+    --color-success-bg: rgba(74, 222, 128, 0.1);
 
     /* Mensajes */
-    --color-user-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --color-assistant-bg: rgba(255, 255, 255, 0.08);
-    --color-system-bg: rgba(255, 193, 7, 0.15);
-    --color-tool-bg: rgba(233, 69, 96, 0.15);
+    --color-user-gradient: linear-gradient(135deg, #7c8ef5 0%, #9b6dc6 100%);
+    --color-assistant-bg: rgba(255, 255, 255, 0.04);
+    --color-system-bg: rgba(251, 191, 36, 0.08);
+    --color-tool-bg: rgba(248, 113, 113, 0.08);
     --color-thinking-bg: transparent;
 
-    /* Fondos */
-    --bg-body-start: #0a0a0a;
-    --bg-body-end: #141414;
-    --bg-surface: rgba(255, 255, 255, 0.06);
-    --bg-surface-hover: rgba(255, 255, 255, 0.1);
-    --bg-toolbar: rgba(0, 0, 0, 0.3);
-    --bg-code: rgba(0, 0, 0, 0.4);
-    --bg-code-block: rgba(0, 0, 0, 0.5);
+    /* Fondos — negro puro para OLED */
+    --bg-body-start: #000000;
+    --bg-body-end: #000000;
+    --bg-surface: rgba(255, 255, 255, 0.04);
+    --bg-surface-hover: rgba(255, 255, 255, 0.07);
+    --bg-toolbar: rgba(0, 0, 0, 0.6);
+    --bg-code: rgba(0, 0, 0, 0.6);
+    --bg-code-block: rgba(0, 0, 0, 0.8);
 
-    /* Textos */
-    --text-primary: #fff;
-    --text-secondary: rgba(255, 255, 255, 0.7);
-    --text-muted: rgba(255, 255, 255, 0.5);
-    --text-faint: rgba(255, 255, 255, 0.4);
-    --text-link: #a78bfa;
+    /* Textos — niveles sutiles, evitando blanco puro excesivo */
+    --text-primary: #e4e4e7;
+    --text-secondary: rgba(228, 228, 231, 0.6);
+    --text-muted: rgba(228, 228, 231, 0.4);
+    --text-faint: rgba(228, 228, 231, 0.25);
+    --text-link: #c4b5fd;
 
     /* Bordes */
-    --border-color: rgba(255, 255, 255, 0.1);
-    --border-light: rgba(255, 255, 255, 0.3);
-    --focus-ring: rgba(102, 126, 234, 0.5);
+    --border-color: rgba(255, 255, 255, 0.06);
+    --border-light: rgba(255, 255, 255, 0.15);
+    --focus-ring: rgba(124, 142, 245, 0.4);
 
     /* Espaciado */
     --spacing-xs: 4px;
@@ -71,18 +71,18 @@
     --max-width: 900px;
     --input-height: 36px;
 
-    /* Framework7 theme overrides */
-    --f7-theme-color: #667eea;
-    --f7-theme-color-rgb: 102, 126, 234;
-    --f7-navbar-bg-color: rgba(14, 14, 14, 0.9);
+    /* Framework7 theme overrides — negro puro */
+    --f7-theme-color: #7c8ef5;
+    --f7-theme-color-rgb: 124, 142, 245;
+    --f7-navbar-bg-color: rgba(0, 0, 0, 0.85);
     --f7-navbar-link-color: var(--text-primary);
     --f7-navbar-text-color: var(--text-primary);
-    --f7-subnavbar-bg-color: rgba(14, 14, 14, 0.9);
-    --f7-toolbar-bg-color: rgba(14, 14, 14, 0.95);
+    --f7-subnavbar-bg-color: rgba(0, 0, 0, 0.85);
+    --f7-toolbar-bg-color: rgba(0, 0, 0, 0.9);
     --f7-page-bg-color: transparent;
     --f7-bars-shadow: none;
     --f7-bars-border-color: transparent;
-    --f7-messagebar-bg-color: rgba(14, 14, 14, 0.95);
+    --f7-messagebar-bg-color: rgba(0, 0, 0, 0.9);
     --f7-messagebar-border-color: transparent;
     --f7-toolbar-border-color: transparent;
     --f7-navbar-border-color: transparent;
@@ -90,7 +90,7 @@
 }
 
 .model-selector {
-    background: rgba(102, 126, 234, 0.3);
+    background: rgba(124, 142, 245, 0.18);
     border: 1px solid var(--color-primary);
     border-radius: var(--radius-md);
     color: var(--text-primary);

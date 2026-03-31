@@ -9,6 +9,8 @@ from termuxcode.ws_config import logger
 class AskUserQuestionHandler:
     """Maneja el flujo bidireccional de AskUserQuestion."""
 
+    QUESTION_TIMEOUT = 60.0  # segundos
+
     def __init__(self, sender=None, session=None):
         """Inicializa el handler.
 
@@ -21,12 +23,31 @@ class AskUserQuestionHandler:
         self._question_response = None
         self._question_cancelled = False
         self._question_event = asyncio.Event()
+        self._cancel_event = asyncio.Event()
         self._waiting_for_question_response = False
 
     @property
     def is_waiting(self) -> bool:
         """Verifica si actualmente se está esperando una respuesta."""
         return self._waiting_for_question_response
+
+    async def _wait_for_response(self):
+        """Espera respuesta del frontend con timeout y soporte de cancelación."""
+        response_task = asyncio.ensure_future(self._question_event.wait())
+        cancel_task = asyncio.ensure_future(self._cancel_event.wait())
+
+        done, pending = await asyncio.wait(
+            {response_task, cancel_task},
+            timeout=self.QUESTION_TIMEOUT,
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+        for task in pending:
+            task.cancel()
+
+        if cancel_task in done or not done:
+            return True  # Cancelado o timeout
+        return False  # Respuesta recibida normalmente
 
     async def handle_questions(self, questions: list) -> tuple:
         """Envía preguntas al frontend y espera las respuestas.
@@ -61,7 +82,10 @@ class AskUserQuestionHandler:
             raise RuntimeError("AskUserQuestionHandler no tiene session ni sender configurado")
 
         # message_processor sigue corriendo en paralelo y procesará el question_response
-        await self._question_event.wait()
+        cancelled = await self._wait_for_response()
+        if cancelled:
+            self._waiting_for_question_response = False
+            return None, True
 
         self._waiting_for_question_response = False
         return self._question_response, self._question_cancelled
@@ -78,9 +102,17 @@ class AskUserQuestionHandler:
         self._question_event.set()
         logger.info(f"Respuesta recibida (cancelled={cancelled}): {responses}")
 
+    def cancel(self):
+        """Cancela la espera activa (llamado al desconectar WebSocket)."""
+        self._question_response = None
+        self._question_cancelled = True
+        self._cancel_event.set()
+        self._waiting_for_question_response = False
+
     def reset(self):
         """Resetea el estado del handler."""
         self._question_response = None
         self._question_cancelled = False
         self._question_event.clear()
+        self._cancel_event.clear()
         self._waiting_for_question_response = False

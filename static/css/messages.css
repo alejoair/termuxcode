@@ -22,7 +22,7 @@
 }
 
 .messages-area::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 3px;
 }
 
@@ -126,8 +126,8 @@
 }
 
 .message.tool-call .bubble {
-    background: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.4);
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.2);
     border-radius: var(--radius-md);
     padding: 8px 12px;
     margin-left: 24px;
@@ -168,13 +168,13 @@
 /* ===== Tool blocks (accordion nativo F7, dentro de la burbuja del asistente) ===== */
 .tool-block {
     margin: 6px 0 2px 0;
-    border-left: 2px solid rgba(255, 255, 255, 0.12);
+    border-left: 2px solid rgba(255, 255, 255, 0.06);
     padding-left: 8px;
 }
 
 .tool-result-block {
     margin-left: 16px;
-    border-left-color: rgba(255, 255, 255, 0.06);
+    border-left-color: rgba(255, 255, 255, 0.03);
 }
 
 .tool-header {
@@ -212,7 +212,7 @@
 }
 
 .tool-result-label {
-    color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.12);
     font-style: italic;
 }
 

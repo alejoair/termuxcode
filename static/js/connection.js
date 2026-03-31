@@ -1,7 +1,7 @@
 // ===== Conexion WebSocket =====
 
 import { state, dom, WS_URL } from './state.js';
-import { addSystemMessage, updateTabStatus, updateGlobalStatus, handleMessage } from './ui.js';
+import { addSystemMessage, updateTabStatus, updateGlobalStatus, handleMessage, hideLoading } from './ui.js';
 
 export function connectTab(tabId) {
     const tab = state.tabs.get(tabId);
@@ -9,6 +9,12 @@ export function connectTab(tabId) {
 
     if (tab.ws && (tab.ws.readyState === WebSocket.CONNECTING || tab.ws.readyState === WebSocket.OPEN)) {
         return;
+    }
+
+    // Cancelar timer de reconexión anterior si existe
+    if (tab.reconnectTimeout) {
+        clearTimeout(tab.reconnectTimeout);
+        tab.reconnectTimeout = null;
     }
 
     updateTabStatus(tabId, 'connecting');
@@ -42,12 +48,6 @@ export function connectTab(tabId) {
             }
 
             updateGlobalStatus();
-
-            // Solicitar replay del buffer si hay session_id (reconexión)
-            if (tab.sessionId) {
-                console.log('[Reconnect] Solicitando replay del buffer...');
-                tab.ws.send(JSON.stringify({ type: 'request_buffer_replay' }));
-            }
         };
 
         tab.ws.onmessage = (event) => {
@@ -66,6 +66,7 @@ export function connectTab(tabId) {
         tab.ws.onclose = () => {
             tab.isConnected = false;
             updateTabStatus(tabId, 'disconnected');
+            hideLoading(tabId);
 
             if (state.activeTabId === tabId) {
                 dom.statusDot.classList.remove('connected');

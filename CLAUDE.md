@@ -114,10 +114,12 @@ Note: The SDK client does NOT expose `session_id` directly after `connect()`. It
 When WebSocket disconnects, messages are preserved for reconnection:
 
 1. **Session Registry**: `_active_sessions` dict in `ws_server.py` maps session_id → WebSocketConnection
-2. **On WebSocket close**: `_cleanup()` only detaches WebSocket, SDK continues running
-3. **MessageSender buffer**: `_send_or_buffer()` accumulates messages in `_buffer` list when no WebSocket
-4. **On reconnect**: Frontend sends `request_buffer_replay`, `replay_buffer()` sends all accumulated messages
-5. **Session update**: When SDK generates new session_id, registry updates via `on_session_id_update` callback
+2. **On WebSocket close**: `_cleanup()` detaches WebSocket and calls `cancel()` on handlers to unblock any pending waits. SDK continues running.
+3. **MessageSender buffer**: `_send_or_buffer()` accumulates messages in `_buffer` list when no WebSocket. Buffer has `MAX_BUFFER_SIZE = 1000` with FIFO eviction.
+4. **On reconnect**: `base.py.reconnect()` calls `replay_buffer()` which sends all accumulated messages with partial-failure protection (unsent messages stay in buffer).
+5. **Session update**: When SDK generates new session_id, registry keeps ALL previous IDs mapping to the same connection (`_known_session_ids` set). This ensures reconnection works even with stale session_ids.
+6. **Timeouts**: All `Event.wait()` calls use `asyncio.wait()` with a timeout (30s for tool approval, 60s for AskUserQuestion) and a `_cancel_event` for immediate unblock on disconnect. On timeout/cancel, tools are denied and questions are cancelled so the SDK can continue.
+7. **Frontend**: `connection.js` cancels old reconnect timers before creating new connections. UI calls `hideLoading()` on disconnect to prevent stuck loading states.
 
 ## Agent Options
 

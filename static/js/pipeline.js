@@ -20,7 +20,7 @@ export function initPipeline() {
         rangeSpeed: 0.4,
         baseHue: 180,
         rangeHue: 60,
-        backgroundColor: 'hsla(160, 60%, 3%, 1)',
+        backgroundColor: '#000000',
         blur: 12
     };
     const WORK = {
@@ -29,7 +29,7 @@ export function initPipeline() {
         rangeSpeed: 2.5,
         baseHue: 220,
         rangeHue: 80,
-        backgroundColor: 'hsla(200, 70%, 2%, 1)',
+        backgroundColor: '#000000',
         blur: 16
     };
 
@@ -166,7 +166,7 @@ export function initPipeline() {
 
     function drawPipe(x, y, life, ttl, width, hue) {
         ctx.a.save();
-        ctx.a.strokeStyle = `hsla(${hue}, 75%, 50%, ${fadeInOut(life, ttl) * 0.6})`;
+        ctx.a.strokeStyle = `hsla(${hue}, 60%, 45%, ${fadeInOut(life, ttl) * 0.4})`;
         ctx.a.beginPath();
         ctx.a.arc(x, y, width, 0, TAU);
         ctx.a.stroke();
@@ -176,19 +176,16 @@ export function initPipeline() {
 
     function render() {
         const t = transitionProgress;
-        const bgH = lerp(160, 200, t);
-        const bgS = lerp(60, 70, t);
-        const bgL = lerp(3, 2, t);
         const blur = lerp(IDLE.blur, WORK.blur, t);
 
-        // Fade canvas.a rellenando con negro semi-transparente
+        // Fade canvas.a rellenando con negro puro (OLED)
         ctx.a.save();
         ctx.a.fillStyle = `rgba(0, 0, 0, ${FADE_ALPHA})`;
         ctx.a.fillRect(0, 0, canvas.a.width, canvas.a.height);
         ctx.a.restore();
 
         ctx.b.save();
-        ctx.b.fillStyle = `hsla(${bgH}, ${bgS}%, ${bgL}%, 1)`;
+        ctx.b.fillStyle = '#000000';
         ctx.b.fillRect(0, 0, canvas.b.width, canvas.b.height);
         ctx.b.restore();
 
