@@ -111,6 +111,42 @@
     padding: var(--spacing-xs) 0;
 }
 
+/* Tool-call messages (sin label, diseño separado) */
+.message.tool-call {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+.bubble.tool-call-bubble {
+    display: block;
+    margin-left: 12px;
+}
+
+.message.tool-call .bubble {
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    margin-left: 24px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    max-width: 90%;
+}
+
+.bubble.tool-call-bubble {
+    display: block;
+    margin-left: 0;
+}
+
+.bubble.tool-call-bubble .tool-block {
+    margin: 0;
+    border-left: none;
+    padding-left: 0;
+}
+
 /* Labels */
 .message-label {
     font-size: 0.65rem;
@@ -121,4 +157,72 @@
 
 .message.user .message-label {
     text-align: right;
+}
+
+/* ===== Assistant bubble con display block para contener tool blocks ===== */
+.bubble.assistant-bubble {
+    display: block;
+    margin-left: 12px;
+}
+
+/* ===== Tool blocks (accordion nativo F7, dentro de la burbuja del asistente) ===== */
+.tool-block {
+    margin: 6px 0 2px 0;
+    border-left: 2px solid rgba(255, 255, 255, 0.12);
+    padding-left: 8px;
+}
+
+.tool-result-block {
+    margin-left: 16px;
+    border-left-color: rgba(255, 255, 255, 0.06);
+}
+
+.tool-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 0;
+    color: var(--text-faint);
+    font-size: 0.72rem;
+    font-family: monospace;
+    cursor: pointer;
+    user-select: none;
+}
+
+.tool-header:hover {
+    color: var(--text-muted);
+}
+
+.tool-chevron {
+    font-size: 0.6rem;
+    opacity: 0.6;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+    display: inline-block;
+}
+
+.accordion-item-opened .tool-chevron {
+    transform: rotate(90deg);
+}
+
+.tool-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tool-result-label {
+    color: rgba(255, 255, 255, 0.2);
+    font-style: italic;
+}
+
+.tool-content {
+    padding: 4px 0 6px;
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 0.72rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 300px;
+    overflow-y: auto;
 }

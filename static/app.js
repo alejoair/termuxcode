@@ -107,7 +107,7 @@ function openSettings() {
         </div>
     `;
     document.body.appendChild(overlay);
-    overlay.querySelector('#cfg-permission_mode').value = s.permission_mode || 'acceptEdits';
+    overlay.querySelector('#cfg-permission_mode').value = s.permission_mode || 'bypassPermissions';
     overlay.querySelector('#cfg-model').value = s.model || 'sonnet';
     overlay.querySelector('#settingsCancelBtn').onclick = () => overlay.remove();
     overlay.querySelector('#settingsSaveBtn').onclick = () => {
@@ -131,7 +131,7 @@ function openSettings() {
 // ===== 3D Starfield Background with Warp Effect =====
 function initStarfield() {
     const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:0;opacity:0.7';
+    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:0;opacity:0.35';
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
     const stars = Array.from({ length: 5000 }, () => ({
@@ -156,8 +156,8 @@ function initStarfield() {
 
     let working = false;
     let curFlash = 0;
-    const IDLE  = { speed: 0.004, alpha: 0.6, size: 2.5, opacity: 0.7 };
-    const WORK  = { speed: 0.15, alpha: 1.0, size: 4.0, opacity: 0.85 };
+    const IDLE  = { speed: 0.004, alpha: 0.6, size: 2.5, opacity: 0.35 };
+    const WORK  = { speed: 0.15, alpha: 1.0, size: 4.0, opacity: 0.55 };
     const COLOR_IDLE = [102, 126, 234]; // #667eea
     const COLOR_WARP = [220, 215, 255]; // bright blueish white for warp
 

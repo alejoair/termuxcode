@@ -52,12 +52,20 @@ class WebSocketConnection:
         try:
             # Solo inicializar componentes si no están ya inicializados (reconexión)
             if self._sender is None:
+                original_ws = self.websocket
                 await self._initialize_components()
 
                 # Iniciar tarea de fondo para procesar mensajes
                 self._processor_task = asyncio.create_task(
                     self._processor.start_processing(self.message_queue)
                 )
+
+                # Si el websocket fue reemplazado durante la inicialización (reconexión
+                # llegó mientras conectábamos al SDK), ceder el control al handle() que
+                # ya arrancó _message_loop en el nuevo websocket.
+                if self.websocket is not original_ws:
+                    logger.info("WebSocket reemplazado durante init, cediendo control al handle de reconexión")
+                    return
 
             # Iniciar loop de mensajes del WebSocket
             await self._message_loop()

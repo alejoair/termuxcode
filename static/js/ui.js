@@ -77,18 +77,64 @@ export function addMessage(type, text, tabId) {
     scrollToBottom();
 }
 
-export function addToolUse(name, input, tabId) {
+function createToolUseEl(name, input, toolId) {
+    let info = '';
+    if (name === 'Bash') info = input.command || input.description || '';
+    else if (['Read', 'Write', 'Edit'].includes(name)) info = input.file_path || '';
+    else if (name === 'Grep') info = `${input.pattern || ''}${input.path ? '  ' + input.path : ''}`;
+    else if (name === 'Glob') info = input.pattern || '';
+    else info = JSON.stringify(input);
+
+    const el = document.createElement('div');
+    el.className = 'accordion-item tool-block';
+    if (toolId) el.dataset.toolId = toolId;
+    el.innerHTML = `
+        <div class="accordion-item-toggle tool-header">
+            <span class="tool-chevron">▸</span>
+            <span class="tool-name">${name}</span>
+        </div>
+        <div class="accordion-item-content">
+            <div class="tool-content">${info}</div>
+        </div>`;
+    return el;
+}
+
+function createToolResultEl(rawContent) {
+    const text = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
+
+    const el = document.createElement('div');
+    el.className = 'accordion-item tool-block tool-result-block';
+    el.innerHTML = `
+        <div class="accordion-item-toggle tool-header">
+            <span class="tool-chevron">▸</span>
+            <span class="tool-name tool-result-label">resultado</span>
+        </div>
+        <div class="accordion-item-content">
+            <div class="tool-content">${text}</div>
+        </div>`;
+    return el;
+}
+
+function insertToolResults(blocks, tabId) {
     if (state.activeTabId !== tabId) return;
-
-    const msgDiv = document.createElement('div');
-    msgDiv.className = 'message tool';
-
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.innerHTML = `<strong>Tool:</strong> ${name}<br><code>${JSON.stringify(input).substring(0, 150)}</code>`;
-
-    msgDiv.appendChild(bubble);
-    dom.messages.appendChild(msgDiv);
+    for (const block of blocks) {
+        if (block.type !== 'tool_result') continue;
+        const toolUseEl = dom.messages.querySelector(`[data-tool-id="${block.tool_use_id}"]`);
+        const resultEl = createToolResultEl(block.content);
+        if (toolUseEl) {
+            toolUseEl.after(resultEl);
+        } else {
+            // fallback: añadir al final del último tool-call bubble
+            const lastToolCall = dom.messages.querySelector('.tool-call-bubble:last-of-type');
+            if (lastToolCall) {
+                lastToolCall.appendChild(resultEl);
+            } else {
+                // fallback 2: añadir al final del último bubble de asistente
+                const lastBubble = dom.messages.querySelector('.assistant-bubble:last-of-type');
+                if (lastBubble) lastBubble.appendChild(resultEl);
+            }
+        }
+    }
     scrollToBottom();
 }
 
@@ -133,7 +179,13 @@ export function renderMessage(data, tabId) {
     if (state.activeTabId !== tabId) return;
 
     if (data.type === 'user') {
-        addMessage('user', data.content, tabId);
+        if (data.blocks && data.blocks.length > 0) {
+            // User message con tool_result blocks
+            insertToolResults(data.blocks, tabId);
+        } else if (data.content) {
+            // User message normal
+            addMessage('user', data.content, tabId);
+        }
     } else if (data.type === 'assistant') {
         renderAssistantBlocks(data.blocks, tabId);
     } else if (data.type === 'result') {
@@ -146,20 +198,58 @@ export function renderMessage(data, tabId) {
 }
 
 export function renderAssistantBlocks(blocks, tabId) {
+    if (state.activeTabId !== tabId) return;
+    if (!blocks || blocks.length === 0) return;
+
+    // Thinking blocks van separados (sin burbuja)
     for (const block of blocks) {
-        if (block.type === 'text') {
-            addMessage('assistant', block.text, tabId);
-        } else if (block.type === 'thinking') {
+        if (block.type === 'thinking') {
             addMessage('thinking', block.thinking, tabId);
-        } else if (block.type === 'tool_use') {
-            addToolUse(block.name, block.input, tabId);
-        } else if (block.type === 'tool_result') {
-            const content = typeof block.content === 'string'
-                ? block.content.substring(0, 200)
-                : JSON.stringify(block.content).substring(0, 200);
-            addMessage('tool', `Resultado: ${content}...`, tabId);
         }
     }
+
+    // Separar tool_use del texto
+    const toolBlocks = blocks.filter(b => b.type === 'tool_use');
+    const textBlocks = blocks.filter(b => b.type === 'text');
+
+    // Renderizar tool calls primero (sin label "Claude", diseño separado)
+    for (const block of toolBlocks) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message tool-call';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble tool-call-bubble';
+        bubble.appendChild(createToolUseEl(block.name, block.input, block.id));
+
+        msgDiv.appendChild(bubble);
+        dom.messages.appendChild(msgDiv);
+    }
+
+    // Renderizar texto con label "Claude"
+    if (textBlocks.length > 0) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message assistant';
+
+        const label = document.createElement('div');
+        label.className = 'message-label';
+        label.textContent = 'Claude';
+        msgDiv.appendChild(label);
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble assistant-bubble';
+
+        for (const block of textBlocks) {
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'markdown-content';
+            contentDiv.innerHTML = marked.parse(block.text);
+            bubble.appendChild(contentDiv);
+        }
+
+        msgDiv.appendChild(bubble);
+        dom.messages.appendChild(msgDiv);
+    }
+
+    scrollToBottom();
 }
 
 export function handleMessage(data, tabId) {
@@ -213,8 +303,8 @@ export function handleMessage(data, tabId) {
             showLoading(tabId);
         }
     } else if (data.type === 'user') {
-        // UserMessage contiene ToolResultBlock con resultados de herramientas
-        renderAssistantBlocks(data.blocks, tabId);
+        // UserMessage contiene ToolResultBlock — insertar cada result tras su tool_use
+        insertToolResults(data.blocks, tabId);
     } else if (data.type === 'result') {
         // Resultado final: apagar todo
         hideLoading(tabId);

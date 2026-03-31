@@ -43,7 +43,7 @@ class SDKClient:
         """
         o = self._agent_options
         options = ClaudeAgentOptions(
-            permission_mode=o.get("permission_mode", "acceptEdits"),
+            permission_mode=o.get("permission_mode", "bypassPermissions"),
             model=o.get("model", "glm-5"),
             setting_sources=["user", "project", "local"],
             stderr=lambda line: logger.error(f"Claude CLI stderr: {line}"),
