@@ -5,31 +5,34 @@ import { dom } from './state.js';
 // ===== Configuracion =====
 const config = {
     enabled: true,
-    // Vibracion al hacer scroll
-    scrollPulse: 3,           // ms - pulso muy corto
-    scrollCooldown: 16,     // ms entre pulsos
+    // Vibracion proporcional al scroll
+    minPulse: 10,             // ms - pulso minimo (scroll lento)
+    maxPulse: 25,             // ms - pulso maximo (scroll rapido)
+    cooldownSlow: 350,        // ms entre pulsos (scroll lento)
+    cooldownFast: 100,        // ms entre pulsos (scroll rapido)
 
     // Vibracion al llegar a bordes
-    borderPulse: [8, 20, 8],  // patron de "rebote"
-    borderCooldown: 200,    // ms antes de poder repetir
+    borderPulse: [10, 30, 10],
+    borderCooldown: 300,
 
-    // Vibracion al "over-scroll" (intentar scrollear mas alla del limite)
-    overscrollPulse: [15, 10, 25, 10, 15],  // patron complejo tipo "rebote elástico"
-    overscrollIntensity: 0,  // se incrementa con cada intento
+    // Over-scroll
+    overscrollBasePulse: 8,
+    overscrollCooldown: 80,
 
-    // Swipe rápido
-    fastSwipePulse: [2, 1, 2, 1, 2],  // múltiples pulsos rápidos
-    fastSwipeThreshold: 15,  // px/ms para considerar swipe rápido
+    // Swipe rapido
+    fastSwipeThreshold: 0.8,  // px/ms
+    fastSwipePulse: [4, 8, 4, 8, 4],
 };
 
 // ===== Estado interno =====
 let lastScrollTime = 0;
+let lastPulseTime = 0;
 let lastBorderTime = 0;
+let lastOverscrollTime = 0;
 let overscrollCount = 0;
-let lastScrollY = 0;
+let lastScrollTop = 0;
 let scrollVelocity = 0;
-let isScrolling = false;
-let scrollTimeout = null;
+let glowTimer = null;
 
 // ===== Soporte del navegador =====
 const supportsVibration = 'vibrate' in navigator;
@@ -42,34 +45,36 @@ export function initScrollFeedback() {
         return;
     }
 
-    console.log('[ScrollFeedback] Inicializando...');
+    console.log('[ScrollFeedback] Inicializando... Vibracion:', supportsVibration);
 
-    // Event listeners para scroll
     messagesContainer.addEventListener('scroll', onScroll, { passive: true });
     messagesContainer.addEventListener('touchstart', onTouchStart, { passive: true });
     messagesContainer.addEventListener('touchend', onTouchEnd, { passive: true });
 
-    console.log('[ScrollFeedback] Listo. Vibracion:', supportsVibration);
+    console.log('[ScrollFeedback] Listo.');
 }
 
 // ===== Touch handlers =====
-function onTouchStart(e) {
-    if (!e.touches[0]) return;
-    lastScrollY = e.touches[0].clientY;
-    isScrolling = true;
+// ===== Visual glow =====
+function flashGlow() {
+    const el = dom.messages;
+    if (!el) return;
+    el.style.outline = '3px solid red';
+    clearTimeout(glowTimer);
+    glowTimer = setTimeout(() => { el.style.outline = ''; }, 300);
+}
+
+// ===== Touch handlers =====
+function onTouchStart() {
     scrollVelocity = 0;
+    overscrollCount = 0;
+    // Desbloquear vibracion en Chrome (requiere primer user gesture)
+    if (supportsVibration) navigator.vibrate(1);
 }
 
 function onTouchEnd() {
-    isScrolling = false;
     scrollVelocity = 0;
     overscrollCount = 0;
-
-    // Limpiar timeout
-    if (scrollTimeout) {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = null;
-    }
 }
 
 // ===== Scroll handler =====
@@ -81,71 +86,60 @@ function onScroll(e) {
     const scrollHeight = target.scrollHeight;
     const clientHeight = target.clientHeight;
 
-    // Calcular velocidad de scroll
     const now = Date.now();
+
+    // Calcular distancia y velocidad
+    const distance = Math.abs(scrollTop - lastScrollTop);
     const timeDelta = now - lastScrollTime;
+
     if (timeDelta > 0 && lastScrollTime > 0) {
-        scrollVelocity = Math.abs(scrollTop - (lastScrollY || scrollTop)) / timeDelta;
+        scrollVelocity = distance / timeDelta; // px/ms
     }
+
     lastScrollTime = now;
+    lastScrollTop = scrollTop;
 
-    // Detectar si está en los bordes
-    const atTop = scrollTop <= 5;
-    const atBottom = scrollTop + clientHeight >= scrollHeight - 5;
-    const canScrollUp = scrollTop > 0;
-    const canScrollDown = scrollTop + clientHeight < scrollHeight;
+    // Limites
+    const atTop = scrollTop <= 2;
+    const atBottom = scrollTop + clientHeight >= scrollHeight - 2;
+    const inMiddle = !atTop && !atBottom;
 
-    // ===== Vibración durante scroll normal =====
-    if (canScrollUp && canScrollDown) {
-        // Scroll normal - vibración sutil
-        if (now - lastScrollTime > config.scrollCooldown) {
-            // Vibración más fuerte si el scroll es rápido
-            if (scrollVelocity > config.fastSwipeThreshold) {
-                // Swipe rápido - pulsos múltiples
-                navigator.vibrate(config.fastSwipePulse);
-            } else {
-                // Scroll normal - pulso simple
-                navigator.vibrate(config.scrollPulse);
-            }
+    // ===== Scroll normal — pulso proporcional a la distancia =====
+    // Cooldown dinamico: lento = espaciado, rapido = junto
+    const speedFactor = Math.min(scrollVelocity / config.fastSwipeThreshold, 1);
+    const cooldown = Math.round(config.cooldownSlow - speedFactor * (config.cooldownSlow - config.cooldownFast));
+
+    if (inMiddle && distance > 0 && now - lastPulseTime >= cooldown) {
+        lastPulseTime = now;
+
+        if (scrollVelocity > config.fastSwipeThreshold) {
+            // Swipe rapido — patron multiple
+            navigator.vibrate(config.fastSwipePulse);
+        } else {
+            // Scroll normal — pulso proporcional a la distancia recorrida
+            const intensity = Math.min(distance / 50, 1); // 0-1 basado en px movidos
+            const pulse = Math.round(config.minPulse + intensity * (config.maxPulse - config.minPulse));
+            navigator.vibrate(pulse);
         }
+        flashGlow();
         overscrollCount = 0;
     }
 
-    // ===== Vibración al llegar a bordes =====
-    if ((atTop && canScrollUp) || (atBottom && canScrollDown)) {
-        // Ya no hay más contenido para scrollear
-        if (now - lastBorderTime > config.borderCooldown) {
-            lastBorderTime = now;
-            navigator.vibrate(config.borderPulse);
-        }
+    // ===== Bordes — pulso de rebote =====
+    if ((atTop || atBottom) && now - lastBorderTime >= config.borderCooldown) {
+        lastBorderTime = now;
+        navigator.vibrate(config.borderPulse);
+        flashGlow();
     }
 
-    // ===== Detectar overscroll (intentar scrollear más allá del límite) =====
-    // Esto requiere detectar cuando el usuario "tira" del borde
-    if (atTop && !canScrollDown || atBottom && !canScrollUp) {
+    // ===== Over-scroll =====
+    if ((atTop || atBottom) && distance === 0 && now - lastOverscrollTime >= config.overscrollCooldown) {
+        lastOverscrollTime = now;
         overscrollCount++;
-        if (overscrollCount > 3) {
-            // Overscroll detectado - vibración elástica
-            const intensity = Math.min(overscrollCount / 10, 1);
-            const pattern = generateOverscrollPattern(intensity);
-            navigator.vibrate(pattern);
-        }
-    } else {
-        overscrollCount = Math.max(0, overscrollCount - 1);
+        const pulse = Math.min(config.overscrollBasePulse + overscrollCount * 2, 30);
+        navigator.vibrate([pulse, 15, pulse]);
+        flashGlow();
     }
-
-    // Actualizar último Y
-    lastScrollY = scrollTop;
-}
-
-// ===== Generar patron de overscroll =====
-function generateOverscrollPattern(intensity) {
-    // Patrón que simula "rebote" o resistencia
-    const basePulse = 5 + Math.floor(intensity * 10);
-    const gap = 8 + Math.floor(intensity * 5);
-    const secondPulse = 3 + Math.floor(intensity * 6);
-
-    return [basePulse, gap, secondPulse, gap / 2, basePulse / 2];
 }
 
 // ===== API publica =====

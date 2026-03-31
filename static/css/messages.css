@@ -17,6 +17,16 @@
     margin-right: auto;
 }
 
+.messages-area {
+    transition: box-shadow 0.1s ease-out, border-color 0.1s ease-out;
+    border-left: 2px solid transparent;
+    border-right: 2px solid transparent;
+}
+
+.messages-area.scroll-glow {
+    background: red !important;
+}
+
 .messages-area::-webkit-scrollbar {
     width: 6px;
 }
