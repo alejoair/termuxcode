@@ -109,6 +109,27 @@ The session_id enables session resumption and history management:
 
 Note: The SDK client does NOT expose `session_id` directly after `connect()`. It only arrives in `ResultMessage` during streaming.
 
+## Key Flow: Reconnection Buffer
+
+When WebSocket disconnects, messages are preserved for reconnection:
+
+1. **Session Registry**: `_active_sessions` dict in `ws_server.py` maps session_id → WebSocketConnection
+2. **On WebSocket close**: `_cleanup()` only detaches WebSocket, SDK continues running
+3. **MessageSender buffer**: `_send_or_buffer()` accumulates messages in `_buffer` list when no WebSocket
+4. **On reconnect**: Frontend sends `request_buffer_replay`, `replay_buffer()` sends all accumulated messages
+5. **Session update**: When SDK generates new session_id, registry updates via `on_session_id_update` callback
+
+## Agent Options
+
+Frontend can pass options via query string `?options=<json>`:
+
+- `permission_mode`: Tool approval mode (e.g., "auto", "interactive")
+- `model`: Model override (e.g., "claude-sonnet-4-6")
+- `system_prompt` / `append_system_prompt`: Custom system prompts
+- `max_turns`: Maximum agent turns
+- `rolling_window`: History truncation window (default: 100)
+- `allowed_tools` / `disallowed_tools`: Comma-separated tool names
+
 ## Key Flow: Working State Animations
 
 When the agent is processing, visual feedback is provided:
@@ -122,6 +143,24 @@ When the agent is processing, visual feedback is provided:
 
 - HTTP: 8000 (static files)
 - WebSocket: 8769 (SDK communication)
+
+## WebSocket Message Types
+
+**Frontend → Backend:**
+- `{content, attachments}`: User chat message
+- `{command: "/stop"}`: Stop current operation
+- `{type: "tool_approval_response", ...}`: Tool approval decision
+- `{type: "question_response", responses, cancelled}`: AskUserQuestion response
+- `{type: "request_buffer_replay"}`: Request buffered messages on reconnect
+
+**Backend → Frontend:**
+- `{type: "assistant", blocks}`: Assistant message with content blocks
+- `{type: "result", ...}`: SDK result message
+- `{type: "session_id", session_id}`: New session ID from SDK
+- `{type: "system", message}`: System status message
+- `{type: "ask_user_question", questions}`: AskUserQuestion modal
+- `{type: "tool_approval_request", tool_name, input}`: Tool approval modal
+- `{type: "file_view", file_path, content}`: File content for viewing
 
 ## Version Sync
 
