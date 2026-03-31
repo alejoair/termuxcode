@@ -68,6 +68,7 @@
     --transition-normal: 0.3s;
 
     /* ===== Input Feedback — Variables ===== */
+    --input-height: 44px;
     --input-glow-color: var(--color-primary);
     --particle-color: var(--color-primary);
 

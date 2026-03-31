@@ -102,73 +102,105 @@ class MessageProcessor:
         await self._sdk_client.query(content)
 
         # Obtener el async iterator
-        response_iterator = self._sdk_client.receive_response()
+        try:
+            response_iterator = self._sdk_client.receive_response()
+        except Exception as e:
+            logger.error(f"Error iniciando receive_response: {e}")
+            await self._sender.send_system_message(f"Error del SDK: {e}")
+            await self._try_recover_sdk()
+            return
 
         # Loop para procesar mensajes del SDK
-        async for msg in response_iterator:
-            # Verificar si se solicitó detención
-            if self._stop_event.is_set():
-                logger.info("=== Stop detectado - Drenando mensajes restantes del SDK ===")
-                # Drenar mensajes restantes para dejar el SDK en estado limpio
-                async for remaining in response_iterator:
-                    remaining_type = type(remaining).__name__
-                    logger.info(f"=== Drenando: {remaining_type} ===")
-                    if remaining_type == "ResultMessage":
-                        if hasattr(remaining, 'session_id') and remaining.session_id:
-                            self._session_id = remaining.session_id
-                            await self._sender.send_session_id(remaining.session_id)
-                            if self._on_session_id_update:
-                                await self._on_session_id_update(self._session_id)
-                        break
-                await self._sender.send_system_message("Query detenido")
-                break
+        try:
+            async for msg in response_iterator:
+                # Verificar si se solicitó detención
+                if self._stop_event.is_set():
+                    logger.info("=== Stop detectado - Drenando mensajes restantes del SDK ===")
+                    # Drenar mensajes restantes para dejar el SDK en estado limpio
+                    async for remaining in response_iterator:
+                        remaining_type = type(remaining).__name__
+                        logger.info(f"=== Drenando: {remaining_type} ===")
+                        if remaining_type == "ResultMessage":
+                            if hasattr(remaining, 'session_id') and remaining.session_id:
+                                self._session_id = remaining.session_id
+                                await self._sender.send_session_id(remaining.session_id)
+                                if self._on_session_id_update:
+                                    await self._on_session_id_update(self._session_id)
+                            break
+                    await self._sender.send_system_message("Query detenido")
+                    break
 
-            msg_type = type(msg).__name__
-            logger.info(f"=== Msg recibido: {msg_type} ===")
+                msg_type = type(msg).__name__
+                logger.info(f"=== Msg recibido: {msg_type} ===")
 
-            if msg_type == "ResultMessage":
-                # Capturar session_id del SDK y enviarlo al frontend
-                if hasattr(msg, 'session_id') and msg.session_id:
-                    self._session_id = msg.session_id
-                    logger.info(f"Session ID del SDK: {self._session_id}")
-                    await self._sender.send_session_id(self._session_id)
-                    # Notificar al callback si existe (para actualizar registry)
-                    if self._on_session_id_update:
-                        await self._on_session_id_update(self._session_id)
-                logger.info(f"ResultMessage: stop_reason={msg.stop_reason}, num_turns={msg.num_turns}")
-                result_data = MessageConverter.convert_result_message(msg)
-                await self._sender.send_message(result_data)
-                break
+                if msg_type == "ResultMessage":
+                    # Capturar session_id del SDK y enviarlo al frontend
+                    if hasattr(msg, 'session_id') and msg.session_id:
+                        self._session_id = msg.session_id
+                        logger.info(f"Session ID del SDK: {self._session_id}")
+                        await self._sender.send_session_id(self._session_id)
+                        # Notificar al callback si existe (para actualizar registry)
+                        if self._on_session_id_update:
+                            await self._on_session_id_update(self._session_id)
+                    logger.info(f"ResultMessage: stop_reason={msg.stop_reason}, num_turns={msg.num_turns}")
+                    result_data = MessageConverter.convert_result_message(msg)
+                    await self._sender.send_message(result_data)
+                    break
 
-            elif msg_type == "AssistantMessage":
-                # Loggear todos los bloques del mensaje
-                if hasattr(msg, 'content'):
-                    logger.info(f"AssistantMessage: {len(msg.content)} bloques")
-                    for i, block in enumerate(msg.content):
-                        block_type = type(block).__name__
-                        logger.info(f"  Bloque {i}: {block_type}")
+                elif msg_type == "AssistantMessage":
+                    # Loggear todos los bloques del mensaje
+                    if hasattr(msg, 'content'):
+                        logger.info(f"AssistantMessage: {len(msg.content)} bloques")
+                        for i, block in enumerate(msg.content):
+                            block_type = type(block).__name__
+                            logger.info(f"  Bloque {i}: {block_type}")
 
-                        if block_type == "TextBlock":
-                            logger.info(f"    Text: {block.text[:100]}")
-                        elif block_type == "ToolUseBlock":
-                            logger.info(f"    Tool: {block.name}, id={block.id}")
-                            if hasattr(block, 'input'):
-                                logger.info(f"    Input: {str(block.input)[:200]}")
-                        elif block_type == "ThinkingBlock":
-                            logger.info(f"    Thinking: {block.thinking[:100]}")
-                        elif block_type == "ToolResultBlock":
-                            logger.info(f"    ToolResult: tool_use_id={block.tool_use_id}")
-                            logger.info(f"    Content: {str(block.content)[:200]}")
+                            if block_type == "TextBlock":
+                                logger.info(f"    Text: {block.text[:100]}")
+                            elif block_type == "ToolUseBlock":
+                                logger.info(f"    Tool: {block.name}, id={block.id}")
+                                if hasattr(block, 'input'):
+                                    logger.info(f"    Input: {str(block.input)[:200]}")
+                            elif block_type == "ThinkingBlock":
+                                logger.info(f"    Thinking: {block.thinking[:100]}")
+                            elif block_type == "ToolResultBlock":
+                                logger.info(f"    ToolResult: tool_use_id={block.tool_use_id}")
+                                logger.info(f"    Content: {str(block.content)[:200]}")
 
-                assistant_data = MessageConverter.convert_assistant_message(
-                    msg, exclude_special_tools=True
-                )
-                if assistant_data["blocks"]:
-                    await self._sender.send_message(assistant_data)
+                    assistant_data = MessageConverter.convert_assistant_message(
+                        msg, exclude_special_tools=True
+                    )
+                    if assistant_data["blocks"]:
+                        await self._sender.send_message(assistant_data)
 
-            elif msg_type == "UserMessage":
-                # Los UserMessage contienen ToolResultBlock con los resultados de las herramientas
-                logger.info(f"UserMessage recibido del SDK")
-                user_data = MessageConverter.convert_user_message(msg)
-                if user_data["blocks"]:
-                    await self._sender.send_message(user_data)
+                elif msg_type == "UserMessage":
+                    # Los UserMessage contienen ToolResultBlock con los resultados de las herramientas
+                    logger.info(f"UserMessage recibido del SDK")
+                    user_data = MessageConverter.convert_user_message(msg)
+                    if user_data["blocks"]:
+                        await self._sender.send_message(user_data)
+        except Exception as e:
+            logger.error(f"Fatal error en response loop: {e}", exc_info=True)
+            # Avisar al frontend para que quite el estado loading
+            short_msg = str(e)
+            if len(short_msg) > 200:
+                short_msg = short_msg[:200] + "..."
+            await self._sender.send_system_message(f"Error del SDK: {short_msg}")
+            # Intentar reconectar el SDK para que la siguiente consulta funcione
+            await self._try_recover_sdk()
+
+    async def _try_recover_sdk(self):
+        """Intenta reconectar el SDK después de un error fatal."""
+        logger.info("Intentando recuperar SDK...")
+        try:
+            await self._sdk_client.disconnect()
+        except Exception as e:
+            logger.warning(f"Error en disconnect durante recovery: {e}")
+
+        try:
+            await self._sdk_client.reconnect(self._session_id)
+            logger.info("SDK recuperado exitosamente")
+            await self._sender.send_system_message("SDK reconectado. Puedes enviar otro mensaje.")
+        except Exception as e:
+            logger.error(f"No se pudo recuperar el SDK: {e}")
+            await self._sender.send_system_message("No se pudo reconectar el SDK. Recarga la página.")

@@ -321,5 +321,9 @@ export function handleMessage(data, tabId) {
         notifyResult();
     } else if (data.type === 'system') {
         addSystemMessage(data.message, tabId);
+        // Si el mensaje indica error del SDK, quitar loading state
+        if (data.message.startsWith('Error del SDK') || data.message.startsWith('SDK reconectado') || data.message.startsWith('No se pudo')) {
+            hideLoading(tabId);
+        }
     }
 }
