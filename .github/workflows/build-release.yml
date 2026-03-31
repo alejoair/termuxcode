@@ -34,7 +34,7 @@ jobs:
 
           - name: macOS (Intel)
             target: macos-intel
-            runner: macos-latest
+            runner: macos-13
             rust-target: x86_64-apple-darwin
             sidecar-suffix: x86_64-apple-darwin
             platform: desktop
