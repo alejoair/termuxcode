@@ -185,14 +185,38 @@ All colors flow through `static/css/variables.css`. The only hardcoded exception
 SDK hooks enrich Claude's understanding of Python files and prevent syntax errors:
 
 1. **PostToolUse Read** (`matcher="Read"`): When Claude reads a `.py` file, `JediAnalyzer.analyze_file()` injects semantic context via `additionalContext`:
-   - Top-level symbols (functions, classes, variables) with line numbers
-   - Class methods and their signatures
-   - Import tree
-   - Inferred types for variables
-2. **PreToolUse Write|Edit** (`matcher="Write|Edit"`): Before writing/editing a `.py` file, `ast.parse()` validates the new code. On `SyntaxError` → returns `{"decision": "block", "reason": "..."}` and Claude auto-corrects.
+   - **Signatures**: Full function/method signatures with types, defaults, and return types via `Name.get_signatures()` (e.g. `async def connect(self, host: str, port: int = 8000) -> str | None`)
+   - **Import defs**: Project-internal imports resolved via `Script.goto(follow_imports=True)` — shows class methods and function signatures from imported modules. Filters out `site-packages` and stdlib.
+   - **References**: Cross-file usages of each top-level function/class via `Script.get_references()` — shows which files and lines reference each symbol. Limited to 10 symbols × 8 refs each.
+   - **Imports**: Flat import list
+   - **Variables**: Inferred types for top-level variables
+2. **PreToolUse Write|Edit** (`matcher="Write|Edit"`): Before writing/editing a `.py` file, validates the resulting code with `ast.parse()`. For **Edit**, reads the current file, applies `old_string → new_string` replacement in memory, and validates the complete result. On `SyntaxError` → returns `{"decision": "block", "reason": "..."}` and Claude auto-corrects.
+
+   **Baseline Check**: Para evitar falsos positivos, el hook verifica si el archivo _ya tenía_ errores de sintaxis antes de la edición:
+   - Si el archivo actual tiene syntax errors → permite la edición (Claude está arreglando algo roto)
+   - Si el archivo estaba OK y la edición introduce error → bloquea con reason educativo
+
+   **Stub-First Pattern**: Cuando bloquea, el reason incluye instrucciones del patrón stub-first para guiar a Claude:
+   ```
+   Python syntax error: unexpected EOF
+
+   Each Edit must be syntactically valid on its own. Use stub-first pattern:
+   1. Declare structure with `pass` bodies first
+   2. Then replace each stub with implementation
+   ```
+   Esto fuerza a Claude a hacer ediciones incrementalmente válidas en lugar de dejar bloques incompletos.
 3. **PostToolUse Write|Edit** (`matcher="Write|Edit"`): After writing, `pyflakes` (if installed) checks for logical errors (undefined names, unused imports). Issues injected as `additionalContext`.
 4. Non-Python files pass through untouched (only `.py` triggers analysis).
 5. The `_dummy_hook` with `matcher=None` remains for `can_use_tool` compatibility.
+
+### Jedi API Notes
+
+- `Name.get_signatures()` works on `Name` objects from `get_names()` — returns full signatures for definitions
+- `Script.get_signatures(line, col)` only works at **call sites** (where `()` exist), NOT at definitions — don't use for `analyze_file()`
+- `Script.get_references(line, col)` finds cross-file references within the project scope
+- `Script.goto(follow_imports=True)` resolves imports to their definition; filter by `module_path` to exclude pip/stdlib
+- All Jedi calls use 1-based lines, 0-based columns
+- Every Jedi API call in `analyze_file()` is wrapped in individual `try/except` — partial failures don't break other features
 
 Dependencies: `jedi` (required, already installed), `pyflakes` (optional, for post-write checks).
 

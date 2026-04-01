@@ -7,6 +7,29 @@ from termuxcode.connection.jedi_analyzer import JediAnalyzer
 from termuxcode.ws_config import logger
 
 
+def _format_block_reason(error: str) -> str:
+    """Genera un reason educativo para el bloqueo por syntax error.
+
+    Incluye instrucciones del patrón stub-first para que Claude sepa cómo proceder.
+    """
+    return f"""Python syntax error: {error}
+
+Each Edit must be syntactically valid on its own. Use stub-first pattern:
+1. Declare structure with `pass` bodies first
+2. Then replace each stub with implementation
+
+Example:
+  # Step 1 (valid)
+  def process_data(items):
+      for item in items:
+          pass
+
+  # Step 2 (valid) — replace pass with real code
+  def process_data(items):
+      for item in items:
+          print(item)"""
+
+
 # ---------------------------------------------------------------------------
 # PreToolUse hooks — se ejecutan ANTES de que la tool corra
 # ---------------------------------------------------------------------------
@@ -38,7 +61,7 @@ async def pre_tool_use_lsp_hook(input_data, tool_use_id, context):
             logger.info(f"LSP PreToolUse BLOCK: {tool_name} on {os.path.basename(file_path)} — {error}")
             return {
                 "decision": "block",
-                "reason": f"Python syntax error: {error}"
+                "reason": _format_block_reason(error)
             }
 
     elif tool_name == "Edit":
@@ -54,7 +77,7 @@ async def pre_tool_use_lsp_hook(input_data, tool_use_id, context):
                 logger.info(f"LSP PreToolUse BLOCK: {tool_name} (new file) on {os.path.basename(file_path)} — {error}")
                 return {
                     "decision": "block",
-                    "reason": f"Python syntax error: {error}"
+                    "reason": _format_block_reason(error)
                 }
             return {"continue_": True}
 
@@ -70,15 +93,25 @@ async def pre_tool_use_lsp_hook(input_data, tool_use_id, context):
             # old_string no encontrado — dejar que la tool falle naturalmente
             return {"continue_": True}
 
+        # Baseline check: verificar si el archivo actual tiene errores
+        baseline_ok, baseline_error = JediAnalyzer.validate_syntax(current)
+
         result = current.replace(old_string, new_string, 1)
 
         # Validar archivo resultante completo
         ok, error = JediAnalyzer.validate_syntax(result)
         if not ok:
+            if not baseline_ok:
+                # El archivo YA tenía errores — Claude probablemente está arreglando
+                # No bloquear, pero loggear para debugging
+                logger.info(f"LSP PreToolUse ALLOW (baseline had errors): {tool_name} on {os.path.basename(file_path)} — baseline: {baseline_error}, result: {error}")
+                return {"continue_": True}
+
+            # El error es NUEVO — bloquear con reason educativo
             logger.info(f"LSP PreToolUse BLOCK: {tool_name} on {os.path.basename(file_path)} — {error}")
             return {
                 "decision": "block",
-                "reason": f"Python syntax error: {error}"
+                "reason": _format_block_reason(error)
             }
 
     else:
