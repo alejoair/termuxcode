@@ -31,6 +31,7 @@ jobs:
             sidecar-suffix: x86_64-pc-windows-msvc.exe
             platform: desktop
             artifact-glob: "src-tauri/target/release/bundle/msi/*.msi"
+            python-arch: "x64"
 
           - name: macOS (Intel)
             target: macos-intel
@@ -39,7 +40,7 @@ jobs:
             sidecar-suffix: x86_64-apple-darwin
             platform: desktop
             artifact-glob: "src-tauri/target/release/bundle/dmg/*.dmg"
-            cross-arch: "x86_64"
+            python-arch: "x86_64"
 
           - name: macOS (ARM)
             target: macos-arm
@@ -48,6 +49,7 @@ jobs:
             sidecar-suffix: aarch64-apple-darwin
             platform: desktop
             artifact-glob: "src-tauri/target/release/bundle/dmg/*.dmg"
+            python-arch: "arm64"
 
           - name: Linux
             target: linux
@@ -56,6 +58,7 @@ jobs:
             sidecar-suffix: x86_64-unknown-linux-gnu
             platform: desktop
             artifact-glob: "src-tauri/target/release/bundle/deb/*.deb"
+            python-arch: "x64"
 
           - name: Android
             target: android
@@ -99,21 +102,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          architecture: ${{ matrix.python-arch || 'x64' }}
 
       - name: Install Python dependencies
         if: matrix.platform == 'desktop'
+        shell: bash
         run: |
           pip install pyinstaller
           pip install -e .
 
       - name: Build Python sidecar
         if: matrix.platform == 'desktop'
-        run: |
-          if [ -n "${{ matrix.cross-arch }}" ]; then
-            arch -${{ matrix.cross-arch }} pyinstaller pyinstaller.spec --distpath src-tauri/binaries
-          else
-            pyinstaller pyinstaller.spec --distpath src-tauri/binaries
-          fi
+        shell: bash
+        run: pyinstaller pyinstaller.spec --distpath src-tauri/binaries
 
       - name: Rename sidecar with target triple
         if: matrix.platform == 'desktop'
