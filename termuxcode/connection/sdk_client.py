@@ -6,6 +6,11 @@ import asyncio
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from claude_agent_sdk.types import HookMatcher
 
+from termuxcode.connection.hooks import (
+    pre_tool_use_lsp_hook,
+    post_tool_use_read_hook,
+    post_tool_use_edit_hook,
+)
 from termuxcode.ws_config import logger
 
 
@@ -42,6 +47,16 @@ class SDKClient:
             ClaudeAgentOptions configurado
         """
         o = self._agent_options
+
+        # Debug: imprimir opciones recibidas del frontend
+        logger.info(f"=== Opciones recibidas del frontend ===")
+        logger.info(f"permission_mode: {o.get('permission_mode')}")
+        logger.info(f"model: {o.get('model')}")
+        logger.info(f"tools: {o.get('tools')}")
+        logger.info(f"allowed_tools: {o.get('allowed_tools')}")
+        logger.info(f"disallowed_tools: {o.get('disallowed_tools')}")
+        logger.info(f"========================================")
+
         options = ClaudeAgentOptions(
             permission_mode=o.get("permission_mode", "bypassPermissions"),
             model=o.get("model", "glm-5"),
@@ -58,11 +73,22 @@ class SDKClient:
             options.allowed_tools = o["allowed_tools"]
         if o.get("disallowed_tools"):
             options.disallowed_tools = o["disallowed_tools"]
+        if o.get("tools"):
+            options.tools = o["tools"]
 
         if self._can_use_tool:
             options.can_use_tool = self._can_use_tool
-            options.hooks = {"PreToolUse": [HookMatcher(matcher=None, hooks=[_dummy_hook])]}
-            logger.info("can_use_tool callback configurado")
+            options.hooks = {
+                "PreToolUse": [
+                    HookMatcher(matcher="Write|Edit", hooks=[pre_tool_use_lsp_hook]),
+                    HookMatcher(matcher=None, hooks=[_dummy_hook]),
+                ],
+                "PostToolUse": [
+                    HookMatcher(matcher="Read", hooks=[post_tool_use_read_hook]),
+                    HookMatcher(matcher="Write|Edit", hooks=[post_tool_use_edit_hook]),
+                ],
+            }
+            logger.info("can_use_tool + LSP hooks configurados")
 
         if self.cwd:
             options.cwd = self.cwd

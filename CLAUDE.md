@@ -16,12 +16,14 @@ TERMUXCODE is a Claude Code client with two deployment modes:
   - `ws_server.py` - WebSocket server (port 8769) using `websockets` library
 - **`termuxcode/connection/`**: Modular WebSocket connection handling:
   - `base.py` - `WebSocketConnection` orchestrator: sets up SDK client, sender, processors, and message queue
-  - `sdk_client.py` - `SDKClient` wrapper for `ClaudeSDKClient` (connect, query, receive, interrupt, resume)
+  - `sdk_client.py` - `SDKClient` wrapper for `ClaudeSDKClient` (connect, query, receive, interrupt, resume). Registers LSP hooks via `HookMatcher` alongside `can_use_tool`.
   - `sender.py` - `MessageSender` sends typed JSON messages to the frontend WebSocket
   - `message_processor.py` - `MessageProcessor` processes user messages from the queue, iterates SDK responses, handles stop signals
   - `ask_handler.py` - `AskUserQuestionHandler` detects `AskUserQuestion` tool use, sends questions to frontend, waits for response, sends tool_result back to SDK
   - `tool_approval_handler.py` - `ToolApprovalHandler` implements `can_use_tool` callback for tool approval flow
   - `history_manager.py` - `truncate_history()` trims SDK conversation history JSONL files before each query
+  - `jedi_analyzer.py` - `JediAnalyzer` semantic Python analysis engine (Jedi for symbols/types, ast for syntax, pyflakes for logic checks)
+  - `hooks.py` - SDK hooks: PreToolUse (syntax validation → block on error), PostToolUse Read (inject semantic context), PostToolUse Edit (pyflakes warnings)
 - **`termuxcode/message_converter.py`**: Converts SDK messages (AssistantMessage, ResultMessage) to WebSocket JSON format. Filters out `AskUserQuestion` from normal assistant messages.
 - **`termuxcode/ws_config.py`**: Configuration and logging setup (log file: `~/.termuxcode/websocket_server.log`)
 - **`termuxcode/desktop_server.py`**: Entry point for PyInstaller-built sidecar on desktop. On Windows, patches `subprocess.Popen` with `CREATE_NO_WINDOW` to prevent ghost console windows.
@@ -177,6 +179,22 @@ The UI is optimized for OLED screens (Android/Termux nighttime use):
 - **Pipeline canvas** — pure black fill, pipe strokes at 40% opacity/45% lightness
 
 All colors flow through `static/css/variables.css`. The only hardcoded exceptions are the pipeline canvas in `pipeline.js` and a few `base.css` glow colors. The `manifest.json` also uses `background_color: #000000`.
+
+## Key Flow: LSP Hooks (Jedi)
+
+SDK hooks enrich Claude's understanding of Python files and prevent syntax errors:
+
+1. **PostToolUse Read** (`matcher="Read"`): When Claude reads a `.py` file, `JediAnalyzer.analyze_file()` injects semantic context via `additionalContext`:
+   - Top-level symbols (functions, classes, variables) with line numbers
+   - Class methods and their signatures
+   - Import tree
+   - Inferred types for variables
+2. **PreToolUse Write|Edit** (`matcher="Write|Edit"`): Before writing/editing a `.py` file, `ast.parse()` validates the new code. On `SyntaxError` → returns `{"decision": "block", "reason": "..."}` and Claude auto-corrects.
+3. **PostToolUse Write|Edit** (`matcher="Write|Edit"`): After writing, `pyflakes` (if installed) checks for logical errors (undefined names, unused imports). Issues injected as `additionalContext`.
+4. Non-Python files pass through untouched (only `.py` triggers analysis).
+5. The `_dummy_hook` with `matcher=None` remains for `can_use_tool` compatibility.
+
+Dependencies: `jedi` (required, already installed), `pyflakes` (optional, for post-write checks).
 
 ## Version Sync
 
