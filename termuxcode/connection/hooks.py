@@ -27,26 +27,62 @@ async def pre_tool_use_lsp_hook(input_data, tool_use_id, context):
     if not JediAnalyzer.is_python_file(file_path):
         return {"continue_": True}
 
-    # Extraer código a validar
     if tool_name == "Write":
+        # Write: content es el archivo completo — validar directamente
         code = tool_input.get("content", "")
+        if not code.strip():
+            return {"continue_": True}
+
+        ok, error = JediAnalyzer.validate_syntax(code)
+        if not ok:
+            logger.info(f"LSP PreToolUse BLOCK: {tool_name} on {os.path.basename(file_path)} — {error}")
+            return {
+                "decision": "block",
+                "reason": f"Python syntax error: {error}"
+            }
+
     elif tool_name == "Edit":
-        code = tool_input.get("new_string", "")
+        # Edit: new_string es un fragmento — simular la edición y validar archivo resultante
+        new_string = tool_input.get("new_string", "")
+        if not new_string.strip():
+            return {"continue_": True}
+
+        # Si el archivo no existe, solo validar new_string
+        if not os.path.isfile(file_path):
+            ok, error = JediAnalyzer.validate_syntax(new_string)
+            if not ok:
+                logger.info(f"LSP PreToolUse BLOCK: {tool_name} (new file) on {os.path.basename(file_path)} — {error}")
+                return {
+                    "decision": "block",
+                    "reason": f"Python syntax error: {error}"
+                }
+            return {"continue_": True}
+
+        # Leer archivo actual y aplicar reemplazo
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                current = f.read()
+        except OSError:
+            return {"continue_": True}
+
+        old_string = tool_input.get("old_string", "")
+        if old_string not in current:
+            # old_string no encontrado — dejar que la tool falle naturalmente
+            return {"continue_": True}
+
+        result = current.replace(old_string, new_string, 1)
+
+        # Validar archivo resultante completo
+        ok, error = JediAnalyzer.validate_syntax(result)
+        if not ok:
+            logger.info(f"LSP PreToolUse BLOCK: {tool_name} on {os.path.basename(file_path)} — {error}")
+            return {
+                "decision": "block",
+                "reason": f"Python syntax error: {error}"
+            }
+
     else:
         return {"continue_": True}
-
-    # Skip si no hay código (ej: edits vacíos)
-    if not code.strip():
-        return {"continue_": True}
-
-    # Validar sintaxis
-    ok, error = JediAnalyzer.validate_syntax(code)
-    if not ok:
-        logger.info(f"LSP PreToolUse BLOCK: {tool_name} on {os.path.basename(file_path)} — {error}")
-        return {
-            "decision": "block",
-            "reason": f"Python syntax error: {error}"
-        }
 
     return {"continue_": True}
 
