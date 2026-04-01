@@ -34,11 +34,12 @@ jobs:
 
           - name: macOS (Intel)
             target: macos-intel
-            runner: macos-13
+            runner: macos-latest
             rust-target: x86_64-apple-darwin
             sidecar-suffix: x86_64-apple-darwin
             platform: desktop
             artifact-glob: "src-tauri/target/release/bundle/dmg/*.dmg"
+            cross-arch: "x86_64"
 
           - name: macOS (ARM)
             target: macos-arm
@@ -107,7 +108,12 @@ jobs:
 
       - name: Build Python sidecar
         if: matrix.platform == 'desktop'
-        run: pyinstaller pyinstaller.spec --distpath src-tauri/binaries
+        run: |
+          if [ -n "${{ matrix.cross-arch }}" ]; then
+            arch -${{ matrix.cross-arch }} pyinstaller pyinstaller.spec --distpath src-tauri/binaries
+          else
+            pyinstaller pyinstaller.spec --distpath src-tauri/binaries
+          fi
 
       - name: Rename sidecar with target triple
         if: matrix.platform == 'desktop'
