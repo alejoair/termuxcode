@@ -235,25 +235,44 @@ class WebSocketConnection:
         if self._tool_approval_handler:
             self._tool_approval_handler.reset()
 
-    async def reconnect(self, new_websocket):
-        """Reconecta con un nuevo WebSocket.
+    async def reconnect(self, new_websocket, agent_options: dict = None):
+        """Reconecta con un nuevo WebSocket y reconstruye el SDK con opciones actualizadas.
 
         Args:
             new_websocket: Nueva conexión WebSocket
+            agent_options: Nuevas opciones del agente desde el frontend
         """
         # Cancelar timer de limpieza si existe
         if self._cleanup_timer and not self._cleanup_timer.done():
             self._cleanup_timer.cancel()
             self._cleanup_timer = None
 
-        # Resetear handlers para estado limpio
-        if self._ask_handler:
-            self._ask_handler.reset()
-        if self._tool_approval_handler:
-            self._tool_approval_handler.reset()
+        # Destruir SDK viejo
+        if self._sdk_client:
+            await self._sdk_client.disconnect()
 
+        # Cancelar processor viejo
+        if self._processor_task:
+            self._processor_task.cancel()
+            try:
+                await self._processor_task
+            except asyncio.CancelledError:
+                pass
+
+        # Actualizar opciones
+        if agent_options:
+            self.agent_options = agent_options
+            logger.info(f"Opciones del agente actualizadas en reconexión: {agent_options}")
+
+        # Limpiar referencias para que handle() re-_initialize_components()
+        self._sdk_client = None
+        self._sender = None
+        self._ask_handler = None
+        self._tool_approval_handler = None
+        self._processor = None
+        self._processor_task = None
+
+        # Reconectar websocket
         logger.info(f"Reconectando sesión: {self.resume_id}")
         self.websocket = new_websocket
         self.remote_address = new_websocket.remote_address
-        self._sender.set_websocket(new_websocket)
-        await self._sender.replay_buffer()

@@ -48,7 +48,7 @@ async def handle_connection(websocket):
     if resume_id and resume_id in _active_sessions:
         logger.info(f"Reconectando sesión existente: {resume_id}")
         conn = _active_sessions[resume_id]
-        await conn.reconnect(websocket)
+        await conn.reconnect(websocket, agent_options=agent_options)
         await conn.handle()  # Entra al loop de mensajes
     else:
         # Crear nueva sesión
