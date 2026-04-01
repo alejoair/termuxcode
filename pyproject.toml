@@ -23,8 +23,9 @@ authors = [
 Homepage = "https://github.com/alejoair/termuxcode"
 Repository = "https://github.com/alejoair/termuxcode"
 
-[tool.setuptools]
-packages = ["termuxcode"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["termuxcode*"]
 
 [project.scripts]
 termuxcode = "termuxcode.cli:main"

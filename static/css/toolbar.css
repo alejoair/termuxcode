@@ -2,17 +2,18 @@
 .action-toolbar {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    bottom: 48px !important;
+    bottom: 60px !important;
     border-bottom: none !important;
     box-shadow: none !important;
-    min-height: 44px !important;
+    min-height: 52px !important;
     overflow: visible !important;
+    z-index: 100 !important;
 }
 
 .action-toolbar .toolbar-inner {
     display: flex;
     justify-content: center;
-    padding: 6px var(--spacing-lg);
+    padding: 8px var(--spacing-lg);
     overflow: visible !important;
 }
 
@@ -30,22 +31,22 @@
 .action-pill {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     background: transparent;
     border-radius: var(--radius-full);
-    padding: 3px;
+    padding: 4px;
 }
 
 .btn-action {
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
-    padding: 5px 12px;
+    gap: 6px;
+    padding: 8px 16px;
     background: transparent;
     border: none;
     border-radius: var(--radius-full);
     color: var(--text-muted);
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     cursor: pointer;
     transition: all var(--transition-fast);
 }
@@ -90,4 +91,6 @@
 
 .btn-action svg {
     flex-shrink: 0;
+    width: 18px;
+    height: 18px;
 }

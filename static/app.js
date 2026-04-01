@@ -1,6 +1,6 @@
 // ===== termux-code - Entry Point =====
 
-import { state, dom, DEFAULT_SETTINGS } from './js/state.js';
+import { state, dom, DEFAULT_SETTINGS, AVAILABLE_TOOLS } from './js/state.js';
 import { createTab, switchTab, loadTabs, send, sendStop, sendDisconnect, clearChat } from './js/tabs.js';
 import { connectTab, disconnectTab } from './js/connection.js';
 import { saveTabs } from './js/storage.js';
@@ -57,6 +57,18 @@ function openSettings() {
     const s = tab.settings || { ...DEFAULT_SETTINGS };
     const esc = t => { const d = document.createElement('div'); d.textContent = String(t ?? ''); return d.innerHTML; };
 
+    // Generar checkboxes de tools
+    const selectedTools = s.tools || [];
+    const toolsCheckboxes = AVAILABLE_TOOLS.map(tool => {
+        const checked = selectedTools.includes(tool.name) ? 'checked' : '';
+        return `
+            <label class="tools-checkbox-label" title="${esc(tool.desc)}">
+                <input type="checkbox" class="tools-checkbox" value="${esc(tool.name)}" ${checked}>
+                <span class="tools-checkbox-name">${esc(tool.name)}</span>
+            </label>
+        `;
+    }).join('');
+
     const overlay = document.createElement('div');
     overlay.id = 'settingsOverlay';
     overlay.className = 'question-overlay';
@@ -89,6 +101,12 @@ function openSettings() {
                 <input class="settings-input" id="cfg-rolling_window" type="number" min="10" placeholder="100" value="${esc(s.rolling_window)}">
             </div>
             <div class="settings-field">
+                <label class="settings-label">Herramientas disponibles <span class="settings-hint">(dejar vacío = todas)</span></label>
+                <div class="tools-checkbox-grid">
+                    ${toolsCheckboxes}
+                </div>
+            </div>
+            <div class="settings-field">
                 <label class="settings-label">Herramientas permitidas <span class="settings-hint">(separadas por coma)</span></label>
                 <input class="settings-input" id="cfg-allowed_tools" type="text" placeholder="Bash,Edit,Read,..." value="${esc(s.allowed_tools)}">
             </div>
@@ -116,11 +134,15 @@ function openSettings() {
     overlay.querySelector('#cfg-model').value = s.model || 'sonnet';
     overlay.querySelector('#settingsCancelBtn').onclick = () => overlay.remove();
     overlay.querySelector('#settingsSaveBtn').onclick = () => {
+        // Recopilar tools seleccionados
+        const selectedTools = Array.from(overlay.querySelectorAll('.tools-checkbox:checked')).map(cb => cb.value);
+
         tab.settings = {
             permission_mode: overlay.querySelector('#cfg-permission_mode').value,
             model: overlay.querySelector('#cfg-model').value,
             max_turns: overlay.querySelector('#cfg-max_turns').value.trim(),
             rolling_window: parseInt(overlay.querySelector('#cfg-rolling_window').value) || 100,
+            tools: selectedTools,
             allowed_tools: overlay.querySelector('#cfg-allowed_tools').value.trim(),
             disallowed_tools: overlay.querySelector('#cfg-disallowed_tools').value.trim(),
             system_prompt: overlay.querySelector('#cfg-system_prompt').value,

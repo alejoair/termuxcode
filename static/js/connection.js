@@ -33,6 +33,7 @@ export function connectTab(tabId) {
         if (s.append_system_prompt) opts.append_system_prompt = s.append_system_prompt;
         if (s.max_turns) opts.max_turns = parseInt(s.max_turns);
         if (s.rolling_window) opts.rolling_window = parseInt(s.rolling_window);
+        if (s.tools && s.tools.length > 0) opts.tools = s.tools;
         if (s.allowed_tools) opts.allowed_tools = s.allowed_tools.split(',').map(t => t.trim()).filter(Boolean);
         if (s.disallowed_tools) opts.disallowed_tools = s.disallowed_tools.split(',').map(t => t.trim()).filter(Boolean);
         if (Object.keys(opts).length) params.set('options', JSON.stringify(opts));

@@ -8,3 +8,19 @@
         display: none;
     }
 }
+
+/* Pantallas anchas: centrar contenido */
+@media (min-width: 900px) {
+    .navbar-inner,
+    .subnavbar-inner,
+    .messagebar .toolbar-inner {
+        max-width: var(--max-width);
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .messages-area {
+        padding-left: var(--spacing-xl);
+        padding-right: var(--spacing-xl);
+    }
+}

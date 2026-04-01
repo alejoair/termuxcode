@@ -67,6 +67,9 @@
     --transition-fast: 0.2s;
     --transition-normal: 0.3s;
 
+    /* Layout */
+    --max-width: 800px;
+
     /* ===== Input Feedback — Variables ===== */
     --input-height: 44px;
     --input-glow-color: var(--color-primary);
@@ -90,14 +93,34 @@
 }
 
 .model-selector {
-    background: rgba(124, 142, 245, 0.18);
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: #1a1a2e;
     border: 1px solid var(--color-primary);
     border-radius: var(--radius-md);
     color: var(--text-primary);
-    font-size: 11px;
-    padding: 3px 8px;
+    font-size: 12px;
+    padding: 6px 28px 6px 10px;
     margin-right: var(--spacing-md);
     cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237c8ef5' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    min-width: 90px;
+}
+
+.model-selector option {
+    background-color: #1a1a2e;
+    color: var(--text-primary);
+}
+
+.model-selector:hover {
+    background-color: rgba(124, 142, 245, 0.28);
+}
+
+.model-selector:focus {
+    outline: none;
+    box-shadow: var(--shadow-focus);
 }
 
 /* ===== Input Feedback — Animaciones inmersivas ===== */

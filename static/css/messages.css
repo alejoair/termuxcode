@@ -2,7 +2,7 @@
 .messages-area {
     padding-left: var(--spacing-lg);
     padding-right: var(--spacing-lg);
-    padding-bottom: 110px;
+    padding-bottom: 130px;
     position: relative;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
