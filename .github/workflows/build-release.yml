@@ -40,7 +40,7 @@ jobs:
             sidecar-suffix: x86_64-apple-darwin
             platform: desktop
             artifact-glob: "src-tauri/target/release/bundle/dmg/*.dmg"
-            python-arch: "x86_64"
+            python-arch: "x64"
 
           - name: macOS (ARM)
             target: macos-arm
