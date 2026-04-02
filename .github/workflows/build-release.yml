@@ -30,7 +30,7 @@ jobs:
             rust-target: x86_64-pc-windows-msvc
             sidecar-suffix: x86_64-pc-windows-msvc.exe
             platform: desktop
-            artifact-glob: "src-tauri/target/release/bundle/msi/*.msi"
+            artifact-glob: "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi"
             python-arch: "x64"
 
           - name: macOS (Intel)
@@ -39,7 +39,7 @@ jobs:
             rust-target: x86_64-apple-darwin
             sidecar-suffix: x86_64-apple-darwin
             platform: desktop
-            artifact-glob: "src-tauri/target/release/bundle/dmg/*.dmg"
+            artifact-glob: "src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg"
             python-arch: "x64"
 
           - name: macOS (ARM)
@@ -48,7 +48,7 @@ jobs:
             rust-target: aarch64-apple-darwin
             sidecar-suffix: aarch64-apple-darwin
             platform: desktop
-            artifact-glob: "src-tauri/target/release/bundle/dmg/*.dmg"
+            artifact-glob: "src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg"
             python-arch: "arm64"
 
           - name: Linux
@@ -57,7 +57,7 @@ jobs:
             rust-target: x86_64-unknown-linux-gnu
             sidecar-suffix: x86_64-unknown-linux-gnu
             platform: desktop
-            artifact-glob: "src-tauri/target/release/bundle/deb/*.deb"
+            artifact-glob: "src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb"
             python-arch: "x64"
 
           - name: Android
