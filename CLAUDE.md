@@ -14,16 +14,19 @@ TERMUXCODE is a Claude Code client with two deployment modes:
 - **`termuxcode/cli.py`**: Entry point for the `termuxcode` command. Spawns two subprocesses:
   - `serve.py` - HTTP server (port 8000) serving static files from `static/`
   - `ws_server.py` - WebSocket server (port 8769) using `websockets` library
-- **`termuxcode/connection/`**: Modular WebSocket connection handling:
-  - `base.py` - `WebSocketConnection` orchestrator: sets up SDK client, sender, processors, and message queue
-  - `sdk_client.py` - `SDKClient` wrapper for `ClaudeSDKClient` (connect, query, receive, interrupt, resume). Registers LSP hooks via `HookMatcher` alongside `can_use_tool`.
-  - `sender.py` - `MessageSender` sends typed JSON messages to the frontend WebSocket
+- **`termuxcode/connection/`**: Modular WebSocket connection handling, fully isolated per-tab:
+  - `session.py` - `Session` class: encapsulates ALL per-tab resources (LspManager, SDKClient, hooks, handlers, processor). Lifecycle: `create()` / `resume()` / `destroy()`. Each tab gets its own LSP servers with independent `rootUri`.
+  - `session_registry.py` - Global registry: `session_id → WebSocketConnection` mapping. Used by `ws_server.py` for reconnection lookups. Session manages registration/unregistration via `_known_session_ids` set.
+  - `base.py` - `WebSocketConnection` thin wrapper: connects WebSocket lifecycle to `Session`. Only handles WebSocket I/O (message loop) and delegates all logic to `Session`.
+  - `sdk_client.py` - `SDKClient` wrapper for `ClaudeSDKClient` (connect, query, receive, interrupt, resume). Accepts a per-session `LspManager` instance and creates LSP hooks via closure factories.
+  - `sender.py` - `MessageSender` sends typed JSON messages to the frontend WebSocket. Supports buffer/replay for reconnection.
   - `message_processor.py` - `MessageProcessor` processes user messages from the queue, iterates SDK responses, handles stop signals
   - `ask_handler.py` - `AskUserQuestionHandler` detects `AskUserQuestion` tool use, sends questions to frontend, waits for response, sends tool_result back to SDK
   - `tool_approval_handler.py` - `ToolApprovalHandler` implements `can_use_tool` callback for tool approval flow
   - `history_manager.py` - `truncate_history()` trims SDK conversation history JSONL files before each query
-  - `jedi_analyzer.py` - `JediAnalyzer` semantic Python analysis engine (Jedi for symbols/types, ast for syntax, pyflakes for logic checks)
-  - `hooks.py` - SDK hooks: PreToolUse (syntax validation → block on error), PostToolUse Read (inject semantic context), PostToolUse Edit (pyflakes warnings)
+  - `lsp_client.py` - `LSPClient` generic LSP client over stdio (JSON-RPC). Manages lifecycle (start/shutdown), text sync (didOpen/didChange/didClose), queries (documentSymbol, hover, references), and diagnostics caching per URI.
+  - `lsp_manager.py` - `LspManager` (per-session instance): registry of LSP servers by extension (`SERVERS` dict) + semantic analyzer. Auto-discovers available servers (`shutil.which`), provides `analyze_file()` (symbols + hover + references), `validate_file()` (LSP diagnostics), and baseline comparison for edit validation. Each `Session` creates its own `LspManager` with its own `rootUri`.
+  - `hooks.py` - SDK hooks via LSP as **closure factories**: `make_pre_tool_use_hook(lsp_manager)`, `make_post_tool_use_read_hook(lsp_manager)`, `make_post_tool_use_edit_hook(lsp_manager)`. Each factory captures a session's `LspManager` by closure, ensuring per-session isolation.
 - **`termuxcode/message_converter.py`**: Converts SDK messages (AssistantMessage, ResultMessage) to WebSocket JSON format. Filters out `AskUserQuestion` from normal assistant messages.
 - **`termuxcode/ws_config.py`**: Configuration and logging setup (log file: `~/.termuxcode/websocket_server.log`)
 - **`termuxcode/desktop_server.py`**: Entry point for PyInstaller-built sidecar on desktop. On Windows, patches `subprocess.Popen` with `CREATE_NO_WINDOW` to prevent ghost console windows.
@@ -89,6 +92,37 @@ pkill -f termuxcode
 cat ~/.termuxcode/websocket_server.log
 ```
 
+## Key Flow: Session Lifecycle
+
+Each browser tab maps to one `Session` with fully isolated resources:
+
+```
+ws_server.py handle_connection(websocket)
+  ├─ resume_id? → session_registry.get(resume_id)
+  │    ├─ found → conn.reconnect(ws, opts, cwd)
+  │    │           └─ session.resume(ws, opts, cwd)
+  │    │                ├─ _destroy_resources() [LSP + SDK + tasks]
+  │    │                └─ create(ws) [new LspManager + SDK + hooks + processor]
+  │    └─ not found → new connection (error to frontend)
+  └─ new tab → WebSocketConnection(ws, resume_id, cwd, opts)
+                 └─ session.create(ws)
+                      ├─ LspManager() → initialize(cwd) in background
+                      ├─ Hooks: make_*_hook(lsp_manager) → closures
+                      ├─ SDKClient(lsp_manager, hooks) → connect()
+                      ├─ Handlers: AskHandler, ToolApprovalHandler
+                      ├─ MessageProcessor → start in background
+                      └─ session_registry.register(session_id, connection)
+```
+
+**Per-session resources** (no sharing between tabs):
+- `LspManager` — own LSP servers with own `rootUri` (different CWDs)
+- `SDKClient` — own Claude SDK process with own hooks
+- `MessageSender` — own WebSocket + buffer
+- `AskUserQuestionHandler` / `ToolApprovalHandler` — own cancel events
+- `MessageProcessor` — own asyncio.Queue and asyncio.Task
+
+**Cleanup flow**: `Session.destroy()` cancels processor task → disconnects SDK → shuts down LSP → resets handlers → unregisters all session_ids from `session_registry`.
+
 ## Key Flow: AskUserQuestion
 
 The tool `AskUserQuestion` requires special handling:
@@ -104,12 +138,25 @@ The tool `AskUserQuestion` requires special handling:
 The session_id enables session resumption and history management:
 
 1. **Frontend sends session_id** via WebSocket query string (`?session_id=xxx&cwd=/path`)
-2. **Backend receives as `resume_id`** in `ws_server.py`, passes to `WebSocketConnection` and `SDKClient`
-3. **SDK uses it for resume** via `ClaudeAgentOptions.resume = resume_id`
-4. **ResultMessage contains session_id** from SDK, which is:
+2. **Backend receives as `resume_id`** in `ws_server.py`, looks up `session_registry.get(resume_id)` for reconnection or creates a new `WebSocketConnection` → `Session`
+3. **Session registers** the session_id in `session_registry` via `register(session_id, connection)`, tracked in `_known_session_ids` for multi-ID mapping (re-key)
+4. **SDK uses it for resume** via `ClaudeAgentOptions.resume = resume_id`
+5. **ResultMessage contains session_id** from SDK, which is:
    - Saved in `MessageProcessor._session_id` for `truncate_history()`
-   - Sent back to frontend to persist for reconnection
-5. **History truncation** uses `session_id` to find `~/.claude/projects/{project}/{session_id}.jsonl`
+   - Registered in `session_registry` via `on_session_id_update` callback
+   - Sent back to frontend via `send_session_id()` to persist for reconnection
+6. **History truncation** uses `session_id` to find `~/.claude/projects/{project}/{session_id}.jsonl`
+
+### Tab Re-Key
+
+When the SDK sends a `session_id`, the frontend migrates the tab's temporary ID (`tab_xxx`) to the real session_id:
+
+1. Backend sends `{"type": "session_id", "session_id": "abc123"}`
+2. Frontend deletes old key from `state.tabs` Map, updates `tab.id` to `abc123`, re-inserts
+3. DOM attribute `data-tab-id` is updated on the tab element
+4. `state.activeTabId` is updated if the active tab was re-keyed
+5. `tab.sessionId` is set for future reconnection
+6. WebSocket handlers in `connection.js` resolve `tab.id` dynamically (not via captured closure) so they work correctly after re-key
 
 Note: The SDK client does NOT expose `session_id` directly after `connect()`. It only arrives in `ResultMessage` during streaming.
 
@@ -117,12 +164,12 @@ Note: The SDK client does NOT expose `session_id` directly after `connect()`. It
 
 When WebSocket disconnects, messages are preserved for reconnection:
 
-1. **Session Registry**: `_active_sessions` dict in `ws_server.py` maps session_id → WebSocketConnection
-2. **On WebSocket close**: `_cleanup()` detaches WebSocket and calls `cancel()` on handlers to unblock any pending waits. SDK continues running.
+1. **Session Registry**: `session_registry` module maps `session_id → WebSocketConnection`. Each `Session` registers all known IDs via `_known_session_ids` set.
+2. **On WebSocket close**: `Session.detach_websocket()` detaches WebSocket and calls `cancel()` on handlers (AskHandler, ToolApprovalHandler) to unblock any pending waits. SDK continues running.
 3. **MessageSender buffer**: `_send_or_buffer()` accumulates messages in `_buffer` list when no WebSocket. Buffer has `MAX_BUFFER_SIZE = 1000` with FIFO eviction.
-4. **On reconnect**: `base.py.reconnect()` calls `replay_buffer()` which sends all accumulated messages with partial-failure protection (unsent messages stay in buffer).
-5. **Session update**: When SDK generates new session_id, registry keeps ALL previous IDs mapping to the same connection (`_known_session_ids` set). This ensures reconnection works even with stale session_ids.
-6. **Timeouts**: All `Event.wait()` calls use `asyncio.wait()` with a timeout (30s for tool approval, 60s for AskUserQuestion) and a `_cancel_event` for immediate unblock on disconnect. On timeout/cancel, tools are denied and questions are cancelled so the SDK can continue.
+4. **On reconnect**: `ws_server.py` looks up `session_registry.get(resume_id)` → finds the existing `WebSocketConnection` → calls `conn.reconnect()` → `session.resume()` destroys old SDK/LSP and creates fresh ones → `replay_buffer()` sends accumulated messages.
+5. **Session update**: When SDK generates new session_id, `on_session_id_update` callback registers the new ID in `session_registry`. Registry keeps ALL previous IDs mapping to the same connection (`_known_session_ids` set). This ensures reconnection works even with stale session_ids.
+6. **Timeouts**: No timeouts on `Event.wait()` calls — only `_cancel_event` for immediate unblock on disconnect. Waits block indefinitely until the frontend responds or the WebSocket disconnects (which triggers `cancel()`). Sessions live forever until explicitly cleaned up via `Session.destroy()`.
 7. **Frontend**: `connection.js` cancels old reconnect timers before creating new connections. UI calls `hideLoading()` on disconnect to prevent stuck loading states.
 
 ## Agent Options
@@ -135,6 +182,16 @@ Frontend can pass options via query string `?options=<json>`:
 - `max_turns`: Maximum agent turns
 - `rolling_window`: History truncation window (default: 100)
 - `allowed_tools` / `disallowed_tools`: Comma-separated tool names
+
+## Key Flow: Per-Tab CWD
+
+Each tab has its own CWD (working directory) independent of the backend's `os.getcwd()`:
+
+1. **New tab**: Frontend passes `cwd` via WebSocket query string (Tauri uses folder picker, browser uses backend default)
+2. **Backend sends CWD** after SDK connects via `sender.send_cwd()` → `{"type": "cwd", "cwd": "/path"}`
+3. **Frontend stores** `tab.cwd` and persists to localStorage via `saveTabs()`
+4. **Reconnection**: Frontend sends stored `tab.cwd` in query string, backend passes to `conn.reconnect(cwd=cwd)` which updates `self.cwd`
+5. **Session rebuild**: When SDK is rebuilt on reconnect, it uses the updated `self.cwd` for `ClaudeAgentOptions.cwd`
 
 ## Key Flow: Working State Animations
 
@@ -162,7 +219,8 @@ When the agent is processing, visual feedback is provided:
 **Backend → Frontend:**
 - `{type: "assistant", blocks}`: Assistant message with content blocks
 - `{type: "result", ...}`: SDK result message
-- `{type: "session_id", session_id}`: New session ID from SDK
+- `{type: "session_id", session_id}`: New session ID from SDK (triggers tab re-key)
+- `{type: "cwd", cwd}`: Working directory for the session
 - `{type: "system", message}`: System status message
 - `{type: "ask_user_question", questions}`: AskUserQuestion modal
 - `{type: "tool_approval_request", tool_name, input}`: Tool approval modal
@@ -180,45 +238,36 @@ The UI is optimized for OLED screens (Android/Termux nighttime use):
 
 All colors flow through `static/css/variables.css`. The only hardcoded exceptions are the pipeline canvas in `pipeline.js` and a few `base.css` glow colors. The `manifest.json` also uses `background_color: #000000`.
 
-## Key Flow: LSP Hooks (Jedi)
+## Key Flow: LSP Hooks
 
-SDK hooks enrich Claude's understanding of Python files and prevent syntax errors:
+SDK hooks enrich Claude's understanding of code and prevent errors via Language Server Protocol:
 
-1. **PostToolUse Read** (`matcher="Read"`): When Claude reads a `.py` file, `JediAnalyzer.analyze_file()` injects semantic context via `additionalContext`:
-   - **Signatures**: Full function/method signatures with types, defaults, and return types via `Name.get_signatures()` (e.g. `async def connect(self, host: str, port: int = 8000) -> str | None`)
-   - **Import defs**: Project-internal imports resolved via `Script.goto(follow_imports=True)` — shows class methods and function signatures from imported modules. Filters out `site-packages` and stdlib.
-   - **References**: Cross-file usages of each top-level function/class via `Script.get_references()` — shows which files and lines reference each symbol. Limited to 10 symbols × 8 refs each.
-   - **Imports**: Flat import list
-   - **Variables**: Inferred types for top-level variables
-2. **PreToolUse Write|Edit** (`matcher="Write|Edit"`): Before writing/editing a `.py` file, validates the resulting code with `ast.parse()`. For **Edit**, reads the current file, applies `old_string → new_string` replacement in memory, and validates the complete result. On `SyntaxError` → returns `{"decision": "block", "reason": "..."}` and Claude auto-corrects.
+**Architecture**: Each `Session` creates its own `LspManager` instance (in `lsp_manager.py`), which manages a registry of LSP clients (`LSPClient` in `lsp_client.py`), one per file extension. Servers are auto-discovered per-session via `shutil.which`. Supported extensions: `.py` (pylsp), `.ts/.js/.tsx/.jsx` (typescript-language-server), `.go` (gopls).
 
-   **Baseline Check**: Para evitar falsos positivos, el hook verifica si el archivo _ya tenía_ errores de sintaxis antes de la edición:
-   - Si el archivo actual tiene syntax errors → permite la edición (Claude está arreglando algo roto)
-   - Si el archivo estaba OK y la edición introduce error → bloquea con reason educativo
+**Per-Session Isolation**: Hooks are created via closure factories in `hooks.py` (`make_pre_tool_use_hook(lsp_manager)`, `make_post_tool_use_read_hook(lsp_manager)`, `make_post_tool_use_edit_hook(lsp_manager)`). Each factory captures a session's `LspManager` by closure, ensuring that each tab's hooks operate on its own LSP servers with its own `rootUri`. LSP initialization is non-blocking — `session.create()` launches `lsp_manager.initialize(cwd)` in background via `asyncio.create_task`. Hooks check `lsp_manager._initialized` and passthrough if not ready.
 
-   **Stub-First Pattern**: Cuando bloquea, el reason incluye instrucciones del patrón stub-first para guiar a Claude:
-   ```
-   Python syntax error: unexpected EOF
+1. **PostToolUse Read** (`matcher="Read"`): When Claude reads a supported file, `LspManager.analyze_file()` injects semantic context via `additionalContext`:
+   - **Signatures**: Top-level symbols with hover info (full type signatures via `textDocument/hover`)
+   - **Methods**: Class methods with hover signatures
+   - **References**: Cross-file usages of classes/functions via `textDocument/references` — shows which files and lines reference each symbol. Limited to 10 symbols × 8 refs each.
+   - Uses `textDocument/documentSymbol` for hierarchical symbol discovery
+2. **PreToolUse Write|Edit** (`matcher="Write|Edit"`): Before writing/editing, validates the resulting code via LSP diagnostics (`textDocument/publishDiagnostics`). For **Edit**, reads the current file, applies `old_string → new_string` replacement in memory, and validates the complete result. On new errors → returns `{"decision": "block", "reason": "..."}` and Claude auto-corrects.
 
-   Each Edit must be syntactically valid on its own. Use stub-first pattern:
-   1. Declare structure with `pass` bodies first
-   2. Then replace each stub with implementation
-   ```
-   Esto fuerza a Claude a hacer ediciones incrementalmente válidas en lugar de dejar bloques incompletos.
-3. **PostToolUse Write|Edit** (`matcher="Write|Edit"`): After writing, `pyflakes` (if installed) checks for logical errors (undefined names, unused imports). Issues injected as `additionalContext`.
-4. Non-Python files pass through untouched (only `.py` triggers analysis).
+   **Baseline Check**: The hook takes a snapshot of current diagnostics before the edit. If the file already had errors → allows the edit (Claude is fixing something broken). If the file was clean and the edit introduces errors → blocks with an educational reason.
+3. **PostToolUse Write|Edit** (`matcher="Write|Edit"`): After writing, reports all LSP diagnostics (errors, warnings, info) from the cached diagnostics as `additionalContext`.
+4. Unsupported files pass through untouched (only extensions with a running LSP server trigger analysis).
 5. The `_dummy_hook` with `matcher=None` remains for `can_use_tool` compatibility.
 
-### Jedi API Notes
+### LSP Protocol Notes
 
-- `Name.get_signatures()` works on `Name` objects from `get_names()` — returns full signatures for definitions
-- `Script.get_signatures(line, col)` only works at **call sites** (where `()` exist), NOT at definitions — don't use for `analyze_file()`
-- `Script.get_references(line, col)` finds cross-file references within the project scope
-- `Script.goto(follow_imports=True)` resolves imports to their definition; filter by `module_path` to exclude pip/stdlib
-- All Jedi calls use 1-based lines, 0-based columns
-- Every Jedi API call in `analyze_file()` is wrapped in individual `try/except` — partial failures don't break other features
+- `LSPClient` communicates over stdio via JSON-RPC with Content-Length headers
+- File sync uses full-content mode (`didOpen`/`didChange` with full text)
+- Diagnostics are cached per URI and signaled via `asyncio.Event` for `wait_diagnostics()`
+- All LSP positions are 0-based (line and character)
+- Server startup is non-blocking — `Session.create()` initializes LSP in background via `asyncio.create_task`
+- On `Session.destroy()`, LSP servers are shut down (`lsp_manager.shutdown()`), releasing all resources
 
-Dependencies: `jedi` (required, already installed), `pyflakes` (optional, for post-write checks).
+Dependencies: LSP servers must be installed separately (`pylsp`, `typescript-language-server`, `gopls`). Servers not found are silently skipped.
 
 ## Version Sync
 

@@ -56,7 +56,6 @@ class MessageProcessor:
         Args:
             data: Diccionario con el mensaje
         """
-        logger.info(f"=== Frontend request: {data} ===")
         command = data.get("command")
         content = data.get("content", "")
         msg_type = data.get("type")
@@ -68,7 +67,6 @@ class MessageProcessor:
 
     async def request_stop(self):
         """Señala detención e interrumpe el SDK."""
-        logger.info("=== /stop detectado - Señalando detención ===")
         self._stop_event.set()
         try:
             await self._sdk_client.interrupt()
@@ -89,8 +87,6 @@ class MessageProcessor:
         """
         from termuxcode.message_converter import MessageConverter
 
-        logger.info(f"Query: {content[:50]}")
-        logger.info(f"  session_id={self._session_id}, cwd={self._cwd}, rolling_window={self._rolling_window}")
         self._stop_event.clear()
 
         # Truncar historial y reconectar para que el SDK cargue el JSONL recortado
@@ -115,15 +111,14 @@ class MessageProcessor:
             async for msg in response_iterator:
                 # Verificar si se solicitó detención
                 if self._stop_event.is_set():
-                    logger.info("=== Stop detectado - Drenando mensajes restantes del SDK ===")
                     # Drenar mensajes restantes para dejar el SDK en estado limpio
                     async for remaining in response_iterator:
                         remaining_type = type(remaining).__name__
-                        logger.info(f"=== Drenando: {remaining_type} ===")
                         if remaining_type == "ResultMessage":
                             if hasattr(remaining, 'session_id') and remaining.session_id:
                                 self._session_id = remaining.session_id
                                 await self._sender.send_session_id(remaining.session_id)
+                                await self._sender.send_cwd(self._cwd)
                                 if self._on_session_id_update:
                                     await self._on_session_id_update(self._session_id)
                             break
@@ -131,42 +126,22 @@ class MessageProcessor:
                     break
 
                 msg_type = type(msg).__name__
-                logger.info(f"=== Msg recibido: {msg_type} ===")
 
                 if msg_type == "ResultMessage":
                     # Capturar session_id del SDK y enviarlo al frontend
                     if hasattr(msg, 'session_id') and msg.session_id:
                         self._session_id = msg.session_id
-                        logger.info(f"Session ID del SDK: {self._session_id}")
                         await self._sender.send_session_id(self._session_id)
+                        # Enviar CWD junto con el session_id (sesión establecida)
+                        await self._sender.send_cwd(self._cwd)
                         # Notificar al callback si existe (para actualizar registry)
                         if self._on_session_id_update:
                             await self._on_session_id_update(self._session_id)
-                    logger.info(f"ResultMessage: stop_reason={msg.stop_reason}, num_turns={msg.num_turns}")
                     result_data = MessageConverter.convert_result_message(msg)
                     await self._sender.send_message(result_data)
                     break
 
                 elif msg_type == "AssistantMessage":
-                    # Loggear todos los bloques del mensaje
-                    if hasattr(msg, 'content'):
-                        logger.info(f"AssistantMessage: {len(msg.content)} bloques")
-                        for i, block in enumerate(msg.content):
-                            block_type = type(block).__name__
-                            logger.info(f"  Bloque {i}: {block_type}")
-
-                            if block_type == "TextBlock":
-                                logger.info(f"    Text: {block.text[:100]}")
-                            elif block_type == "ToolUseBlock":
-                                logger.info(f"    Tool: {block.name}, id={block.id}")
-                                if hasattr(block, 'input'):
-                                    logger.info(f"    Input: {str(block.input)[:200]}")
-                            elif block_type == "ThinkingBlock":
-                                logger.info(f"    Thinking: {block.thinking[:100]}")
-                            elif block_type == "ToolResultBlock":
-                                logger.info(f"    ToolResult: tool_use_id={block.tool_use_id}")
-                                logger.info(f"    Content: {str(block.content)[:200]}")
-
                     assistant_data = MessageConverter.convert_assistant_message(
                         msg, exclude_special_tools=True
                     )
@@ -174,8 +149,6 @@ class MessageProcessor:
                         await self._sender.send_message(assistant_data)
 
                 elif msg_type == "UserMessage":
-                    # Los UserMessage contienen ToolResultBlock con los resultados de las herramientas
-                    logger.info(f"UserMessage recibido del SDK")
                     user_data = MessageConverter.convert_user_message(msg)
                     if user_data["blocks"]:
                         await self._sender.send_message(user_data)
@@ -191,7 +164,6 @@ class MessageProcessor:
 
     async def _try_recover_sdk(self):
         """Intenta reconectar el SDK después de un error fatal."""
-        logger.info("Intentando recuperar SDK...")
         try:
             await self._sdk_client.disconnect()
         except Exception as e:
@@ -199,7 +171,6 @@ class MessageProcessor:
 
         try:
             await self._sdk_client.reconnect(self._session_id)
-            logger.info("SDK recuperado exitosamente")
             await self._sender.send_system_message("SDK reconectado. Puedes enviar otro mensaje.")
         except Exception as e:
             logger.error(f"No se pudo recuperar el SDK: {e}")

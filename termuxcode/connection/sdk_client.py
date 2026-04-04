@@ -7,9 +7,9 @@ from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from claude_agent_sdk.types import HookMatcher
 
 from termuxcode.connection.hooks import (
-    pre_tool_use_lsp_hook,
-    post_tool_use_read_hook,
-    post_tool_use_edit_hook,
+    make_pre_tool_use_hook,
+    make_post_tool_use_read_hook,
+    make_post_tool_use_edit_hook,
 )
 from termuxcode.ws_config import logger
 
@@ -22,7 +22,8 @@ async def _dummy_hook(input_data, tool_use_id, context):
 class SDKClient:
     """Encapsula la inicialización y comunicación con el Claude SDK."""
 
-    def __init__(self, resume_id: str = None, cwd: str = None, can_use_tool=None, agent_options: dict = None):
+    def __init__(self, resume_id: str = None, cwd: str = None, can_use_tool=None,
+                 agent_options: dict = None, lsp_manager=None):
         """Inicializa el cliente SDK.
 
         Args:
@@ -30,12 +31,14 @@ class SDKClient:
             cwd: Directorio de trabajo
             can_use_tool: Callback async para aprobación de herramientas
             agent_options: Opciones del agente desde el frontend
+            lsp_manager: LspManager de la sesión (para hooks LSP aislados)
         """
         self._client = None
         self.resume_id = resume_id
         self.cwd = cwd
         self._can_use_tool = can_use_tool
         self._agent_options = agent_options or {}
+        self._lsp_manager = lsp_manager
 
     def _build_options(self, resume: bool = True) -> ClaudeAgentOptions:
         """Construye las opciones del agente.
@@ -47,15 +50,6 @@ class SDKClient:
             ClaudeAgentOptions configurado
         """
         o = self._agent_options
-
-        # Debug: imprimir opciones recibidas del frontend
-        logger.info(f"=== Opciones recibidas del frontend ===")
-        logger.info(f"permission_mode: {o.get('permission_mode')}")
-        logger.info(f"model: {o.get('model')}")
-        logger.info(f"tools: {o.get('tools')}")
-        logger.info(f"allowed_tools: {o.get('allowed_tools')}")
-        logger.info(f"disallowed_tools: {o.get('disallowed_tools')}")
-        logger.info(f"========================================")
 
         options = ClaudeAgentOptions(
             permission_mode=o.get("permission_mode", "bypassPermissions"),
@@ -78,94 +72,83 @@ class SDKClient:
 
         if self._can_use_tool:
             options.can_use_tool = self._can_use_tool
-            options.hooks = {
-                "PreToolUse": [
-                    HookMatcher(matcher="Write|Edit", hooks=[pre_tool_use_lsp_hook]),
-                    HookMatcher(matcher=None, hooks=[_dummy_hook]),
-                ],
-                "PostToolUse": [
-                    HookMatcher(matcher="Read", hooks=[post_tool_use_read_hook]),
-                    HookMatcher(matcher="Write|Edit", hooks=[post_tool_use_edit_hook]),
-                ],
-            }
-            logger.info("can_use_tool + LSP hooks configurados")
+
+            # Hooks LSP: solo si hay un LspManager asignado a esta sesión
+            if self._lsp_manager:
+                options.hooks = {
+                    "PreToolUse": [
+                        HookMatcher(matcher="Write|Edit",
+                            hooks=[make_pre_tool_use_hook(self._lsp_manager)]),
+                        HookMatcher(matcher=None, hooks=[_dummy_hook]),
+                    ],
+                    "PostToolUse": [
+                        HookMatcher(matcher="Read",
+                            hooks=[make_post_tool_use_read_hook(self._lsp_manager)]),
+                        HookMatcher(matcher="Write|Edit",
+                            hooks=[make_post_tool_use_edit_hook(self._lsp_manager)]),
+                    ],
+                }
+                logger.info("can_use_tool + LSP hooks configurados (per-session)")
+            else:
+                # Sin LSP — solo el dummy hook
+                options.hooks = {
+                    "PreToolUse": [
+                        HookMatcher(matcher=None, hooks=[_dummy_hook]),
+                    ],
+                }
+                logger.info("can_use_tool configurado sin LSP hooks")
 
         if self.cwd:
             options.cwd = self.cwd
-            logger.info(f"Usando cwd: {self.cwd}")
 
         if resume and self.resume_id:
-            logger.info(f"Reanudando sesión: {self.resume_id}")
             options.resume = self.resume_id
 
         return options
 
-    async def connect(self) -> str | None:
-        """Conecta al SDK y retorna el session_id si está disponible.
-
-        Returns:
-            El session_id del SDK o None si no está disponible aún
+    async def connect(self):
+        """Conecta al SDK.
 
         Raises:
             Exception: Si falla la conexión
         """
-        logger.info("Creando cliente SDK...")
         options = self._build_options()
 
         try:
             self._client = ClaudeSDKClient(options)
             await self._client.connect()
-            logger.info("Cliente conectado")
-
-            # Retornar resume_id como session_id para reconexiones
-            if self.resume_id:
-                logger.info(f"Usando resume_id como session_id: {self.resume_id}")
-                return self.resume_id
-
-            return None
 
         except Exception as e:
             logger.error(f"Error conectando SDK: {e}")
             raise
 
-    async def reconnect(self, session_id: str = None) -> str | None:
+    async def reconnect(self, session_id: str = None):
         """Crea un nuevo cliente SDK.
 
         Args:
             session_id: ID de sesión para reanudar (actualiza resume_id)
-
-        Returns:
-            El session_id o None
         """
         if session_id:
             self.resume_id = session_id
 
         self._client = None
-        return await self.connect()
+        await self.connect()
 
     async def disconnect(self):
         """Desconecta el cliente SDK."""
         if self._client:
             try:
-                # Verificar si el proceso está vivo antes de desconectar
-                if hasattr(self._client, '_transport') and self._client._transport:
-                    transport = self._client._transport
-                    if hasattr(transport, '_process') and transport._process:
-                        logger.info(f"Proceso CLI antes de disconnect: returncode={transport._process.returncode}")
-
                 await self._client.disconnect()
-
-                # Verificar si el proceso murió después de desconectar
-                if hasattr(self._client, '_transport') and self._client._transport:
-                    transport = self._client._transport
-                    if hasattr(transport, '_process') and transport._process:
-                        logger.info(f"Proceso CLI después de disconnect: returncode={transport._process.returncode}")
-
             except Exception as e:
-                logger.warning(f"Error en disconnect: {e}")
+                # anyio cancel scope mismatch es un problema conocido del SDK
+                # No es crítico - la conexión se cierra de todas formas
+                error_msg = str(e)
+                if "cancel scope" in error_msg.lower():
+                    logger.debug(f"SDK disconnect: cancel scope issue (known SDK bug)")
+                else:
+                    logger.warning(f"Error en disconnect: {e}")
             finally:
                 self._client = None
-                logger.info("Referencia al cliente SDK limpiada")
 
     async def query(self, content: str):
         """Envía una consulta al SDK.

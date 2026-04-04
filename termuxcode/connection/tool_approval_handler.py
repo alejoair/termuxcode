@@ -11,8 +11,6 @@ from termuxcode.ws_config import logger
 class ToolApprovalHandler:
     """Maneja solicitudes de aprobación de herramientas del SDK."""
 
-    APPROVAL_TIMEOUT = 30.0  # segundos
-
     AUTO_APPROVE_MODES = {"bypassPermissions", "acceptEdits"}
 
     def __init__(self, sender=None, sdk_client=None, on_plan_rejected=None, session=None, agent_options=None):
@@ -31,14 +29,15 @@ class ToolApprovalHandler:
     def is_waiting(self) -> bool:
         return self._waiting
 
-    async def _wait_for_approval(self, timeout=None):
-        """Espera respuesta del frontend con timeout opcional y soporte de cancelación."""
+    async def _wait_for_approval(self):
+        """Espera respuesta del frontend con soporte de cancelación (sin timeout)."""
+        # Limpiar cancel stale de desconexiones previas
+        self._cancel_event.clear()
         approval_task = asyncio.ensure_future(self._approval_event.wait())
         cancel_task = asyncio.ensure_future(self._cancel_event.wait())
 
         done, pending = await asyncio.wait(
             {approval_task, cancel_task},
-            timeout=timeout,
             return_when=asyncio.FIRST_COMPLETED
         )
 
@@ -47,22 +46,16 @@ class ToolApprovalHandler:
 
         if cancel_task in done:
             return None  # Cancelado
-        if not done:
-            return None  # Timeout
         return self._approval_response
 
     async def can_use_tool(self, tool_name: str, input_data: dict, context):
         """Callback para el SDK. Envía solicitud al frontend y espera respuesta."""
-        logger.info(f"=== can_use_tool: {tool_name} ===")
-
         if tool_name == "AskUserQuestion":
-            logger.info("AskUserQuestion: esperando respuesta del usuario")
             questions = input_data.get("questions", [])
             responses, cancelled = await self._ask_handler.handle_questions(questions)
             if cancelled:
                 responses = ["Cancelled by user" for _ in questions]
             answers = {q.get("question", ""): r for q, r in zip(questions, responses or [])}
-            logger.info(f"AskUserQuestion: respuestas={answers}")
             return PermissionResultAllow(updated_input={**input_data, "answers": answers})
 
         # ExitPlanMode: mostrar el plan al usuario
@@ -72,7 +65,6 @@ class ToolApprovalHandler:
         # Auto-aprobar si el permission_mode lo indica
         permission_mode = self._agent_options.get("permission_mode", "bypassPermissions")
         if permission_mode in self.AUTO_APPROVE_MODES:
-            logger.info(f"=== Auto-aprobando {tool_name} (modo: {permission_mode}) ===")
             return PermissionResultAllow(updated_input=input_data)
 
         self._approval_event.clear()
@@ -96,11 +88,9 @@ class ToolApprovalHandler:
             response = await self._wait_for_approval()
 
             if response and response.get("allow"):
-                logger.info(f"=== Tool {tool_name} PERMITIDA ===")
                 return PermissionResultAllow(updated_input=input_data)
             else:
                 message = response.get("message", "Usuario denegó esta acción") if response else "Sin respuesta"
-                logger.info(f"=== Tool {tool_name} DENEGADA: {message} ===")
                 return PermissionResultDeny(message=message)
         finally:
             self._waiting = False
@@ -111,10 +101,7 @@ class ToolApprovalHandler:
         plan_content = input_data.get("plan", "")
 
         if not plan_content:
-            logger.warning("ExitPlanMode: no hay plan en input_data")
             plan_content = "(Plan vacío)"
-
-        logger.info(f"ExitPlanMode: mostrando plan ({len(plan_content)} chars)")
 
         self._approval_event.clear()
         self._approval_response = None
@@ -133,12 +120,10 @@ class ToolApprovalHandler:
             else:
                 raise RuntimeError("ToolApprovalHandler no tiene session ni sender configurado")
 
-            response = await self._wait_for_approval(timeout=None)  # Sin timeout para planes
+            response = await self._wait_for_approval()
             if response and response.get("allow"):
-                logger.info("=== Plan APROBADO ===")
                 return PermissionResultAllow(updated_input=input_data)
             else:
-                logger.info("=== Plan RECHAZADO - interrumpiendo SDK ===")
                 # Interrumpir el SDK para devolver el control al usuario
                 if self._sdk_client:
                     try:
@@ -155,7 +140,6 @@ class ToolApprovalHandler:
         """Recibe la respuesta del frontend y desbloquea el callback."""
         self._approval_response = data
         self._approval_event.set()
-        logger.info(f"Approval response recibida: allow={data.get('allow')}")
 
     def cancel(self):
         """Cancela la espera activa (llamado al desconectar WebSocket)."""

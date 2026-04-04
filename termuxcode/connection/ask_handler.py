@@ -9,8 +9,6 @@ from termuxcode.ws_config import logger
 class AskUserQuestionHandler:
     """Maneja el flujo bidireccional de AskUserQuestion."""
 
-    QUESTION_TIMEOUT = 60.0  # segundos
-
     def __init__(self, sender=None, session=None):
         """Inicializa el handler.
 
@@ -32,21 +30,22 @@ class AskUserQuestionHandler:
         return self._waiting_for_question_response
 
     async def _wait_for_response(self):
-        """Espera respuesta del frontend con timeout y soporte de cancelación."""
+        """Espera respuesta del frontend con soporte de cancelación (sin timeout)."""
+        # Limpiar cancel stale de desconexiones previas
+        self._cancel_event.clear()
         response_task = asyncio.ensure_future(self._question_event.wait())
         cancel_task = asyncio.ensure_future(self._cancel_event.wait())
 
         done, pending = await asyncio.wait(
             {response_task, cancel_task},
-            timeout=self.QUESTION_TIMEOUT,
             return_when=asyncio.FIRST_COMPLETED
         )
 
         for task in pending:
             task.cancel()
 
-        if cancel_task in done or not done:
-            return True  # Cancelado o timeout
+        if cancel_task in done:
+            return True  # Cancelado
         return False  # Respuesta recibida normalmente
 
     async def handle_questions(self, questions: list) -> tuple:
@@ -100,7 +99,6 @@ class AskUserQuestionHandler:
         self._question_response = responses
         self._question_cancelled = cancelled
         self._question_event.set()
-        logger.info(f"Respuesta recibida (cancelled={cancelled}): {responses}")
 
     def cancel(self):
         """Cancela la espera activa (llamado al desconectar WebSocket)."""

@@ -72,6 +72,15 @@ class MessageSender:
             self._buffer = self._buffer[evicted:]
             logger.warning(f"Buffer evicted {evicted} oldest messages (limit: {self.MAX_BUFFER_SIZE})")
 
+    async def send_cwd(self, cwd: str):
+        """Envía el CWD de la sesión al frontend.
+
+        Args:
+            cwd: Directorio de trabajo actual
+        """
+        if cwd:
+            await self._send_or_buffer({"type": "cwd", "cwd": cwd})
+
     async def send_system_message(self, message: str):
         """Envía un mensaje del sistema al cliente.
 

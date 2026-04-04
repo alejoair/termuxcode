@@ -1,77 +1,51 @@
 #!/usr/bin/env python3
-"""Clase principal de conexión WebSocket."""
+"""Thin wrapper: conecta WebSocket lifecycle con Session."""
 
-import asyncio
+import json
+
 import websockets
 
 from termuxcode.ws_config import logger
-from termuxcode.connection.sdk_client import SDKClient
-from termuxcode.connection.sender import MessageSender
-from termuxcode.connection.ask_handler import AskUserQuestionHandler
-from termuxcode.connection.tool_approval_handler import ToolApprovalHandler
-from termuxcode.connection.message_processor import MessageProcessor
-
-
-# Referencia al registry de sesiones activas (se setea desde ws_server.py)
-_active_sessions_registry: dict = None
+from termuxcode.connection.session import Session
 
 
 class WebSocketConnection:
-    """Maneja una conexión WebSocket con sus componentes asociados."""
+    """Conecta el ciclo de vida del WebSocket con una Session.
 
-    SESSION_CLEANUP_TIMEOUT = 3600.0  # 1 hora sin reconexión → limpieza completa
+    Responsabilidades:
+    - Crear/reanudar la Session cuando llega una conexión
+    - Despachar mensajes del WebSocket a Session.handle_message()
+    - Detach del WebSocket al desconectarse (sin destruir la Session)
+    """
 
-    def __init__(self, websocket, resume_id: str = None, cwd: str = None, agent_options: dict = None):
-        """Inicializa la conexión.
-
-        Args:
-            websocket: Conexión WebSocket
-            resume_id: ID de sesión para reanudar
-            cwd: Directorio de trabajo
-            agent_options: Opciones del agente desde el frontend
-        """
+    def __init__(self, websocket, resume_id: str = None, cwd: str = None,
+                 agent_options: dict = None):
         self.websocket = websocket
         self.remote_address = websocket.remote_address
-        self.resume_id = resume_id
-        self.cwd = cwd
-        self.agent_options = agent_options or {}
-        self._known_session_ids: set = set()
-
-        # Componentes
-        self._sdk_client = None
-        self._sender = None
-        self._ask_handler = None
-        self._tool_approval_handler = None
-        self._processor = None
-
-        # Control de flujo
-        self.message_queue = asyncio.Queue(maxsize=100)
-        self._processor_task = None
-        self._cleanup_timer = None
+        self._resume_id = resume_id
+        self._cwd = cwd
+        self._agent_options = agent_options or {}
+        self._session: Session | None = None
 
     async def handle(self):
         """Maneja el ciclo de vida de la conexión."""
         logger.info(f"[Nueva conexión] {self.remote_address}")
 
         try:
-            # Solo inicializar componentes si no están ya inicializados (reconexión)
-            if self._sender is None:
-                original_ws = self.websocket
-                await self._initialize_components()
-
-                # Iniciar tarea de fondo para procesar mensajes
-                self._processor_task = asyncio.create_task(
-                    self._processor.start_processing(self.message_queue)
+            if self._session is None:
+                # Crear Session nueva, pasando self como connection wrapper
+                self._session = Session(
+                    session_id=self._resume_id,
+                    cwd=self._cwd,
+                    agent_options=self._agent_options,
+                    connection=self,
                 )
+                await self._session.create(self.websocket)
+            else:
+                # Sesión existente reanudada — attach del nuevo WebSocket
+                self._session.attach_websocket(self.websocket)
 
-                # Si el websocket fue reemplazado durante la inicialización (reconexión
-                # llegó mientras conectábamos al SDK), ceder el control al handle() que
-                # ya arrancó _message_loop en el nuevo websocket.
-                if self.websocket is not original_ws:
-                    logger.info("WebSocket reemplazado durante init, cediendo control al handle de reconexión")
-                    return
-
-            # Iniciar loop de mensajes del WebSocket
+            # Loop de mensajes del WebSocket
             await self._message_loop()
 
         except websockets.exceptions.ConnectionClosed:
@@ -79,200 +53,47 @@ class WebSocketConnection:
         except Exception as e:
             logger.error(f"Error: {e}", exc_info=True)
             try:
-                await self._sender.send_system_message(f"Error: {e}")
-                # Mantener la conexión abierta para evitar reconnect loop
+                if self._session:
+                    await self._session.send_message(
+                        {"type": "system", "message": f"Error: {e}"}
+                    )
                 await self.websocket.wait_closed()
             except Exception:
                 pass
         finally:
-            await self._cleanup()
+            # Solo detach del WebSocket — la Session sigue viva para reconexión
+            if self._session:
+                self._session.detach_websocket()
 
-    async def _initialize_components(self):
-        """Inicializa todos los componentes de la conexión."""
-        # Inicializar sender primero (lo necesitan los handlers)
-        self._sender = MessageSender(self.websocket)
-
-        # Inicializar tool_approval_handler (su callback se pasa al SDK)
-        self._tool_approval_handler = ToolApprovalHandler(self._sender, agent_options=self.agent_options)
-
-        # Inicializar cliente SDK con el callback de aprobación
-        self._sdk_client = SDKClient(
-            resume_id=self.resume_id,
-            cwd=self.cwd,
-            can_use_tool=self._tool_approval_handler.can_use_tool,
-            agent_options=self.agent_options,
-        )
-        session_id = await self._sdk_client.connect()
-        logger.info("Cliente conectado")
-
-        # Ahora que el SDK está conectado, darle referencia al approval handler
-        self._tool_approval_handler._sdk_client = self._sdk_client
-
-        # Enviar session_id inmediatamente después de conectar
-        if session_id:
-            await self._send_session_id(session_id)
-            logger.info(f"Session ID enviado: {session_id}")
-
-        # Inicializar ask_handler
-        self._ask_handler = AskUserQuestionHandler(self._sender)
-        self._tool_approval_handler._ask_handler = self._ask_handler
-
-        # Callback para actualizar el registry cuando el SDK genera un nuevo session_id
-        async def on_session_id_update(new_session_id: str):
-            if _active_sessions_registry is not None and new_session_id:
-                # Agregar nueva key, mantener las anteriores para reconexión
-                _active_sessions_registry[new_session_id] = self
-                self._known_session_ids.add(new_session_id)
-                self.resume_id = new_session_id
-                logger.info(f"Registry actualizado con nuevo session_id: {new_session_id}")
-
-        # Inicializar message_processor
-        rolling_window = self.agent_options.get('rolling_window', 100) if self.agent_options else 100
-        self._processor = MessageProcessor(
-            sdk_client=self._sdk_client,
-            sender=self._sender,
-            ask_handler=self._ask_handler,
-            tool_approval_handler=self._tool_approval_handler,
-            cwd=self.cwd,
-            session_id=self.resume_id,
-            rolling_window=rolling_window,
-            on_session_id_update=on_session_id_update,
-        )
-
-        # Callback para cuando se rechaza un plan: setear stop_event del processor
-        async def on_plan_rejected():
-            self._processor._stop_event.set()
-            await self._sender.send_system_message("Plan rechazado")
-
-        self._tool_approval_handler._on_plan_rejected = on_plan_rejected
-
-    async def _send_session_id(self, session_id: str):
-        """Envía el session_id del SDK al frontend.
-
-        Args:
-            session_id: ID de sesión a enviar
-        """
-        await self._sender.send_session_id(session_id)
-
-    async def _message_loop(self):
-        """Procesa mensajes entrantes del WebSocket."""
-        async for message in self.websocket:
-            data = __import__('json').loads(message)
-            # Determinar el tipo de mensaje para el log
-            msg_type = data.get('type') or data.get('command') or ('chat' if data.get('content') else 'unknown')
-            logger.info(f"Mensaje recibido: {msg_type}")
-
-            # Mensajes que se manejan directamente (sin encolar) para evitar deadlock
-            if data.get('command') == '/stop':
-                await self._processor.request_stop()
-            elif data.get('type') == 'tool_approval_response':
-                self._tool_approval_handler.handle_response(data)
-            elif data.get('type') == 'question_response':
-                await self._ask_handler.handle_response(
-                    data.get("responses"),
-                    cancelled=data.get("cancelled", False)
-                )
-            elif data.get('type') == 'request_buffer_replay':
-                await self._sender.replay_buffer()
-            else:
-                try:
-                    self.message_queue.put_nowait(data)
-                except asyncio.QueueFull:
-                    logger.warning("Cola de mensajes llena, descartando mensaje antiguo")
-                    await self.message_queue.get()
-                    await self.message_queue.put(data)
-
-    async def _cleanup(self):
-        """Limpia recursos de la conexión.
-
-        NOTA: Solo desconecta el WebSocket, mantiene el SDK activo para reconexión.
-        El SDK y el processor continúan ejecutándose para acumular mensajes en el buffer.
-        """
-        # Solo desconectar WebSocket, mantener SDK activo para reconexión
-        self._sender.set_websocket(None)
-
-        # Cancelar esperas activas para desbloquear el SDK si está esperando respuesta
-        if self._tool_approval_handler:
-            self._tool_approval_handler.cancel()
-        if self._ask_handler:
-            self._ask_handler.cancel()
-
-        # Iniciar timer de limpieza completa
-        if self._cleanup_timer and not self._cleanup_timer.done():
-            self._cleanup_timer.cancel()
-        self._cleanup_timer = asyncio.create_task(self._delayed_cleanup())
-
-        logger.info("WebSocket desconectado, SDK sigue activo para reconexión")
-
-    async def _delayed_cleanup(self):
-        """Limpieza completa después de timeout sin reconexión."""
-        await asyncio.sleep(self.SESSION_CLEANUP_TIMEOUT)
-        if self.websocket is None:  # No se reconectó
-            logger.info(f"Timeout de limpieza alcanzado para sesión {self.resume_id}, eliminando")
-            await self._full_cleanup()
-
-    async def _full_cleanup(self):
-        """Limpieza completa cuando la sesión ya no se necesita."""
-        # Remover todos los session_ids del registry
-        if _active_sessions_registry is not None:
-            for sid in self._known_session_ids:
-                if sid in _active_sessions_registry and _active_sessions_registry[sid] is self:
-                    del _active_sessions_registry[sid]
-
-        if self._processor_task:
-            self._processor_task.cancel()
-            try:
-                await self._processor_task
-            except asyncio.CancelledError:
-                pass
-
-        if self._sdk_client:
-            await self._sdk_client.disconnect()
-
-        if self._ask_handler:
-            self._ask_handler.reset()
-
-        if self._tool_approval_handler:
-            self._tool_approval_handler.reset()
-
-    async def reconnect(self, new_websocket, agent_options: dict = None):
-        """Reconecta con un nuevo WebSocket y reconstruye el SDK con opciones actualizadas.
+    async def reconnect(self, new_websocket, agent_options: dict = None,
+                        cwd: str = None):
+        """Reconecta: resume la Session con nuevo WebSocket.
 
         Args:
             new_websocket: Nueva conexión WebSocket
-            agent_options: Nuevas opciones del agente desde el frontend
+            agent_options: Nuevas opciones del agente
+            cwd: Nuevo directorio de trabajo
         """
-        # Cancelar timer de limpieza si existe
-        if self._cleanup_timer and not self._cleanup_timer.done():
-            self._cleanup_timer.cancel()
-            self._cleanup_timer = None
-
-        # Destruir SDK viejo
-        if self._sdk_client:
-            await self._sdk_client.disconnect()
-
-        # Cancelar processor viejo
-        if self._processor_task:
-            self._processor_task.cancel()
-            try:
-                await self._processor_task
-            except asyncio.CancelledError:
-                pass
-
-        # Actualizar opciones
-        if agent_options:
-            self.agent_options = agent_options
-            logger.info(f"Opciones del agente actualizadas en reconexión: {agent_options}")
-
-        # Limpiar referencias para que handle() re-_initialize_components()
-        self._sdk_client = None
-        self._sender = None
-        self._ask_handler = None
-        self._tool_approval_handler = None
-        self._processor = None
-        self._processor_task = None
-
-        # Reconectar websocket
-        logger.info(f"Reconectando sesión: {self.resume_id}")
         self.websocket = new_websocket
         self.remote_address = new_websocket.remote_address
+
+        if self._session:
+            await self._session.resume(
+                new_websocket,
+                agent_options=agent_options,
+                cwd=cwd,
+            )
+            if cwd:
+                self._cwd = cwd
+
+    async def destroy_session(self):
+        """Destruye la Session por completo (cleanup total)."""
+        if self._session:
+            await self._session.destroy()
+            self._session = None
+
+    async def _message_loop(self):
+        """Lee mensajes del WebSocket y los despacha a la Session."""
+        async for message in self.websocket:
+            data = json.loads(message)
+            await self._session.handle_message(data)
