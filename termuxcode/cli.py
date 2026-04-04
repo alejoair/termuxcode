@@ -2,8 +2,6 @@
 """CLI para termuxcode - Inicia todos los servidores."""
 
 import argparse
-import asyncio
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -54,10 +52,10 @@ def run_servers(mode="both"):
             )
             processes.append(("HTTP", http_proc))
 
-        print(f"\n[OK] Servidor(es) iniciado(s)")
-        print(f"\nAbre en tu navegador:")
+        print("\n[OK] Servidor(es) iniciado(s)")
+        print("\nAbre en tu navegador:")
         print(f"  http://localhost:{HTTP_PORT}")
-        print(f"\nPresiona Ctrl+C para detener...\n")
+        print("\nPresiona Ctrl+C para detener...\n")
 
         # Esperar a que los procesos terminen
         for name, proc in processes:
@@ -103,7 +101,7 @@ Ejemplos:
     parser.add_argument(
         "--version", "-v",
         action="version",
-        version="termuxcode 0.1.0"
+        version="termuxcode 1.1.3"
     )
 
     args = parser.parse_args()
