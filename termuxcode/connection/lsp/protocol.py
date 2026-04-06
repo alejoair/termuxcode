@@ -24,7 +24,7 @@ def build_notification(method: str, params: Any = None) -> dict:
 def encode_message(msg: dict) -> bytes:
     """Codifica un mensaje JSON-RPC con header Content-Length."""
     body = json.dumps(msg).encode("utf-8")
-    header = f"Content-Length: {len(body)}\r\n\r\n".encode("utf-8")
+    header = f"Content-Length: {len(body)}\r\n\r\n".encode()
     return header + body
 
 

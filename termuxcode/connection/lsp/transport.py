@@ -2,7 +2,8 @@
 """Transporte stdio para comunicación con servidores LSP."""
 
 import asyncio
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from termuxcode.connection.lsp import protocol
 from termuxcode.ws_config import logger
@@ -11,7 +12,7 @@ from termuxcode.ws_config import logger
 class StdioTransport:
     """Maneja comunicación JSON-RPC sobre stdin/stdout con un proceso LSP."""
 
-    def __init__(self, command: list[str], cwd: str):
+    def __init__(self, command: list[str], cwd: str) -> None:
         self._command = command
         self._cwd = cwd
         self._process: asyncio.subprocess.Process | None = None

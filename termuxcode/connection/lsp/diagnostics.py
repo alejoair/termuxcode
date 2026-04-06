@@ -7,7 +7,7 @@ import asyncio
 class DiagnosticsManager:
     """Cache de diagnósticos LSP con eventos para sincronización async."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._diagnostics: dict[str, list[dict]] = {}  # URI → diagnostics
         self._events: dict[str, asyncio.Event] = {}  # URI → Event
         self._generation: dict[str, int] = {}  # URI → counter
