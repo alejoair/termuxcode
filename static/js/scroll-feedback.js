@@ -45,13 +45,9 @@ export function initScrollFeedback() {
         return;
     }
 
-    console.log('[ScrollFeedback] Inicializando... Vibracion:', supportsVibration);
-
     messagesContainer.addEventListener('scroll', onScroll, { passive: true });
     messagesContainer.addEventListener('touchstart', onTouchStart, { passive: true });
     messagesContainer.addEventListener('touchend', onTouchEnd, { passive: true });
-
-    console.log('[ScrollFeedback] Listo.');
 }
 
 // ===== Touch handlers =====

@@ -8,6 +8,7 @@ import { initPipeline } from './js/pipeline.js';
 import { initInputFeedback } from './js/input-feedback.js';
 import { initScrollFeedback } from './js/scroll-feedback.js';
 import { initNotifications } from './js/notifications.js';
+import { showPlanViewer, updatePlanButton } from './js/ui.js';
 
 // Inicializar Framework7
 const f7 = new Framework7({
@@ -39,6 +40,14 @@ window.sendStop = sendStop;
 window.sendDisconnect = sendDisconnect;
 window.clearChat = clearChat;
 window.openSettings = openSettings;
+window.showPlanModal = () => {
+    console.log('[showPlanModal] Called, activeTabId:', state.activeTabId);
+    if (state.activeTabId) {
+        showPlanViewer(state.activeTabId);
+    } else {
+        console.warn('[showPlanModal] No active tab');
+    }
+};
 window.changeModel = (model) => {
     const tab = state.tabs.get(state.activeTabId);
     if (tab) {
@@ -205,3 +214,14 @@ initPipeline();
 initTypewriter();
 initInputFeedback();
 initScrollFeedback();
+
+// Event listener directo para el botón del plan (respaldo al onclick inline)
+const fabPlan = document.getElementById('fabPlan');
+if (fabPlan) {
+    fabPlan.addEventListener('click', (e) => {
+        console.log('[FabPlan] Click event triggered');
+        e.preventDefault();
+        e.stopPropagation();
+        window.showPlanModal();
+    });
+}

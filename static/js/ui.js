@@ -2,11 +2,42 @@
 
 import { state, dom } from './state.js';
 import { saveTabs } from './storage.js';
-import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion } from './modals.js';
+import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion, showPlanViewer, migrateQuestionModal } from './modals.js';
 import { vibrateReceive, vibrateResult, vibrateAttention } from './haptics.js';
 import { notifyResult, notifyAskUserQuestion, notifyToolApproval, notifyPlanApproval } from './notifications.js';
 
-export { showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion };
+export { showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion, showPlanViewer };
+
+// ===== Sanitización =====
+
+/** Renderiza markdown de forma segura (DOMPurify + marked) */
+function safeMarkdown(text) {
+    if (typeof text !== 'string') return '';
+    const raw = marked.parse(text);
+    return window.DOMPurify ? window.DOMPurify.sanitize(raw) : raw;
+}
+
+/** Escapa HTML para inyección segura en innerHTML */
+function escapeHtml(text) {
+    if (typeof text !== 'string') text = String(text);
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// Flag para deshabilitar animaciones durante re-render de tabs
+let _skipAnimations = false;
+
+export function skipAnimationsDuring(fn) {
+    _skipAnimations = true;
+    fn();
+    _skipAnimations = false;
+}
+
+export { escapeHtml };
 
 export function scrollToBottom() {
     dom.messages.scrollTop = dom.messages.scrollHeight;
@@ -54,6 +85,7 @@ export function addMessage(type, text, tabId) {
 
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${type}`;
+    if (_skipAnimations) msgDiv.classList.add('no-anim');
 
     if (type !== 'thinking') {
         const label = document.createElement('div');
@@ -68,7 +100,7 @@ export function addMessage(type, text, tabId) {
     if (type === 'assistant') {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'markdown-content';
-        contentDiv.innerHTML = marked.parse(text);
+        contentDiv.innerHTML = safeMarkdown(text);
         bubble.appendChild(contentDiv);
     } else {
         bubble.textContent = text;
@@ -93,10 +125,10 @@ function createToolUseEl(name, input, toolId) {
     el.innerHTML = `
         <div class="accordion-item-toggle tool-header">
             <span class="tool-chevron">▸</span>
-            <span class="tool-name">${name}</span>
+            <span class="tool-name">${escapeHtml(name)}</span>
         </div>
         <div class="accordion-item-content">
-            <div class="tool-content">${info}</div>
+            <div class="tool-content">${escapeHtml(info)}</div>
         </div>`;
     return el;
 }
@@ -112,7 +144,7 @@ function createToolResultEl(rawContent) {
             <span class="tool-name tool-result-label">resultado</span>
         </div>
         <div class="accordion-item-content">
-            <div class="tool-content">${text}</div>
+            <div class="tool-content">${escapeHtml(text)}</div>
         </div>`;
     return el;
 }
@@ -145,7 +177,8 @@ export function addSystemMessage(text, tabId) {
 
     const msgDiv = document.createElement('div');
     msgDiv.className = 'message system';
-    msgDiv.innerHTML = `<div class="bubble">${text}</div>`;
+    if (_skipAnimations) msgDiv.classList.add('no-anim');
+    msgDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
     dom.messages.appendChild(msgDiv);
     scrollToBottom();
 }
@@ -175,6 +208,25 @@ export function updateGlobalStatus() {
 
     dom.statusText.textContent =
         tabs.length > 0 ? `${connected}/${tabs.length} conectados` : 'Sin pestanas';
+}
+
+export function updateCwdDisplay(tabId) {
+    const tabEl = document.querySelector(`.tab[data-tab-id="${tabId}"]`);
+    if (!tabEl) return;
+
+    const cwdEl = tabEl.querySelector('.tab-cwd');
+    if (!cwdEl) return;
+
+    const tab = state.tabs.get(tabId);
+    if (tab && tab.cwd) {
+        const parts = tab.cwd.replace(/\\/g, '/').split('/');
+        const folderName = parts[parts.length - 1] || tab.cwd;
+        cwdEl.textContent = folderName;
+        cwdEl.title = tab.cwd;
+    } else {
+        cwdEl.textContent = '';
+        cwdEl.title = '';
+    }
 }
 
 export function renderMessage(data, tabId) {
@@ -218,6 +270,7 @@ export function renderAssistantBlocks(blocks, tabId) {
     for (const block of toolBlocks) {
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message tool-call';
+        if (_skipAnimations) msgDiv.classList.add('no-anim');
 
         const bubble = document.createElement('div');
         bubble.className = 'bubble tool-call-bubble';
@@ -231,6 +284,7 @@ export function renderAssistantBlocks(blocks, tabId) {
     if (textBlocks.length > 0) {
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message assistant';
+        if (_skipAnimations) msgDiv.classList.add('no-anim');
 
         const label = document.createElement('div');
         label.className = 'message-label';
@@ -243,7 +297,7 @@ export function renderAssistantBlocks(blocks, tabId) {
         for (const block of textBlocks) {
             const contentDiv = document.createElement('div');
             contentDiv.className = 'markdown-content';
-            contentDiv.innerHTML = marked.parse(block.text);
+            contentDiv.innerHTML = safeMarkdown(block.text);
             bubble.appendChild(contentDiv);
         }
 
@@ -255,14 +309,41 @@ export function renderAssistantBlocks(blocks, tabId) {
 }
 
 export function handleMessage(data, tabId) {
-    console.log('Recibido:', data);
-
     const tab = state.tabs.get(tabId);
     if (!tab) return;
 
-    // Guardar session_id del SDK
+    // Guardar CWD del backend
+    if (data.type === 'cwd') {
+        tab.cwd = data.cwd;
+        updateCwdDisplay(tabId);
+        saveTabs();
+        return;
+    }
+
+    // Re-key de tab cuando llega session_id del SDK
     if (data.type === 'session_id') {
-        tab.sessionId = data.session_id;
+        const oldId = tabId;
+        const newId = data.session_id;
+        if (oldId === newId) return;
+
+        // Migrar tab al nuevo ID
+        state.tabs.delete(oldId);
+        tab.id = newId;
+        tab.sessionId = newId;
+        state.tabs.set(newId, tab);
+
+        // Actualizar DOM
+        const tabEl = document.querySelector(`.tab[data-tab-id="${oldId}"]`);
+        if (tabEl) tabEl.dataset.tabId = newId;
+
+        // Actualizar activeTabId si corresponde
+        if (state.activeTabId === oldId) {
+            state.activeTabId = newId;
+        }
+
+        // Migrar estado de modales pendientes
+        migrateQuestionModal(oldId, newId);
+
         saveTabs();
         return;
     }
@@ -297,8 +378,10 @@ export function handleMessage(data, tabId) {
         return;
     }
 
-    // Guardar en renderedMessages (excepto system repetitivos)
-    if (data.type !== 'system' || data.message.includes('Conectado')) {
+    // Guardar en renderedMessages (excepto system repetitivos y result que no se renderizan)
+    if (data.type !== 'system' && data.type !== 'result') {
+        tab.renderedMessages.push(data);
+    } else if (data.type === 'system' && data.message.includes('Conectado')) {
         tab.renderedMessages.push(data);
     }
 
@@ -326,4 +409,18 @@ export function handleMessage(data, tabId) {
             hideLoading(tabId);
         }
     }
+
+    saveTabs();
+}
+
+// ===== Botón flotante del plan =====
+
+export function updatePlanButton() {
+    const fabPlan = document.getElementById('fabPlan');
+    if (!fabPlan) return;
+
+    const tab = state.tabs.get(state.activeTabId);
+    const hasPlan = tab && tab.plan;
+
+    fabPlan.classList.toggle('visible', hasPlan);
 }

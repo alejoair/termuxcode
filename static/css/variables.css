@@ -1,5 +1,8 @@
 /* ===== Variables CSS — OLED-optimized dark theme ===== */
 :root {
+    /* Fuentes */
+    --font-mono: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'SF Mono', 'Courier New', monospace;
+
     /* Colores primarios (tonos apagados para reducir fatiga nocturna) */
     --color-primary: #7c8ef5;
     --color-primary-end: #9b6dc6;
@@ -170,4 +173,40 @@
         transform: scale(1.08);
         box-shadow: 0 0 20px var(--color-primary), inset 0 0 14px var(--color-primary);
     }
+}
+
+/* ===== Botón flotante para ver plan ===== */
+.fab-plan {
+    position: fixed;
+    bottom: 140px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--color-primary);
+    background: rgba(0, 0, 0, 0.85);
+    color: var(--color-primary);
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    pointer-events: auto;
+    transition: all var(--transition-fast) ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.fab-plan:hover {
+    background: var(--color-primary-bg-hover);
+    transform: scale(1.1);
+    box-shadow: 0 0 20px var(--color-primary);
+}
+
+.fab-plan.visible {
+    display: flex;
+}
+
+.fab-plan svg {
+    width: 20px;
+    height: 20px;
 }

@@ -48,8 +48,6 @@ export function initInputFeedback() {
         return;
     }
 
-    console.log('[InputFeedback] Inicializando...');
-
     // Encontrar boton de enviar
     sendBtn = document.querySelector('.btn-send');
 
@@ -71,7 +69,7 @@ export function initInputFeedback() {
     // Estado inicial del boton
     updateSendButtonState();
 
-    console.log('[InputFeedback] Listo. Haptic:', supportsVibration, 'Input:', input.id);
+
 }
 
 // ===== Crear contenedor de particulas =====
@@ -85,7 +83,7 @@ function createParticleContainer() {
     inputWrapper.style.position = 'relative';
     inputWrapper.appendChild(particleContainer);
 
-    console.log('[InputFeedback] Contenedor de particulas creado');
+
 }
 
 // ===== Sonido (Web Audio API) =====

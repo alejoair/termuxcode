@@ -38,27 +38,35 @@ export function connectTab(tabId) {
         if (s.disallowed_tools) opts.disallowed_tools = s.disallowed_tools.split(',').map(t => t.trim()).filter(Boolean);
         if (Object.keys(opts).length) params.set('options', JSON.stringify(opts));
         const wsUrl = params.toString() ? `${WS_URL}?${params.toString()}` : WS_URL;
-        tab.ws = new WebSocket(wsUrl);
+        const ws = new WebSocket(wsUrl);
+        tab.ws = ws;
 
-        tab.ws.onopen = () => {
+        // Capturar referencia para ignorar eventos de WebSockets stale
+        // (si disconnectTab() cierra este ws y crea uno nuevo, los handlers
+        // del ws viejo deben ser no-ops)
+        ws.onopen = () => {
+            if (tab.ws !== ws) return; // Stale WebSocket
+            const currentTabId = tab.id;
             tab.isConnected = true;
-            updateTabStatus(tabId, 'connected');
+            updateTabStatus(currentTabId, 'connected');
 
-            if (state.activeTabId === tabId) {
+            if (state.activeTabId === currentTabId) {
                 dom.statusDot.classList.add('connected');
                 dom.statusText.textContent = 'Conectado';
-                addSystemMessage('Conectado al servidor', tabId);
+                addSystemMessage('Conectado al servidor', currentTabId);
                 vibrateConnect();
             }
 
             updateGlobalStatus();
         };
 
-        tab.ws.onmessage = (event) => {
+        ws.onmessage = (event) => {
+            if (tab.ws !== ws) return; // Stale WebSocket
             try {
                 const data = JSON.parse(event.data);
-                if (state.activeTabId === tabId) {
-                    handleMessage(data, tabId);
+                const currentTabId = tab.id;
+                if (state.activeTabId === currentTabId) {
+                    handleMessage(data, currentTabId);
                 } else {
                     tab.messages.push(data);
                 }
@@ -67,15 +75,17 @@ export function connectTab(tabId) {
             }
         };
 
-        tab.ws.onclose = () => {
+        ws.onclose = () => {
+            if (tab.ws !== ws) return; // Stale WebSocket
+            const currentTabId = tab.id;
             tab.isConnected = false;
-            updateTabStatus(tabId, 'disconnected');
-            hideLoading(tabId);
+            updateTabStatus(currentTabId, 'disconnected');
+            hideLoading(currentTabId);
 
-            if (state.activeTabId === tabId) {
+            if (state.activeTabId === currentTabId) {
                 dom.statusDot.classList.remove('connected');
                 dom.statusText.textContent = 'Desconectado';
-                addSystemMessage('Desconectado del servidor', tabId);
+                addSystemMessage('Desconectado del servidor', currentTabId);
                 vibrateDisconnect();
                 notifyDisconnect();
             }
@@ -84,16 +94,19 @@ export function connectTab(tabId) {
 
             // Auto reconnect
             tab.reconnectTimeout = setTimeout(() => {
-                if (state.activeTabId === tabId) {
+                const reconnectTabId = tab.id;
+                if (state.activeTabId === reconnectTabId) {
                     dom.statusText.textContent = 'Reconectando...';
                 }
-                connectTab(tabId);
+                connectTab(reconnectTabId);
             }, 3000);
         };
 
-        tab.ws.onerror = () => {
-            if (state.activeTabId === tabId) {
-                addSystemMessage('Error de conexion', tabId);
+        ws.onerror = () => {
+            if (tab.ws !== ws) return; // Stale WebSocket
+            const currentTabId = tab.id;
+            if (state.activeTabId === currentTabId) {
+                addSystemMessage('Error de conexion', currentTabId);
                 vibrateError();
                 notifyConnectionError();
             }

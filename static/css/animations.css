@@ -10,6 +10,15 @@
     }
 }
 
+/* ===== Disable animations during batch re-render ===== */
+.message.no-anim,
+.message.no-anim .bubble,
+.message.no-anim .markdown-content {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+}
+
 /* ===== Message arrival — Principios de animación ===== */
 /* Anticipation → Overshoot → Settle */
 @keyframes messageArrival {

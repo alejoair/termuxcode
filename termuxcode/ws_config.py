@@ -39,7 +39,7 @@ def setup_logging():
     handlers.append(logging.StreamHandler())
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=handlers
     )

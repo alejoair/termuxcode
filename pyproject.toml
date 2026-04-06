@@ -14,8 +14,7 @@ dependencies = [
     "websockets==15.0.1",
     "anyio==4.8.0",
     "mcp==1.12.4",
-    "jedi>=0.19",
-    "pyflakes>=3.0"
+    "python-lsp-server>=1.0",
 ]
 authors = [
     {name = "Alejo Air", email = "alejoair@users.noreply.github.com"}
@@ -31,3 +30,6 @@ include = ["termuxcode*"]
 
 [project.scripts]
 termuxcode = "termuxcode.cli:main"
+
+[tool.ruff.lint]
+select = ["ANN001", "ANN201", "ANN202"]

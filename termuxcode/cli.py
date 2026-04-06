@@ -37,12 +37,15 @@ def run_servers(mode="both"):
     print_banner()
     processes = []
 
+    # Capturar el directorio actual antes de lanzar subprocesos
+    original_cwd = os.getcwd()
+
     try:
         if mode in ("both", "ws"):
             print(f"[*] Iniciando servidor WebSocket (puerto {WS_PORT})...")
             ws_proc = subprocess.Popen(
                 [sys.executable, str(WS_SERVER)],
-                cwd=str(PACKAGE_DIR)
+                cwd=original_cwd
             )
             processes.append(("WebSocket", ws_proc))
 
@@ -50,7 +53,7 @@ def run_servers(mode="both"):
             print(f"[*] Iniciando servidor HTTP (puerto {HTTP_PORT})...")
             http_proc = subprocess.Popen(
                 [sys.executable, str(HTTP_SERVER)],
-                cwd=str(PACKAGE_DIR)
+                cwd=original_cwd
             )
             processes.append(("HTTP", http_proc))
 

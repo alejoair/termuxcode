@@ -66,6 +66,15 @@ body {
     50% { opacity: 0; }
 }
 
+/* Title wrapper */
+.title-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
 /* Status indicator en navbar */
 .status {
     display: flex;

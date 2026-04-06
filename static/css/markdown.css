@@ -1,6 +1,8 @@
 /* ===== Markdown Content ===== */
 .markdown-content {
     line-height: 1.5;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .markdown-content h1,
@@ -37,7 +39,21 @@
     padding: 10px;
     border-radius: var(--radius-md);
     overflow-x: auto;
+    max-width: 100%;
     margin: var(--spacing-sm) 0;
+}
+
+/* Contener tablas y elementos anchos del markdown */
+.markdown-content table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+    border-collapse: collapse;
+}
+
+.markdown-content img {
+    max-width: 100%;
+    height: auto;
 }
 
 .markdown-content pre code {

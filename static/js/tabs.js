@@ -2,7 +2,7 @@
 
 import { state, dom, DEFAULT_SETTINGS } from './state.js';
 import { saveTabs, loadTabsData } from './storage.js';
-import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, showLoading, hideLoading, showAskUserQuestion, showToolApproval, hasPendingQuestionModal, getPendingQuestion } from './ui.js';
+import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, updateCwdDisplay, showLoading, hideLoading, showAskUserQuestion, showToolApproval, hasPendingQuestionModal, getPendingQuestion, updatePlanButton, skipAnimationsDuring } from './ui.js';
 import { connectTab, disconnectTab } from './connection.js';
 import { vibrateSend, vibrateError } from './haptics.js';
 import { cleanupTabModals } from './modals.js';
@@ -66,6 +66,7 @@ export async function createTab(name, cwd) {
     switchTab(tabId);
     connectTab(tabId);
 
+    updateCwdDisplay(tabId);
     saveTabs();
     updateGlobalStatus();
 
@@ -84,14 +85,19 @@ export function switchTab(tabId) {
     dom.messages.innerHTML = '';
     const tab = state.tabs.get(tabId);
 
-    for (const msg of tab.renderedMessages) {
-        renderMessage(msg, tabId);
-    }
+    skipAnimationsDuring(() => {
+        for (const msg of tab.renderedMessages) {
+            renderMessage(msg, tabId);
+        }
 
-    while (tab.messages.length > 0) {
-        const data = tab.messages.shift();
-        renderMessage(data, tabId);
-    }
+        // Mover mensajes del buffer a renderedMessages y renderizar
+        while (tab.messages.length > 0) {
+            const data = tab.messages.shift();
+            tab.renderedMessages.push(data);
+            renderMessage(data, tabId);
+        }
+    });
+    saveTabs();
 
     // Restaurar modal de pregunta pendiente si existe para esta pestaña
     if (hasPendingQuestionModal(tabId)) {
@@ -112,6 +118,8 @@ export function switchTab(tabId) {
     }
 
     updateGlobalStatus();
+    updateCwdDisplay(tabId);
+    updatePlanButton();
 
     // Actualizar selector de modelo
     const modelSelect = document.getElementById('modelSelector');
@@ -219,17 +227,23 @@ export function sendDisconnect() {
 }
 
 export function clearChat() {
+    const tab = state.tabs.get(state.activeTabId);
+    if (tab) {
+        tab.renderedMessages = [];
+        saveTabs();
+    }
     dom.messages.innerHTML = '';
     addSystemMessage('Chat limpiado', state.activeTabId);
 }
 
 export function loadTabs() {
     const data = loadTabsData();
-    data.forEach(({ id, name, cwd, sessionId, renderedMessages, settings }) => {
+    data.forEach(({ id, name, cwd, sessionId, renderedMessages, settings, plan }) => {
+        const effectiveCwd = cwd || null;
         state.tabs.set(id, {
             id,
             name,
-            cwd: cwd || null,
+            cwd: effectiveCwd,
             ws: null,
             reconnectTimeout: null,
             messages: [],
@@ -237,6 +251,7 @@ export function loadTabs() {
             isConnected: false,
             sessionId: sessionId || null,
             settings: settings || { ...DEFAULT_SETTINGS },
+            plan: plan || null,
         });
         createTabElement(id, name);
 

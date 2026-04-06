@@ -48,6 +48,8 @@
     border-radius: var(--radius-lg);
     line-height: 1.4;
     display: inline-block;
+    overflow-wrap: break-word;
+    overflow: hidden;
 }
 
 /* User messages: alineados a la derecha */

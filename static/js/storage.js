@@ -10,6 +10,7 @@ export function saveTabs() {
         sessionId: tab.sessionId,
         renderedMessages: tab.renderedMessages,
         settings: tab.settings,
+        plan: tab.plan || null,
     }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
