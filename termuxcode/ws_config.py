@@ -2,7 +2,6 @@
 """Configuración del servidor WebSocket."""
 
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -20,7 +19,7 @@ else:
 LOG_FILE = Path.home() / ".termuxcode" / "websocket_server.log"
 
 
-def setup_logging():
+def setup_logging() -> logging.Logger:
     """Configura el sistema de logging."""
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 

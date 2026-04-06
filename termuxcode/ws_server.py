@@ -4,17 +4,18 @@
 import asyncio
 import json
 import os
+from typing import Any
 
 import websockets
 
-from termuxcode.ws_config import WS_HOST, WS_PORT, logger
 from termuxcode.connection import WebSocketConnection
+from termuxcode.ws_config import WS_HOST, WS_PORT, logger
 
 # Registry de sesiones activas para reconexión
 _active_sessions: dict[str, WebSocketConnection] = {}
 
 
-def set_registry_reference():
+def set_registry_reference() -> None:
     """Conecta el registry con el módulo base para que pueda actualizarse."""
     import termuxcode.connection.base as base_module
     base_module._active_sessions_registry = _active_sessions
@@ -24,9 +25,9 @@ def set_registry_reference():
 set_registry_reference()
 
 
-async def handle_connection(websocket):
+async def handle_connection(websocket: Any) -> None:
     """Punto de entrada para nuevas conexiones WebSocket."""
-    from urllib.parse import urlparse, parse_qs, unquote
+    from urllib.parse import parse_qs, unquote, urlparse
 
     parsed = urlparse(websocket.request.path)
     qs = parse_qs(parsed.query)
@@ -58,7 +59,7 @@ async def handle_connection(websocket):
         await connection.handle()
 
 
-async def main():
+async def main() -> None:
     """Inicia el servidor WebSocket."""
     logger.info(f"Iniciando servidor en puerto {WS_PORT}")
     async with websockets.serve(handle_connection, WS_HOST, WS_PORT):

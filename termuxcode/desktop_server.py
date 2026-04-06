@@ -2,14 +2,17 @@
 """Entry point for the desktop sidecar - runs only the WebSocket server."""
 
 import asyncio
+import subprocess
 import sys
+from typing import Any
 
 # En Windows, patchear subprocess para que no abra ventanas de consola
 if sys.platform == "win32":
-    import subprocess
     _original_popen_init = subprocess.Popen.__init__
 
-    def _no_window_popen_init(self, *args, **kwargs):
+    def _no_window_popen_init(
+        self: subprocess.Popen[Any], *args: Any, **kwargs: Any
+    ) -> None:
         kwargs.setdefault("creationflags", 0)
         kwargs["creationflags"] |= subprocess.CREATE_NO_WINDOW
         _original_popen_init(self, *args, **kwargs)
