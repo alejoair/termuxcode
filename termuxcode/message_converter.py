@@ -2,6 +2,7 @@
 """Conversión de mensajes del SDK al formato WebSocket."""
 
 from typing import Any
+
 from claude_agent_sdk import AssistantMessage, ResultMessage, UserMessage
 
 # Tipos de bloques de contenido
@@ -43,7 +44,7 @@ class MessageConverter:
         }
 
     @staticmethod
-    def _convert_block(block, block_type: str) -> dict[str, Any] | None:
+    def _convert_block(block: Any, block_type: str) -> dict[str, Any] | None:
         """Convierte un bloque individual."""
         block_format = BLOCK_TYPES.get(block_type)
 

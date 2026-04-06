@@ -24,7 +24,13 @@ TERMUXCODE is a Claude Code client with two deployment modes:
   - `ask_handler.py` - `AskUserQuestionHandler` detects `AskUserQuestion` tool use, sends questions to frontend, waits for response, sends tool_result back to SDK
   - `tool_approval_handler.py` - `ToolApprovalHandler` implements `can_use_tool` callback for tool approval flow
   - `history_manager.py` - `truncate_history()` trims SDK conversation history JSONL files before each query
-  - `lsp_client.py` - `LSPClient` generic LSP client over stdio (JSON-RPC). Manages lifecycle (start/shutdown), text sync (didOpen/didChange/didClose), queries (documentSymbol, hover, references), and diagnostics caching per URI.
+  - `lsp/` - LSP client module (refactored into focused components):
+    - `uri.py` - Path/URI conversion utilities (`file_path_to_uri`, `uri_to_file_path`, `extension_to_language_id`)
+    - `protocol.py` - JSON-RPC message building and parsing (`build_request`, `build_notification`, `encode_message`, `parse_message`)
+    - `diagnostics.py` - `DiagnosticsManager` class: cache de diagnósticos con eventos async para sincronización
+    - `transport.py` - `StdioTransport` class: manejo de proceso LSP + comunicación stdio (start/shutdown/send_request/send_notification)
+    - `client.py` - `LSPClient` class: high-level API que combina transporte, diagnósticos y operaciones de texto (open_file, get_symbols, get_hover, validate)
+    - `__init__.py` - Re-exports públicos: `LSPClient`, `file_path_to_uri`, `uri_to_file_path`, `extension_to_language_id`
   - `lsp_manager.py` - `LspManager` (per-session instance): registry of LSP servers by extension (`SERVERS` dict) + semantic analyzer. Auto-discovers available servers (`shutil.which`), provides `analyze_file()` (symbols + hover + references), `validate_file()` (LSP diagnostics), and baseline comparison for edit validation. Each `Session` creates its own `LspManager` with its own `rootUri`.
   - `hooks.py` - SDK hooks via LSP as **closure factories**: `make_pre_tool_use_hook(lsp_manager)`, `make_post_tool_use_read_hook(lsp_manager)`, `make_post_tool_use_edit_hook(lsp_manager)`. Each factory captures a session's `LspManager` by closure, ensuring per-session isolation.
 - **`termuxcode/message_converter.py`**: Converts SDK messages (AssistantMessage, ResultMessage) to WebSocket JSON format. Filters out `AskUserQuestion` from normal assistant messages.

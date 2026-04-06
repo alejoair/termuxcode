@@ -5,7 +5,7 @@ import os
 import shutil
 from pathlib import Path
 
-from termuxcode.connection.lsp_client import LSPClient, file_path_to_uri, uri_to_file_path
+from termuxcode.connection.lsp import LSPClient, file_path_to_uri, uri_to_file_path
 from termuxcode.ws_config import logger
 
 # Configuración de servidores LSP por extensión

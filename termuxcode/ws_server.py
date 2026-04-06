@@ -4,6 +4,7 @@
 import asyncio
 import json
 import os
+from typing import Any
 
 import websockets
 
@@ -12,9 +13,9 @@ from termuxcode.connection import WebSocketConnection
 from termuxcode.connection import session_registry
 
 
-async def handle_connection(websocket):
+async def handle_connection(websocket: Any) -> None:
     """Punto de entrada para nuevas conexiones WebSocket."""
-    from urllib.parse import urlparse, parse_qs, unquote
+    from urllib.parse import parse_qs, unquote, urlparse
 
     parsed = urlparse(websocket.request.path)
     qs = parse_qs(parsed.query)
@@ -47,7 +48,7 @@ async def handle_connection(websocket):
     await connection.handle()
 
 
-async def main():
+async def main() -> None:
     """Inicia el servidor WebSocket."""
     logger.info(f"Iniciando servidor en puerto {WS_PORT}")
 
