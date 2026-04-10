@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
+# ruff: noqa: ANN401
 """Manejo de aprobación de herramientas (canUseTool del SDK)."""
 
+from __future__ import annotations
+
 import asyncio
+from typing import Any
 
 from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny
 
@@ -13,7 +17,14 @@ class ToolApprovalHandler:
 
     AUTO_APPROVE_MODES = {"bypassPermissions", "acceptEdits"}
 
-    def __init__(self, sender=None, sdk_client=None, on_plan_rejected=None, session=None, agent_options=None):
+    def __init__(
+        self,
+        sender: Any = None,
+        sdk_client: Any = None,
+        on_plan_rejected: Any = None,
+        session: Any = None,
+        agent_options: dict | None = None,
+    ) -> None:
         self._sender = sender  # Mantener por compatibilidad temporal
         self._sdk_client = sdk_client
         self._ask_handler = None
@@ -29,7 +40,7 @@ class ToolApprovalHandler:
     def is_waiting(self) -> bool:
         return self._waiting
 
-    async def _wait_for_approval(self):
+    async def _wait_for_approval(self) -> Any:
         """Espera respuesta del frontend con soporte de cancelación (sin timeout)."""
         # Limpiar cancel stale de desconexiones previas
         self._cancel_event.clear()
@@ -48,7 +59,7 @@ class ToolApprovalHandler:
             return None  # Cancelado
         return self._approval_response
 
-    async def can_use_tool(self, tool_name: str, input_data: dict, context):
+    async def can_use_tool(self, tool_name: str, input_data: dict, context: Any) -> Any:
         """Callback para el SDK. Envía solicitud al frontend y espera respuesta."""
         if tool_name == "AskUserQuestion":
             questions = input_data.get("questions", [])
@@ -95,7 +106,7 @@ class ToolApprovalHandler:
         finally:
             self._waiting = False
 
-    async def _handle_exit_plan_mode(self, input_data: dict):
+    async def _handle_exit_plan_mode(self, input_data: dict) -> Any:
         """Maneja ExitPlanMode: muestra el plan y espera aprobación."""
         # El plan viene directamente en input_data['plan']
         plan_content = input_data.get("plan", "")
@@ -136,18 +147,18 @@ class ToolApprovalHandler:
         finally:
             self._waiting = False
 
-    def handle_response(self, data: dict):
+    def handle_response(self, data: dict) -> None:
         """Recibe la respuesta del frontend y desbloquea el callback."""
         self._approval_response = data
         self._approval_event.set()
 
-    def cancel(self):
+    def cancel(self) -> None:
         """Cancela la espera activa (llamado al desconectar WebSocket)."""
         self._approval_response = None
         self._cancel_event.set()
         self._waiting = False
 
-    def reset(self):
+    def reset(self) -> None:
         """Resetea el estado del handler."""
         self._approval_response = None
         self._approval_event.clear()

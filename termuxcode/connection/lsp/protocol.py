@@ -2,10 +2,9 @@
 """Protocolo JSON-RPC para LSP."""
 
 import json
-from typing import Any
 
 
-def build_request(msg_id: int, method: str, params: Any = None) -> dict:
+def build_request(msg_id: int, method: str, params: dict | None = None) -> dict:
     """Construye un request JSON-RPC."""
     msg = {"jsonrpc": "2.0", "id": msg_id, "method": method}
     if params is not None:
@@ -13,7 +12,7 @@ def build_request(msg_id: int, method: str, params: Any = None) -> dict:
     return msg
 
 
-def build_notification(method: str, params: Any = None) -> dict:
+def build_notification(method: str, params: dict | None = None) -> dict:
     """Construye una notificación JSON-RPC (sin ID)."""
     msg = {"jsonrpc": "2.0", "method": method}
     if params is not None:
@@ -56,7 +55,7 @@ def is_notification(msg: dict) -> bool:
     return "method" in msg
 
 
-def get_response_result(msg: dict) -> Any:
+def get_response_result(msg: dict) -> dict | None:
     """Extrae el resultado de una respuesta, o None si hay error."""
     if "error" in msg:
         return None

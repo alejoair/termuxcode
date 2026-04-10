@@ -90,7 +90,7 @@ class StdioTransport:
         self._pending.clear()
         logger.info(f"StdioTransport: {self._command[0]} shut down")
 
-    async def send_request(self, method: str, params: Any = None, timeout: float = 10.0) -> Any:
+    async def send_request(self, method: str, params: dict[str, Any] | None = None, timeout: float = 10.0) -> dict[str, Any] | None:
         """Envía un request JSON-RPC y espera la respuesta."""
         if not self.is_running:
             return None
@@ -115,7 +115,7 @@ class StdioTransport:
             )
             return None
 
-    async def send_notification(self, method: str, params: Any = None) -> None:
+    async def send_notification(self, method: str, params: dict[str, Any] | None = None) -> None:
         """Envía una notificación JSON-RPC (sin esperar respuesta)."""
         if not self.is_running:
             return

@@ -17,13 +17,13 @@ HTTP_PORT = 1988
 WS_PORT = 2025
 
 
-def port_in_use(port):
+def port_in_use(port: int) -> bool:
     """Verifica si un puerto ya está en uso."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 
-def kill_port(port):
+def kill_port(port: int) -> bool:
     """Mata los procesos que están usando el puerto dado."""
     if sys.platform == "win32":
         result = subprocess.run(
@@ -54,7 +54,7 @@ def kill_port(port):
         return bool(pids)
 
 
-def check_ports(mode, force=False):
+def check_ports(mode: str, force: bool = False) -> None:
     """Verifica que los puertos necesarios estén disponibles. Sale si alguno está ocupado."""
     ports = []
     if mode in ("both", "ws"):
@@ -96,7 +96,7 @@ def check_ports(mode, force=False):
         sys.exit(1)
 
 
-def print_banner():
+def print_banner() -> None:
     """Muestra el banner de inicio."""
     print("\n" + "=" * 50)
     print("  termuxcode")
@@ -106,7 +106,7 @@ def print_banner():
     print("=" * 50 + "\n")
 
 
-def run_servers(mode="both", force=False):
+def run_servers(mode: str = "both", force: bool = False) -> None:
     """
     Ejecuta los servidores.
 
@@ -164,7 +164,7 @@ def run_servers(mode="both", force=False):
         print("[OK] Servidores detenidos")
 
 
-def main():
+def main() -> None:
     """Punto de entrada del comando ccm."""
     parser = argparse.ArgumentParser(
         description="termuxcode - Cliente web para Claude",

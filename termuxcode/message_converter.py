@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: ANN401
 """Conversión de mensajes del SDK al formato WebSocket."""
 
 from typing import Any

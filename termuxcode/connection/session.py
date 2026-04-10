@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: ANN401
 """Session: encapsula TODOS los recursos de una pestaña.
 
 Cada Session es completamente independiente:
@@ -8,7 +9,10 @@ Cada Session es completamente independiente:
 - Su propio MessageProcessor y asyncio.Queue
 """
 
+from __future__ import annotations
+
 import asyncio
+from typing import Any
 
 from termuxcode.ws_config import logger
 from termuxcode.connection.sdk_client import SDKClient
@@ -24,7 +28,7 @@ class Session:
     """Encapsula todos los recursos de una pestaña. Completamente aislada."""
 
     def __init__(self, session_id: str | None, cwd: str, agent_options: dict,
-                 connection=None):
+                 connection: Any = None) -> None:
         """Inicializa la Session.
 
         Args:
@@ -57,7 +61,7 @@ class Session:
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
-    async def create(self, websocket) -> None:
+    async def create(self, websocket: Any) -> None:
         """Crea sesión nueva: inicializa LSP, SDK, hooks, processor.
 
         Args:
@@ -96,7 +100,7 @@ class Session:
         self._tool_approval_handler._ask_handler = self._ask_handler
 
         # 6. Callback para actualizar registry cuando el SDK genera nuevo session_id
-        async def on_session_id_update(new_session_id: str):
+        async def on_session_id_update(new_session_id: str) -> None:
             if new_session_id and self._connection:
                 session_registry.register(new_session_id, self._connection)
                 self._known_session_ids.add(new_session_id)
@@ -116,7 +120,7 @@ class Session:
         )
 
         # Callback para cuando se rechaza un plan
-        async def on_plan_rejected():
+        async def on_plan_rejected() -> None:
             self._processor._stop_event.set()
             await self._sender.send_system_message("Plan rechazado")
 
@@ -129,8 +133,8 @@ class Session:
 
         logger.info(f"Session created: cwd={self.cwd}, session_id={self.session_id}")
 
-    async def resume(self, websocket, agent_options: dict = None,
-                     cwd: str = None) -> None:
+    async def resume(self, websocket: Any, agent_options: dict | None = None,
+                     cwd: str | None = None) -> None:
         """Reanuda sesión: re-attach WebSocket o rebuild según cambios.
 
         Si no cambiaron las opciones ni el CWD, solo re-attacha el WebSocket
@@ -184,7 +188,7 @@ class Session:
 
     # ── WebSocket attach/detach ────────────────────────────────────────
 
-    def attach_websocket(self, ws) -> None:
+    def attach_websocket(self, ws: Any) -> None:
         """Actualiza el WebSocket del sender."""
         if self._sender:
             self._sender.set_websocket(ws)
@@ -239,7 +243,7 @@ class Session:
 
     # ── Internos ───────────────────────────────────────────────────────
 
-    def _needs_rebuild(self, agent_options: dict = None, cwd: str = None) -> bool:
+    def _needs_rebuild(self, agent_options: dict | None = None, cwd: str | None = None) -> bool:
         """Determina si se necesita reconstruir el SDK al reconectar.
 
         Returns:

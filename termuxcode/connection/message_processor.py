@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 """Procesamiento de mensajes del WebSocket."""
 
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import websockets
 
 from termuxcode.connection.history_manager import truncate_history
 from termuxcode.ws_config import logger
+
+if TYPE_CHECKING:
+    from termuxcode.connection.ask_handler import AskUserQuestionHandler
+    from termuxcode.connection.sdk_client import SDKClient
+    from termuxcode.connection.sender import MessageSender
+    from termuxcode.connection.tool_approval_handler import ToolApprovalHandler
 
 
 class MessageProcessor:
@@ -16,10 +24,10 @@ class MessageProcessor:
 
     def __init__(
         self,
-        sdk_client: Any,
-        sender: Any,
-        ask_handler: Any = None,
-        tool_approval_handler: Any = None,
+        sdk_client: SDKClient,
+        sender: MessageSender,
+        ask_handler: AskUserQuestionHandler | None = None,
+        tool_approval_handler: ToolApprovalHandler | None = None,
         cwd: str | None = None,
         session_id: str | None = None,
         rolling_window: int = 100,

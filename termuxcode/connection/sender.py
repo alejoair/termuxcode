@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Envío de mensajes al frontend WebSocket."""
 
+from __future__ import annotations
+
 import json
+from typing import TYPE_CHECKING, Any
 
 from claude_agent_sdk import AssistantMessage, ResultMessage
 
 from termuxcode.message_converter import MessageConverter
 from termuxcode.ws_config import logger
+
+if TYPE_CHECKING:
+    from websockets.asyncio.client import ClientConnection
 
 
 class MessageSender:
@@ -14,16 +20,16 @@ class MessageSender:
 
     MAX_BUFFER_SIZE = 1000
 
-    def __init__(self, websocket):
+    def __init__(self, websocket: ClientConnection | None) -> None:
         """Inicializa el sender.
 
         Args:
             websocket: Conexión WebSocket activa
         """
         self._websocket = websocket
-        self._buffer = []  # Buffer para mensajes cuando no hay conexión
+        self._buffer: list[dict[str, Any]] = []  # Buffer para mensajes cuando no hay conexión
 
-    def set_websocket(self, ws):
+    def set_websocket(self, ws: ClientConnection | None) -> None:
         """Actualiza el WebSocket (None para desconectar).
 
         Args:
@@ -31,7 +37,7 @@ class MessageSender:
         """
         self._websocket = ws
 
-    async def _send_or_buffer(self, message: dict):
+    async def _send_or_buffer(self, message: dict[str, Any]) -> None:
         """Envía si hay conexión, sino acumula en buffer.
 
         Args:
@@ -49,7 +55,7 @@ class MessageSender:
             self._buffer.append(message)
             self._evict_if_needed()
 
-    async def replay_buffer(self):
+    async def replay_buffer(self) -> None:
         """Envía todos los mensajes acumulados en el buffer."""
         if not self._websocket or not self._buffer:
             return
@@ -65,14 +71,14 @@ class MessageSender:
                 raise
         self._buffer.clear()
 
-    def _evict_if_needed(self):
+    def _evict_if_needed(self) -> None:
         """Evict oldest messages if buffer exceeds MAX_BUFFER_SIZE."""
         if len(self._buffer) > self.MAX_BUFFER_SIZE:
             evicted = len(self._buffer) - self.MAX_BUFFER_SIZE
             self._buffer = self._buffer[evicted:]
             logger.warning(f"Buffer evicted {evicted} oldest messages (limit: {self.MAX_BUFFER_SIZE})")
 
-    async def send_cwd(self, cwd: str):
+    async def send_cwd(self, cwd: str) -> None:
         """Envía el CWD de la sesión al frontend.
 
         Args:
@@ -81,7 +87,7 @@ class MessageSender:
         if cwd:
             await self._send_or_buffer({"type": "cwd", "cwd": cwd})
 
-    async def send_system_message(self, message: str):
+    async def send_system_message(self, message: str) -> None:
         """Envía un mensaje del sistema al cliente.
 
         Args:
@@ -89,7 +95,7 @@ class MessageSender:
         """
         await self._send_or_buffer({"type": "system", "message": message})
 
-    async def send_session_id(self, session_id: str):
+    async def send_session_id(self, session_id: str) -> None:
         """Envía el session_id del SDK al frontend.
 
         Args:
@@ -101,7 +107,7 @@ class MessageSender:
                 "session_id": session_id
             })
 
-    async def send_assistant_message(self, msg: AssistantMessage, exclude_special_tools: bool = False):
+    async def send_assistant_message(self, msg: AssistantMessage, exclude_special_tools: bool = False) -> None:
         """Envía un mensaje del asistente al frontend.
 
         Args:
@@ -112,7 +118,7 @@ class MessageSender:
         if assistant_data["blocks"]:
             await self._send_or_buffer(assistant_data)
 
-    async def send_result(self, msg: ResultMessage):
+    async def send_result(self, msg: ResultMessage) -> None:
         """Envía un mensaje de resultado al frontend.
 
         Args:
@@ -121,7 +127,7 @@ class MessageSender:
         result_data = MessageConverter.convert_result_message(msg)
         await self._send_or_buffer(result_data)
 
-    async def send_ask_user_question(self, questions: list):
+    async def send_ask_user_question(self, questions: list[dict[str, Any]]) -> None:
         """Envía preguntas al frontend para mostrar en un modal.
 
         Args:
@@ -132,7 +138,7 @@ class MessageSender:
             "questions": questions
         })
 
-    async def send_file_view(self, file_path: str, content: str):
+    async def send_file_view(self, file_path: str, content: str) -> None:
         """Envía contenido de un archivo para mostrar en el frontend.
 
         Args:
@@ -145,7 +151,7 @@ class MessageSender:
             "content": content
         })
 
-    async def send_tool_approval_request(self, tool_name: str, input_data: dict):
+    async def send_tool_approval_request(self, tool_name: str, input_data: dict[str, Any]) -> None:
         """Envía solicitud de aprobación de herramienta al frontend.
 
         Args:
@@ -158,7 +164,7 @@ class MessageSender:
             "input": input_data
         })
 
-    async def send_message(self, message: dict):
+    async def send_message(self, message: dict[str, Any]) -> None:
         """Envía un mensaje genérico al frontend.
 
         Args:

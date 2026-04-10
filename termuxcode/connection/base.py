@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Thin wrapper: conecta WebSocket lifecycle con Session."""
 
+from __future__ import annotations
+
 import json
 
 import websockets
+from websockets import ServerConnection
 
 from termuxcode.ws_config import logger
 from termuxcode.connection.session import Session
@@ -18,8 +21,8 @@ class WebSocketConnection:
     - Detach del WebSocket al desconectarse (sin destruir la Session)
     """
 
-    def __init__(self, websocket, resume_id: str = None, cwd: str = None,
-                 agent_options: dict = None):
+    def __init__(self, websocket: ServerConnection, resume_id: str | None = None, cwd: str | None = None,
+                 agent_options: dict | None = None) -> None:
         self.websocket = websocket
         self.remote_address = websocket.remote_address
         self._resume_id = resume_id
@@ -27,7 +30,7 @@ class WebSocketConnection:
         self._agent_options = agent_options or {}
         self._session: Session | None = None
 
-    async def handle(self):
+    async def handle(self) -> None:
         """Maneja el ciclo de vida de la conexión."""
         logger.info(f"[Nueva conexión] {self.remote_address}")
 
@@ -65,8 +68,8 @@ class WebSocketConnection:
             if self._session:
                 self._session.detach_websocket()
 
-    async def reconnect(self, new_websocket, agent_options: dict = None,
-                        cwd: str = None):
+    async def reconnect(self, new_websocket: ServerConnection, agent_options: dict | None = None,
+                        cwd: str | None = None) -> None:
         """Reconecta: resume la Session con nuevo WebSocket.
 
         Args:
@@ -86,13 +89,13 @@ class WebSocketConnection:
             if cwd:
                 self._cwd = cwd
 
-    async def destroy_session(self):
+    async def destroy_session(self) -> None:
         """Destruye la Session por completo (cleanup total)."""
         if self._session:
             await self._session.destroy()
             self._session = None
 
-    async def _message_loop(self):
+    async def _message_loop(self) -> None:
         """Lee mensajes del WebSocket y los despacha a la Session."""
         async for message in self.websocket:
             data = json.loads(message)

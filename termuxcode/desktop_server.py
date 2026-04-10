@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: ANN401
 """Entry point for the desktop sidecar - runs only the WebSocket server."""
 
 import asyncio

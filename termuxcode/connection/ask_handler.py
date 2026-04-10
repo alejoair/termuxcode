@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Manejo del flujo AskUserQuestion (SDK ↔ Frontend)."""
 
+from __future__ import annotations
+
 import asyncio
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from termuxcode.connection.session import Session
+    from termuxcode.connection.sender import MessageSender
 
 from termuxcode.ws_config import logger
 
@@ -9,7 +16,7 @@ from termuxcode.ws_config import logger
 class AskUserQuestionHandler:
     """Maneja el flujo bidireccional de AskUserQuestion."""
 
-    def __init__(self, sender=None, session=None):
+    def __init__(self, sender: MessageSender | None = None, session: Session | None = None) -> None:
         """Inicializa el handler.
 
         Args:
@@ -29,7 +36,7 @@ class AskUserQuestionHandler:
         """Verifica si actualmente se está esperando una respuesta."""
         return self._waiting_for_question_response
 
-    async def _wait_for_response(self):
+    async def _wait_for_response(self) -> bool:
         """Espera respuesta del frontend con soporte de cancelación (sin timeout)."""
         # Limpiar cancel stale de desconexiones previas
         self._cancel_event.clear()
@@ -89,7 +96,7 @@ class AskUserQuestionHandler:
         self._waiting_for_question_response = False
         return self._question_response, self._question_cancelled
 
-    async def handle_response(self, responses: list, cancelled: bool = False):
+    async def handle_response(self, responses: list, cancelled: bool = False) -> None:
         """Maneja la respuesta del usuario a una pregunta.
 
         Args:
@@ -100,14 +107,14 @@ class AskUserQuestionHandler:
         self._question_cancelled = cancelled
         self._question_event.set()
 
-    def cancel(self):
+    def cancel(self) -> None:
         """Cancela la espera activa (llamado al desconectar WebSocket)."""
         self._question_response = None
         self._question_cancelled = True
         self._cancel_event.set()
         self._waiting_for_question_response = False
 
-    def reset(self):
+    def reset(self) -> None:
         """Resetea el estado del handler."""
         self._question_response = None
         self._question_cancelled = False

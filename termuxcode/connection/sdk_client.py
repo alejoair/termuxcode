@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Gestión del cliente SDK para Claude Agent."""
 
+from __future__ import annotations
+
 import asyncio
+from collections.abc import AsyncIterator, Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from claude_agent_sdk.types import HookMatcher
@@ -13,8 +17,12 @@ from termuxcode.connection.hooks import (
 )
 from termuxcode.ws_config import logger
 
+if TYPE_CHECKING:
+    from claude_agent_sdk._internal.transport import Transport
+    from termuxcode.connection.lsp_manager import LspManager
 
-async def _dummy_hook(input_data, tool_use_id, context):
+
+async def _dummy_hook(input_data: dict[str, Any], tool_use_id: str, context: dict[str, Any]) -> dict[str, bool]:
     """Hook requerido para que can_use_tool funcione en streaming mode."""
     return {"continue_": True}
 
@@ -22,8 +30,9 @@ async def _dummy_hook(input_data, tool_use_id, context):
 class SDKClient:
     """Encapsula la inicialización y comunicación con el Claude SDK."""
 
-    def __init__(self, resume_id: str = None, cwd: str = None, can_use_tool=None,
-                 agent_options: dict = None, lsp_manager=None):
+    def __init__(self, resume_id: str | None = None, cwd: str | None = None,
+                 can_use_tool: Callable[..., Coroutine[Any, Any, bool]] | None = None,
+                 agent_options: dict[str, Any] | None = None, lsp_manager: LspManager | None = None) -> None:
         """Inicializa el cliente SDK.
 
         Args:
@@ -106,7 +115,7 @@ class SDKClient:
 
         return options
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Conecta al SDK.
 
         Raises:
@@ -122,7 +131,7 @@ class SDKClient:
             logger.error(f"Error conectando SDK: {e}")
             raise
 
-    async def reconnect(self, session_id: str = None):
+    async def reconnect(self, session_id: str | None = None) -> None:
         """Crea un nuevo cliente SDK.
 
         Args:
@@ -134,7 +143,7 @@ class SDKClient:
         self._client = None
         await self.connect()
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Desconecta el cliente SDK."""
         if self._client:
             try:
@@ -150,7 +159,7 @@ class SDKClient:
             finally:
                 self._client = None
 
-    async def query(self, content: str):
+    async def query(self, content: str) -> None:
         """Envía una consulta al SDK.
 
         Args:
@@ -160,7 +169,7 @@ class SDKClient:
             raise RuntimeError("Cliente SDK no conectado")
         await self._client.query(content)
 
-    async def receive_response(self):
+    async def receive_response(self) -> AsyncIterator[Any]:
         """Recibe la respuesta del SDK como un async iterator.
 
         Yields:
@@ -171,13 +180,13 @@ class SDKClient:
         async for msg in self._client.receive_response():
             yield msg
 
-    async def interrupt(self):
+    async def interrupt(self) -> None:
         """Interrumpe la consulta actual del SDK."""
         if self._client:
             await self._client.interrupt()
 
     @property
-    def transport(self):
+    def transport(self) -> Transport | None:
         """Retorna el transporte del SDK para envío directo de mensajes."""
         if self._client and hasattr(self._client, '_transport'):
             return self._client._transport

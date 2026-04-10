@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+# ruff: noqa: ANN401
 """Servidor HTTP simple para servir el cliente WebSocket."""
 
 import http.server
 import socketserver
 import os
 from pathlib import Path
+from typing import Any
 
 PORT = 1988
 BASE_DIR = Path(__file__).parent.parent.absolute()
@@ -14,10 +16,10 @@ STATIC_DIR = BASE_DIR / "static"
 class ChatHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     """Handler personalizado que sirve / como index.html."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args: Any) -> None:
         """Log personalizado más limpio."""
         print(f"[HTTP] {self.address_string()} - {self.path}")
 
@@ -26,7 +28,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
 
 
-def main():
+def main() -> None:
     with ThreadedHTTPServer(("", PORT), ChatHTTPRequestHandler) as httpd:
         print(f"[HTTP] Servidor corriendo en http://localhost:{PORT}")
         print(f"[HTTP] Chat disponible en http://localhost:{PORT}")

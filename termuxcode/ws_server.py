@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: ANN401
 """Servidor WebSocket principal para Claude Agent SDK."""
 
 import asyncio
