@@ -2,16 +2,29 @@
 """Procesamiento de mensajes del WebSocket."""
 
 import asyncio
+from collections.abc import Callable, Coroutine
+from typing import Any
+
 import websockets
 
-from termuxcode.ws_config import logger
 from termuxcode.connection.history_manager import truncate_history
+from termuxcode.ws_config import logger
 
 
 class MessageProcessor:
     """Procesa mensajes del WebSocket y maneja la comunicación con el SDK."""
 
-    def __init__(self, sdk_client, sender, ask_handler=None, tool_approval_handler=None, cwd=None, session_id=None, rolling_window=100, on_session_id_update=None):
+    def __init__(
+        self,
+        sdk_client: Any,
+        sender: Any,
+        ask_handler: Any = None,
+        tool_approval_handler: Any = None,
+        cwd: str | None = None,
+        session_id: str | None = None,
+        rolling_window: int = 100,
+        on_session_id_update: Callable[[str], Coroutine[Any, Any, None]] | None = None,
+    ) -> None:
         """Inicializa el procesador.
 
         Args:
@@ -32,10 +45,10 @@ class MessageProcessor:
         self._session_id = session_id
         self._rolling_window = rolling_window
         self._on_session_id_update = on_session_id_update
-        self._message_queue = None  # Se setea en start_processing
+        self._message_queue: asyncio.Queue[dict[str, Any]] | None = None  # Se setea en start_processing
         self._stop_event = asyncio.Event()  # Señal de detención
 
-    async def start_processing(self, message_queue: asyncio.Queue):
+    async def start_processing(self, message_queue: asyncio.Queue[dict[str, Any]]) -> None:
         """Procesa mensajes de la cola continuamente (tarea de fondo).
 
         Args:
@@ -50,7 +63,7 @@ class MessageProcessor:
             except Exception as e:
                 logger.error(f"Error procesando mensaje: {e}", exc_info=True)
 
-    async def process_message(self, data: dict):
+    async def process_message(self, data: dict[str, Any]) -> None:
         """Procesa un mensaje recibido del WebSocket.
 
         Args:
@@ -58,14 +71,13 @@ class MessageProcessor:
         """
         command = data.get("command")
         content = data.get("content", "")
-        msg_type = data.get("type")
 
         if command == "/disconnect":
             await self._handle_disconnect()
         elif content:
             await self._handle_query(content)
 
-    async def request_stop(self):
+    async def request_stop(self) -> None:
         """Señala detención e interrumpe el SDK."""
         self._stop_event.set()
         try:
@@ -74,12 +86,12 @@ class MessageProcessor:
             logger.warning(f"Error al interrumpir SDK: {e}")
         await self._sender.send_system_message("Deteniendo...")
 
-    async def _handle_disconnect(self):
+    async def _handle_disconnect(self) -> None:
         """Maneja el comando /disconnect."""
         await self._sender.send_system_message("Bye")
         raise websockets.exceptions.ConnectionClosed(1000, "Disconnect requested")
 
-    async def _handle_query(self, content: str):
+    async def _handle_query(self, content: str) -> None:
         """Maneja una consulta del usuario.
 
         Args:
@@ -95,7 +107,17 @@ class MessageProcessor:
             if did_truncate:
                 await self._sdk_client.reconnect(self._session_id)
 
-        await self._sdk_client.query(content)
+        try:
+            await self._sdk_client.query(content)
+        except Exception as e:
+            logger.warning(f"Query falló (SDK posiblemente muerto): {e}, intentando recovery...")
+            await self._try_recover_sdk()
+            try:
+                await self._sdk_client.query(content)
+            except Exception as retry_e:
+                logger.error(f"Query falló tras recovery: {retry_e}")
+                await self._sender.send_system_message(f"Error del SDK: {retry_e}")
+                return
 
         # Obtener el async iterator
         try:
@@ -162,7 +184,7 @@ class MessageProcessor:
             # Intentar reconectar el SDK para que la siguiente consulta funcione
             await self._try_recover_sdk()
 
-    async def _try_recover_sdk(self):
+    async def _try_recover_sdk(self) -> None:
         """Intenta reconectar el SDK después de un error fatal."""
         try:
             await self._sdk_client.disconnect()
