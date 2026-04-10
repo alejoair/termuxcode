@@ -36,7 +36,7 @@
 .question-chip {
     background: linear-gradient(135deg, var(--color-primary), var(--color-primary-end));
     color: var(--text-primary);
-    font-size: 11px;
+    font-size: 0.688rem;
     font-weight: 600;
     padding: 4px 10px;
     border-radius: var(--radius-full);
@@ -50,7 +50,7 @@
 
 .question-text {
     color: var(--text-primary);
-    font-size: 16px;
+    font-size: 1rem;
     line-height: 1.5;
     margin-bottom: var(--spacing-lg);
 }
@@ -127,7 +127,7 @@
 
 .question-option-description {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 0.813rem;
     line-height: 1.4;
 }
 
@@ -137,7 +137,7 @@
     padding: var(--spacing-sm) var(--spacing-md);
     margin-top: var(--spacing-sm);
     font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     white-space: pre-wrap;
     word-break: break-all;
@@ -157,7 +157,7 @@
 .question-btn {
     padding: var(--spacing-sm) var(--spacing-lg);
     border-radius: var(--radius-md);
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -214,7 +214,7 @@
 /* Multi-select info */
 .question-multiselect-hint {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     margin-bottom: var(--spacing-sm);
 }
 
@@ -243,7 +243,7 @@
     }
 
     .question-text {
-        font-size: 14px;
+        font-size: 0.875rem;
     }
 
     .question-option {
@@ -259,7 +259,7 @@
 .settings-label {
     display: block;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -281,7 +281,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 0.875rem;
     padding: 8px 12px;
     box-sizing: border-box;
     transition: border-color var(--transition-fast);
@@ -299,7 +299,7 @@
 
 .settings-note {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-style: italic;
     margin-bottom: var(--spacing-sm);
 }
@@ -312,7 +312,7 @@
 
 .file-view-path {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-family: 'Consolas', 'Monaco', monospace;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -368,7 +368,7 @@
     padding: 4px 6px;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 11px;
+    font-size: 0.688rem;
     color: var(--text-secondary);
     transition: background var(--transition-fast);
 }
