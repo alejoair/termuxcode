@@ -1,5 +1,8 @@
 /* ===== Variables CSS — OLED-optimized dark theme ===== */
 :root {
+    /* Base font size — change this single value to scale ALL text */
+    font-size: 24px;
+
     /* Fuentes */
     --font-mono: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'SF Mono', 'Courier New', monospace;
 
@@ -8,6 +11,13 @@
     --color-primary-end: #9b6dc6;
     --color-primary-bg: rgba(124, 142, 245, 0.18);
     --color-primary-bg-hover: rgba(124, 142, 245, 0.3);
+
+    /* Colores semánticos por tipo de mensaje */
+    --color-user:        #5b93f5;               /* Sapphire — voz propia */
+    --color-thinking:    #9b8ec4;               /* Lavanda — interno, etéreo */
+    --color-tool-call:   #2cc5c5;               /* Teal — técnico, activo */
+    --color-tool-result: #4ade80;               /* Esmeralda — output, confirmación */
+    --color-system-msg:  #e8b931;               /* Oro — meta, estado */
 
     /* Status */
     --color-connected: #4ade80;
@@ -22,11 +32,11 @@
     --color-success-end: #22c55e;
     --color-success-bg: rgba(74, 222, 128, 0.1);
 
-    /* Mensajes */
+    /* Mensajes — fondos mínimos, el peso visual lo da el borde izquierdo */
     --color-user-gradient: linear-gradient(135deg, #4a5cd4 0%, #6b4a9e 100%);
-    --color-assistant-bg: rgba(255, 255, 255, 0.08);
-    --color-system-bg: rgba(251, 191, 36, 0.08);
-    --color-tool-bg: rgba(248, 113, 113, 0.12);
+    --color-assistant-bg: transparent;
+    --color-system-bg: transparent;
+    --color-tool-bg: transparent;
     --color-thinking-bg: transparent;
 
     /* Fondos — negro puro para OLED */
@@ -38,11 +48,11 @@
     --bg-code: rgba(0, 0, 0, 0.6);
     --bg-code-block: rgba(0, 0, 0, 0.8);
 
-    /* Textos — niveles sutiles, evitando blanco puro excesivo */
-    --text-primary: #e4e4e7;
-    --text-secondary: rgba(228, 228, 231, 0.75);
-    --text-muted: rgba(228, 228, 231, 0.55);
-    --text-faint: rgba(228, 228, 231, 0.4);
+    /* Textos — zinc-300 base (#d4d4d8), escala de opacidad con AA garantizado */
+    --text-primary: #d4d4d8;                        /* 14.6:1 sobre negro */
+    --text-secondary: rgba(212, 212, 216, 0.70);    /* ~9.2:1 */
+    --text-muted: rgba(212, 212, 216, 0.55);        /* ~5.5:1 — barely AA */
+    --text-faint: rgba(212, 212, 216, 0.50);        /* ~5.0:1 — pasa AA */
     --text-link: #c4b5fd;
 
     /* Bordes */
@@ -102,7 +112,7 @@
     border: 1px solid var(--color-primary);
     border-radius: var(--radius-md);
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: 0.75rem;
     padding: 6px 28px 6px 10px;
     margin-right: var(--spacing-md);
     cursor: pointer;

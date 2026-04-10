@@ -95,7 +95,7 @@
 }
 
 .typing-indicator .typing-bubble {
-    background: var(--color-assistant-bg);
+    background: rgba(212, 212, 216, 0.07); /* suficiente para verse en LCD */
     padding: 10px 18px;
     border-radius: var(--radius-lg);
     border-bottom-left-radius: var(--radius-sm);

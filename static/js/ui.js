@@ -157,6 +157,20 @@ function createToolResultEl(rawContent) {
     return el;
 }
 
+function createThinkingEl(text) {
+    const el = document.createElement('div');
+    el.className = 'accordion-item tool-block thinking-block';
+    el.innerHTML = `
+        <div class="accordion-item-toggle tool-header">
+            <span class="tool-chevron">▸</span>
+            <span class="tool-name thinking-label">pensamiento</span>
+        </div>
+        <div class="accordion-item-content">
+            <div class="tool-content thinking-content">${escapeHtml(text)}</div>
+        </div>`;
+    return el;
+}
+
 function insertToolResults(blocks, tabId) {
     if (state.activeTabId !== tabId) return;
     for (const block of blocks) {
@@ -263,18 +277,26 @@ export function renderAssistantBlocks(blocks, tabId) {
     if (state.activeTabId !== tabId) return;
     if (!blocks || blocks.length === 0) return;
 
-    // Thinking blocks van separados (sin burbuja)
-    for (const block of blocks) {
-        if (block.type === 'thinking') {
-            addMessage('thinking', block.thinking, tabId);
-        }
-    }
-
-    // Separar tool_use del texto
+    // Separar bloques por tipo
+    const thinkingBlocks = blocks.filter(b => b.type === 'thinking');
     const toolBlocks = blocks.filter(b => b.type === 'tool_use');
     const textBlocks = blocks.filter(b => b.type === 'text');
 
-    // Renderizar tool calls primero (sin label "Claude", diseño separado)
+    // Thinking: colapsable igual que tool-calls, con colores lavanda
+    for (const block of thinkingBlocks) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message tool-call thinking-msg';
+        if (_skipAnimations) msgDiv.classList.add('no-anim');
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble tool-call-bubble';
+        bubble.appendChild(createThinkingEl(block.thinking));
+
+        msgDiv.appendChild(bubble);
+        dom.messages.appendChild(msgDiv);
+    }
+
+    // Renderizar tool calls (sin label "Claude", diseño separado)
     for (const block of toolBlocks) {
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message tool-call';
