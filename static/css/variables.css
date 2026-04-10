@@ -190,7 +190,7 @@
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 600;
     pointer-events: auto;
     transition: all var(--transition-fast) ease;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);

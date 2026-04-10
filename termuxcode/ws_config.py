@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Configuración del servidor
 WS_HOST = "localhost"
-WS_PORT = 8769
+WS_PORT = 2025
 
 # Directorio base del proyecto (source) o temporal (PyInstaller)
 if getattr(sys, 'frozen', False):
@@ -42,6 +42,10 @@ def setup_logging() -> logging.Logger:
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=handlers
     )
+
+    # Silenciar keepalive ping/pong de websockets
+    logging.getLogger("websockets").setLevel(logging.INFO)
+
     return logging.getLogger(__name__)
 
 

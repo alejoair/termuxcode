@@ -19,7 +19,9 @@ class LSPClient:
         self._diagnostics = DiagnosticsManager()
         self._documents = DocumentManager(self._transport, self._diagnostics)
         self._features = LanguageFeatures(self._transport)
+        self._server_capabilities: dict = {}
         self._initialized = False
+        self._features._client = self
 
     def _handle_notification(self, method: str, params: dict) -> None:
         """Despacha notificaciones del servidor LSP."""
@@ -64,6 +66,7 @@ class LSPClient:
             )
 
         await self._transport.send_notification("initialized", {})
+        self._server_capabilities = result.get("capabilities", {})
         self._initialized = True
         logger.info(f"LSPClient: {self._transport.command[0]} initialized")
 
@@ -79,6 +82,37 @@ class LSPClient:
         except Exception:
             pass
         await self._transport.shutdown()
+
+    def supports(self, method: str) -> bool:
+        """Verifica si el servidor soporta un feature LSP.
+
+        Args:
+            method: Request method completo (ej: "textDocument/documentSymbol").
+                    Se mapea al capability path equivalente.
+        """
+        if not self._server_capabilities:
+            return True  # sin info, asumir que sí (backward compatible)
+
+        # Mapeo de method LSP → capability key en ServerCapabilities
+        CAPABILITY_MAP = {
+            "textDocument/documentSymbol": "documentSymbolProvider",
+            "textDocument/hover": "hoverProvider",
+            "textDocument/references": "referencesProvider",
+            "textDocument/typeDefinition": "typeDefinitionProvider",
+            "textDocument/typeHierarchy": "typeHierarchyProvider",
+            "textDocument/inlayHint": "inlayHintProvider",
+            "textDocument/formatting": "documentFormattingProvider",
+        }
+
+        cap_key = CAPABILITY_MAP.get(method)
+        if not cap_key:
+            return True  # feature desconocido, asumir que sí
+
+        # La capability puede ser bool, dict (options), o no existir
+        value = self._server_capabilities.get(cap_key)
+        if value is None:
+            return False
+        return bool(value) if isinstance(value, bool) else True
 
     # ── Delegacion a DocumentManager ─────────────────────────────────────
 

@@ -1,6 +1,6 @@
 // ===== Estado global y configuracion =====
 
-export const WS_URL = 'ws://localhost:8769';
+export const WS_URL = 'ws://localhost:2025';
 export const STORAGE_KEY = 'ccm_tabs';
 
 export const DEFAULT_SETTINGS = {

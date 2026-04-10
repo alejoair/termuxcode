@@ -5,6 +5,10 @@ import { addSystemMessage, updateTabStatus, updateGlobalStatus, handleMessage, h
 import { vibrateConnect, vibrateDisconnect, vibrateError } from './haptics.js';
 import { notifyDisconnect, notifyConnectionError } from './notifications.js';
 
+const MAX_RECONNECT_ATTEMPTS = 10;
+const INITIAL_RECONNECT_DELAY = 3000;
+const MAX_RECONNECT_DELAY = 30000;
+
 export function connectTab(tabId) {
     const tab = state.tabs.get(tabId);
     if (!tab) return;
@@ -48,6 +52,7 @@ export function connectTab(tabId) {
             if (tab.ws !== ws) return; // Stale WebSocket
             const currentTabId = tab.id;
             tab.isConnected = true;
+            tab.reconnectAttempts = 0;
             updateTabStatus(currentTabId, 'connected');
 
             if (state.activeTabId === currentTabId) {
@@ -79,33 +84,52 @@ export function connectTab(tabId) {
             if (tab.ws !== ws) return; // Stale WebSocket
             const currentTabId = tab.id;
             tab.isConnected = false;
+            tab.reconnectAttempts = (tab.reconnectAttempts || 0) + 1;
             updateTabStatus(currentTabId, 'disconnected');
             hideLoading(currentTabId);
 
             if (state.activeTabId === currentTabId) {
                 dom.statusDot.classList.remove('connected');
-                dom.statusText.textContent = 'Desconectado';
-                addSystemMessage('Desconectado del servidor', currentTabId);
-                vibrateDisconnect();
-                notifyDisconnect();
+
+                if (tab.reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+                    dom.statusText.textContent = 'Sin conexion';
+                    addSystemMessage(`No se pudo reconectar tras ${MAX_RECONNECT_ATTEMPTS} intentos`, currentTabId);
+                    vibrateError();
+                    updateGlobalStatus();
+                    return;
+                }
+
+                dom.statusText.textContent = `Reconectando (${tab.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`;
+                // Solo mostrar mensaje de desconexión en el primer intento
+                if (tab.reconnectAttempts === 1) {
+                    addSystemMessage('Desconectado del servidor', currentTabId);
+                    vibrateDisconnect();
+                    notifyDisconnect();
+                }
             }
 
             updateGlobalStatus();
 
-            // Auto reconnect
+            // Exponential backoff
+            const delay = Math.min(
+                INITIAL_RECONNECT_DELAY * Math.pow(2, tab.reconnectAttempts - 1),
+                MAX_RECONNECT_DELAY
+            );
+
             tab.reconnectTimeout = setTimeout(() => {
                 const reconnectTabId = tab.id;
                 if (state.activeTabId === reconnectTabId) {
                     dom.statusText.textContent = 'Reconectando...';
                 }
                 connectTab(reconnectTabId);
-            }, 3000);
+            }, delay);
         };
 
         ws.onerror = () => {
             if (tab.ws !== ws) return; // Stale WebSocket
             const currentTabId = tab.id;
-            if (state.activeTabId === currentTabId) {
+            // Solo mostrar mensaje de error en el primer intento, no en cada reintento
+            if (state.activeTabId === currentTabId && tab.reconnectAttempts <= 1) {
                 addSystemMessage('Error de conexion', currentTabId);
                 vibrateError();
                 notifyConnectionError();
@@ -131,5 +155,6 @@ export function disconnectTab(tabId) {
         tab.ws = null;
     }
     tab.isConnected = false;
+    tab.reconnectAttempts = 0;
     updateTabStatus(tabId, 'disconnected');
 }

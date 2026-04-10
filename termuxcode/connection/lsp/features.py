@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Operaciones LSP: symbols, hover, references, type hierarchy, inlay hints, formatting."""
 
+from typing import Any
+
 from termuxcode.connection.lsp.transport import StdioTransport
 from termuxcode.connection.lsp.uri import file_path_to_uri
 
@@ -10,9 +12,16 @@ class LanguageFeatures:
 
     def __init__(self, transport: StdioTransport) -> None:
         self._transport = transport
+        self._client: Any = None  # LSPClient, set after construction
+
+    def _supports(self, method: str) -> bool:
+        """Check if the server supports this feature."""
+        return self._client.supports(method) if self._client else True
 
     async def get_symbols(self, file_path: str) -> list[dict]:
         """textDocument/documentSymbol -> lista de DocumentSymbol."""
+        if not self._supports("textDocument/documentSymbol"):
+            return []
         uri = file_path_to_uri(file_path)
         result = await self._transport.send_request(
             "textDocument/documentSymbol",
@@ -29,6 +38,8 @@ class LanguageFeatures:
         col: int,
     ) -> str | None:
         """textDocument/hover -> contenido como texto plano."""
+        if not self._supports("textDocument/hover"):
+            return None
         uri = file_path_to_uri(file_path)
         result = await self._transport.send_request(
             "textDocument/hover",
@@ -61,6 +72,8 @@ class LanguageFeatures:
         col: int,
     ) -> list[dict]:
         """textDocument/references -> lista de Location."""
+        if not self._supports("textDocument/references"):
+            return []
         uri = file_path_to_uri(file_path)
         result = await self._transport.send_request(
             "textDocument/references",
@@ -85,6 +98,8 @@ class LanguageFeatures:
         Retorna donde esta definido el TIPO del simbolo (no el simbolo mismo).
         Util para saltar a definiciones de tipos en librerias/stdlib.
         """
+        if not self._supports("textDocument/typeDefinition"):
+            return []
         uri = file_path_to_uri(file_path)
         result = await self._transport.send_request(
             "textDocument/typeDefinition",
@@ -108,6 +123,8 @@ class LanguageFeatures:
         Returns:
             TypeHierarchy item con subtypes/supertypes, o None si no aplica.
         """
+        if not self._supports("textDocument/typeHierarchy"):
+            return None
         uri = file_path_to_uri(file_path)
 
         result = await self._transport.send_request(
@@ -134,6 +151,8 @@ class LanguageFeatures:
         - Tipos de variables sin anotacion
         - Tipos de parametros en llamadas
         """
+        if not self._supports("textDocument/inlayHint"):
+            return []
         uri = file_path_to_uri(file_path)
         result = await self._transport.send_request(
             "textDocument/inlayHint",
@@ -155,6 +174,8 @@ class LanguageFeatures:
         Retorna ediciones de formato para todo el archivo.
         None si el servidor no soporta formato o falla.
         """
+        if not self._supports("textDocument/formatting"):
+            return None
         uri = file_path_to_uri(file_path)
         result = await self._transport.send_request(
             "textDocument/formatting",

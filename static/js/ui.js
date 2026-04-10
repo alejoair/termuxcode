@@ -6,7 +6,15 @@ import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, 
 import { vibrateReceive, vibrateResult, vibrateAttention } from './haptics.js';
 import { notifyResult, notifyAskUserQuestion, notifyToolApproval, notifyPlanApproval } from './notifications.js';
 
-export { showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion, showPlanViewer };
+export { showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion, showPlanViewer, trimRenderedMessages };
+
+const MAX_RENDERED_MESSAGES = 200;
+
+function trimRenderedMessages(tab) {
+    if (tab.renderedMessages.length > MAX_RENDERED_MESSAGES) {
+        tab.renderedMessages = tab.renderedMessages.slice(-MAX_RENDERED_MESSAGES);
+    }
+}
 
 // ===== Sanitización =====
 
@@ -410,10 +418,9 @@ export function handleMessage(data, tabId) {
         }
     }
 
+    trimRenderedMessages(tab);
     saveTabs();
 }
-
-// ===== Botón flotante del plan =====
 
 export function updatePlanButton() {
     const fabPlan = document.getElementById('fabPlan');

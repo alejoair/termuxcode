@@ -6,7 +6,7 @@ import socketserver
 import os
 from pathlib import Path
 
-PORT = 8000
+PORT = 1988
 BASE_DIR = Path(__file__).parent.parent.absolute()
 STATIC_DIR = BASE_DIR / "static"
 

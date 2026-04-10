@@ -7,7 +7,9 @@ Esto permite que cada sesión tenga sus propios hooks vinculados a su propio Lsp
 
 import os
 
+from termuxcode.connection.lsp.uri import normalize_path
 from termuxcode.connection.lsp_manager import LspManager
+from termuxcode.connection.lsp_analyzer.symbols import diag_key
 from termuxcode.ws_config import logger
 
 
@@ -62,7 +64,7 @@ def make_pre_tool_use_hook(lsp_manager: LspManager):
 
         tool_name = input_data.get("tool_name", "")
         tool_input = input_data.get("tool_input", {})
-        file_path = tool_input.get("file_path", "")
+        file_path = normalize_path(tool_input.get("file_path", ""))
 
         if not manager.is_supported_file(file_path):
             return {"continue_": True}
@@ -79,9 +81,9 @@ def make_pre_tool_use_hook(lsp_manager: LspManager):
             errors = await manager.validate_file(file_path, code)
             if errors:
                 # Verificar si estos errores ya existían (baseline)
-                # Usar _diag_key para comparar por rango+mensaje, no por dict completo
-                baseline_keys = {LspManager._diag_key(e) for e in baseline}
-                new_errors = [e for e in errors if LspManager._diag_key(e) not in baseline_keys]
+                # Usar diag_key para comparar por mensaje, no por dict completo
+                baseline_keys = {diag_key(e) for e in baseline}
+                new_errors = [e for e in errors if diag_key(e) not in baseline_keys]
                 if new_errors:
                     error_msgs = "; ".join(_format_diagnostic_error(e) for e in new_errors[:3])
                     logger.info(f"LSP PreToolUse BLOCK: Write on {os.path.basename(file_path)} — {error_msgs}")
@@ -119,9 +121,9 @@ def make_pre_tool_use_hook(lsp_manager: LspManager):
             errors = await manager.validate_file(file_path, result)
             if errors:
                 # Comparar con baseline — no bloquear errores preexistentes
-                # Usar _diag_key para comparar por rango+mensaje, no por dict completo
-                baseline_keys = {LspManager._diag_key(e) for e in baseline}
-                new_errors = [e for e in errors if LspManager._diag_key(e) not in baseline_keys]
+                # Usar diag_key para comparar por mensaje, no por dict completo
+                baseline_keys = {diag_key(e) for e in baseline}
+                new_errors = [e for e in errors if diag_key(e) not in baseline_keys]
                 if new_errors:
                     error_msgs = "; ".join(_format_diagnostic_error(e) for e in new_errors[:3])
                     logger.info(f"LSP PreToolUse BLOCK: Edit on {os.path.basename(file_path)} — {error_msgs}")
@@ -150,7 +152,7 @@ def make_post_tool_use_read_hook(lsp_manager: LspManager):
             return {"continue_": True}
 
         tool_input = input_data.get("tool_input", {})
-        file_path = tool_input.get("file_path", "")
+        file_path = normalize_path(tool_input.get("file_path", ""))
 
         if not manager.is_supported_file(file_path):
             logger.debug(f"PostToolUse Read hook: archivo no soportado {file_path}")
@@ -182,7 +184,7 @@ def make_post_tool_use_edit_hook(lsp_manager: LspManager):
             return {"continue_": True}
 
         tool_input = input_data.get("tool_input", {})
-        file_path = tool_input.get("file_path", "")
+        file_path = normalize_path(tool_input.get("file_path", ""))
 
         if not manager.is_supported_file(file_path):
             logger.debug(f"PostToolUse Edit hook: archivo no soportado {file_path}")

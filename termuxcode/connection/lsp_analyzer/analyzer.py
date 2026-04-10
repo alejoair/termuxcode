@@ -4,7 +4,7 @@
 import os
 from pathlib import Path
 
-from termuxcode.connection.lsp import LSPClient, file_path_to_uri
+from termuxcode.connection.lsp import LSPClient, file_path_to_uri, normalize_path
 from termuxcode.ws_config import logger
 
 from .formatters import (
@@ -62,7 +62,7 @@ class LspAnalyzer:
             return ""
 
         try:
-            source = Path(file_path).read_text(encoding="utf-8", errors="replace")
+            source = Path(normalize_path(file_path)).read_text(encoding="utf-8", errors="replace")
         except Exception as e:
             logger.debug(f"LspAnalyzer: error reading {file_path}: {e}")
             return ""

@@ -2,7 +2,7 @@
 
 import { state, dom, DEFAULT_SETTINGS } from './state.js';
 import { saveTabs, loadTabsData } from './storage.js';
-import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, updateCwdDisplay, showLoading, hideLoading, showAskUserQuestion, showToolApproval, hasPendingQuestionModal, getPendingQuestion, updatePlanButton, skipAnimationsDuring } from './ui.js';
+import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, updateCwdDisplay, showLoading, hideLoading, showAskUserQuestion, showToolApproval, hasPendingQuestionModal, getPendingQuestion, updatePlanButton, skipAnimationsDuring, trimRenderedMessages } from './ui.js';
 import { connectTab, disconnectTab } from './connection.js';
 import { vibrateSend, vibrateError } from './haptics.js';
 import { cleanupTabModals } from './modals.js';
@@ -55,6 +55,7 @@ export async function createTab(name, cwd) {
         cwd: cwd || null,
         ws: null,
         reconnectTimeout: null,
+        reconnectAttempts: 0,
         messages: [],
         renderedMessages: [],
         isConnected: false,
@@ -97,6 +98,7 @@ export function switchTab(tabId) {
             renderMessage(data, tabId);
         }
     });
+    trimRenderedMessages(tab);
     saveTabs();
 
     // Restaurar modal de pregunta pendiente si existe para esta pestaña
@@ -181,6 +183,7 @@ export function send() {
     if (!content) return;
 
     tab.renderedMessages.push({ type: 'user', content });
+    trimRenderedMessages(tab);
     saveTabs();
     addMessage('user', content, state.activeTabId);
     vibrateSend();
@@ -219,6 +222,7 @@ export function sendDisconnect() {
         tab.ws = null;
     }
     tab.isConnected = false;
+    tab.reconnectAttempts = 0;
 
     dom.statusDot.classList.remove('connected');
     dom.statusText.textContent = 'Desconectado';
@@ -246,6 +250,7 @@ export function loadTabs() {
             cwd: effectiveCwd,
             ws: null,
             reconnectTimeout: null,
+            reconnectAttempts: 0,
             messages: [],
             renderedMessages: renderedMessages || [],
             isConnected: false,

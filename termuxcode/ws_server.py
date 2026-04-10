@@ -11,6 +11,7 @@ import websockets
 from termuxcode.ws_config import WS_HOST, WS_PORT, logger
 from termuxcode.connection import WebSocketConnection
 from termuxcode.connection import session_registry
+from termuxcode.connection.lsp.uri import normalize_path
 
 
 async def handle_connection(websocket: Any) -> None:
@@ -26,9 +27,9 @@ async def handle_connection(websocket: Any) -> None:
     agent_options = json.loads(options_raw) if options_raw else {}
 
     if cwd_raw:
-        cwd = unquote(cwd_raw)
+        cwd = normalize_path(unquote(cwd_raw))
     else:
-        cwd = os.environ['TERMUXCODE_CWD']
+        cwd = normalize_path(os.environ['TERMUXCODE_CWD'])
 
     # Verificar si es una reconexión de sesión existente
     if resume_id:
