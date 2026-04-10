@@ -6,6 +6,8 @@ Esto permite que cada sesión tenga sus propios hooks vinculados a su propio Lsp
 """
 
 import os
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from termuxcode.connection.lsp.uri import normalize_path
 from termuxcode.connection.lsp_manager import LspManager
@@ -53,9 +55,9 @@ def _format_diagnostic_error(diag: dict) -> str:
 # Factory: PreToolUse hooks — se ejecutan ANTES de que la tool corra
 # ---------------------------------------------------------------------------
 
-def make_pre_tool_use_hook(lsp_manager: LspManager):
+def make_pre_tool_use_hook(lsp_manager: LspManager) -> Callable[..., Coroutine[Any, Any, dict]]:
     """Crea un PreToolUse hook para Write|Edit que captura el LspManager por closure."""
-    async def hook(input_data, tool_use_id, context):
+    async def hook(input_data: dict, tool_use_id: str, context: dict) -> dict:
         logger.debug(f"PreToolUse hook invocado: tool_name={input_data.get('tool_name')}")
         manager = lsp_manager
         if not manager or not manager._initialized:
@@ -142,9 +144,9 @@ def make_pre_tool_use_hook(lsp_manager: LspManager):
 # Factory: PostToolUse hooks — se ejecutan DESPUÉS de que la tool corrió
 # ---------------------------------------------------------------------------
 
-def make_post_tool_use_read_hook(lsp_manager: LspManager):
+def make_post_tool_use_read_hook(lsp_manager: LspManager) -> Callable[..., Coroutine[Any, Any, dict]]:
     """Crea un PostToolUse hook para Read que captura el LspManager por closure."""
-    async def hook(input_data, tool_use_id, context):
+    async def hook(input_data: dict, tool_use_id: str, context: dict) -> dict:
         logger.debug(f"PostToolUse Read hook invocado: tool_name={input_data.get('tool_name')}")
         manager = lsp_manager
         if not manager or not manager._initialized:
@@ -174,9 +176,9 @@ def make_post_tool_use_read_hook(lsp_manager: LspManager):
     return hook
 
 
-def make_post_tool_use_edit_hook(lsp_manager: LspManager):
+def make_post_tool_use_edit_hook(lsp_manager: LspManager) -> Callable[..., Coroutine[Any, Any, dict]]:
     """Crea un PostToolUse hook para Write|Edit que captura el LspManager por closure."""
-    async def hook(input_data, tool_use_id, context):
+    async def hook(input_data: dict, tool_use_id: str, context: dict) -> dict:
         logger.debug(f"PostToolUse Edit hook invocado: tool_name={input_data.get('tool_name')}")
         manager = lsp_manager
         if not manager or not manager._initialized:
