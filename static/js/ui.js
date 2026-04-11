@@ -1,6 +1,6 @@
 // ===== Renderizado de mensajes y UI =====
 
-import { state, dom } from './state.js';
+import { state, dom, updateAvailableTools } from './state.js';
 import { saveTabs } from './storage.js';
 import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion, showPlanViewer, migrateQuestionModal } from './modals.js';
 import { vibrateReceive, vibrateResult, vibrateAttention } from './haptics.js';
@@ -375,6 +375,12 @@ export function handleMessage(data, tabId) {
         migrateQuestionModal(oldId, newId);
 
         saveTabs();
+        return;
+    }
+
+    // Actualizar lista de tools disponibles (llega ~3s después de conectar)
+    if (data.type === 'tools_list') {
+        updateAvailableTools(data.tools);
         return;
     }
 

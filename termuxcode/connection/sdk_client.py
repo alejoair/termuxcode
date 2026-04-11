@@ -185,6 +185,12 @@ class SDKClient:
         if self._client:
             await self._client.interrupt()
 
+    async def get_mcp_status(self) -> dict:
+        """Devuelve el estado de los servidores MCP conectados."""
+        if not self._client:
+            return {"mcpServers": []}
+        return await self._client.get_mcp_status()
+
     @property
     def transport(self) -> Transport | None:
         """Retorna el transporte del SDK para envío directo de mensajes."""

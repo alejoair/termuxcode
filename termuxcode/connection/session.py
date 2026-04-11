@@ -24,6 +24,29 @@ from termuxcode.connection.lsp_manager import LspManager
 from termuxcode.connection import session_registry
 
 
+BUILTIN_TOOLS = [
+    {"name": "Agent", "desc": "Lanza agentes especializados", "source": "builtin"},
+    {"name": "Bash", "desc": "Ejecuta comandos de terminal", "source": "builtin"},
+    {"name": "Glob", "desc": "Busca archivos por patrón", "source": "builtin"},
+    {"name": "Grep", "desc": "Busca contenido en archivos", "source": "builtin"},
+    {"name": "Read", "desc": "Lee archivos", "source": "builtin"},
+    {"name": "Edit", "desc": "Edita archivos", "source": "builtin"},
+    {"name": "Write", "desc": "Crea/escribe archivos", "source": "builtin"},
+    {"name": "NotebookEdit", "desc": "Edita celdas de Jupyter notebooks", "source": "builtin"},
+    {"name": "TodoWrite", "desc": "Lista de tareas", "source": "builtin"},
+    {"name": "WebSearch", "desc": "Búsqueda web", "source": "builtin"},
+    {"name": "AskUserQuestion", "desc": "Pregunta al usuario", "source": "builtin"},
+    {"name": "EnterPlanMode", "desc": "Entra en modo planificación", "source": "builtin"},
+    {"name": "ExitPlanMode", "desc": "Sale del modo planificación", "source": "builtin"},
+    {"name": "EnterWorktree", "desc": "Crea git worktree aislado", "source": "builtin"},
+    {"name": "TaskOutput", "desc": "Obtiene resultado de tareas en segundo plano", "source": "builtin"},
+    {"name": "TaskStop", "desc": "Detiene tarea en segundo plano", "source": "builtin"},
+    {"name": "Skill", "desc": "Ejecuta skills especializados", "source": "builtin"},
+    {"name": "ListMcpResourcesTool", "desc": "Lista recursos MCP", "source": "builtin"},
+    {"name": "ReadMcpResourceTool", "desc": "Lee recurso MCP", "source": "builtin"},
+]
+
+
 class Session:
     """Encapsula todos los recursos de una pestaña. Completamente aislada."""
 
@@ -92,6 +115,9 @@ class Session:
         )
         await self._sdk_client.connect()
 
+        # Enviar lista de tools al frontend tras dar tiempo a MCP servers de conectar
+        asyncio.create_task(self._send_tools_list())
+
         # Ahora que el SDK está conectado, darle referencia al approval handler
         self._tool_approval_handler._sdk_client = self._sdk_client
 
@@ -132,6 +158,29 @@ class Session:
         )
 
         logger.info(f"Session created: cwd={self.cwd}, session_id={self.session_id}")
+
+    async def _send_tools_list(self) -> None:
+        """Espera 3s para que los MCP servers conecten, luego envía la lista de tools al frontend."""
+        await asyncio.sleep(3)
+        try:
+            if not self._sdk_client or not self._sdk_client.is_connected:
+                return
+            mcp_status = await self._sdk_client.get_mcp_status()
+            mcp_tools = []
+            for server in mcp_status.get("mcpServers", []):
+                if server.get("status") == "connected":
+                    for tool in server.get("tools", []):
+                        mcp_tools.append({
+                            "name": tool["name"],
+                            "desc": tool.get("description", ""),
+                            "source": "mcp",
+                            "server": server["name"],
+                        })
+            all_tools = BUILTIN_TOOLS + mcp_tools
+            await self._sender.send_tools_list(all_tools)
+            logger.info(f"Tools list enviada: {len(BUILTIN_TOOLS)} builtins + {len(mcp_tools)} MCP")
+        except Exception as e:
+            logger.warning(f"Error enviando tools list: {e}")
 
     async def resume(self, websocket: Any, agent_options: dict | None = None,
                      cwd: str | None = None) -> None:

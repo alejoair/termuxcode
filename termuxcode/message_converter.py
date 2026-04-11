@@ -78,9 +78,10 @@ class MessageConverter:
         """Convierte un ResultMessage a diccionario WebSocket."""
         return {
             "type": "result",
-            "stop_reason": msg.stop_reason,
+            "stop_reason": getattr(msg, "stop_reason", msg.subtype),
             "num_turns": msg.num_turns,
             "is_error": msg.is_error,
+            "errors": getattr(msg, "errors", None),
         }
 
     @staticmethod

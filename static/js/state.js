@@ -15,35 +15,35 @@ export const DEFAULT_SETTINGS = {
     tools: ['TaskOutput', 'Bash', 'Glob', 'Grep', 'Read', 'Edit', 'Write', 'TodoWrite', 'EnterPlanMode', 'ExitPlanMode', 'TaskStop'],
 };
 
-// Lista de todas las tools disponibles
+// Lista de tools disponibles — se actualiza dinámicamente desde el backend vía 'tools_list'.
+// Fallback inicial con las built-ins conocidas hasta que llegue la lista real.
 export const AVAILABLE_TOOLS = [
-    { name: 'Agent', desc: 'Lanza agentes especializados' },
-    { name: 'TaskOutput', desc: 'Obtiene resultado de tareas en segundo plano' },
-    { name: 'Bash', desc: 'Ejecuta comandos de terminal' },
-    { name: 'Glob', desc: 'Busca archivos por patrón' },
-    { name: 'Grep', desc: 'Busca contenido en archivos' },
-    { name: 'Read', desc: 'Lee archivos' },
-    { name: 'Edit', desc: 'Edita archivos' },
-    { name: 'Write', desc: 'Crea/escribe archivos' },
-    { name: 'NotebookEdit', desc: 'Edita celdas de Jupyter notebooks' },
-    { name: 'TodoWrite', desc: 'Lista de tareas' },
-    { name: 'WebSearch', desc: 'Búsqueda web' },
-    { name: 'AskUserQuestion', desc: 'Pregunta al usuario' },
-    { name: 'EnterPlanMode', desc: 'Entra en modo planificación' },
-    { name: 'ExitPlanMode', desc: 'Sale del modo planificación' },
-    { name: 'EnterWorktree', desc: 'Crea git worktree aislado' },
-    { name: 'TaskStop', desc: 'Detiene tarea en segundo plano' },
-    { name: 'Skill', desc: 'Ejecuta skills especializados' },
-    { name: 'ListMcpResourcesTool', desc: 'Lista recursos MCP' },
-    { name: 'ReadMcpResourceTool', desc: 'Lee recurso MCP' },
-    { name: 'mcp__4_5v_mcp__analyze_image', desc: 'Analiza imágenes con IA' },
-    { name: 'mcp__deepwiki__ask_question', desc: 'Pregunta sobre repos GitHub' },
-    { name: 'mcp__deepwiki__read_wiki_contents', desc: 'Documentación de repos' },
-    { name: 'mcp__deepwiki__read_wiki_structure', desc: 'Estructura de docs' },
-    { name: 'mcp__web-reader__webReader', desc: 'Convierte URLs a markdown' },
-    { name: 'mcp__web-search-prime__web_search_prime', desc: 'Búsqueda web con resúmenes' },
-    { name: 'mcp__web_reader__webReader', desc: 'Convierte URLs (alt)' },
+    { name: 'Agent', desc: 'Lanza agentes especializados', source: 'builtin' },
+    { name: 'Bash', desc: 'Ejecuta comandos de terminal', source: 'builtin' },
+    { name: 'Glob', desc: 'Busca archivos por patrón', source: 'builtin' },
+    { name: 'Grep', desc: 'Busca contenido en archivos', source: 'builtin' },
+    { name: 'Read', desc: 'Lee archivos', source: 'builtin' },
+    { name: 'Edit', desc: 'Edita archivos', source: 'builtin' },
+    { name: 'Write', desc: 'Crea/escribe archivos', source: 'builtin' },
+    { name: 'NotebookEdit', desc: 'Edita celdas de Jupyter notebooks', source: 'builtin' },
+    { name: 'TodoWrite', desc: 'Lista de tareas', source: 'builtin' },
+    { name: 'WebSearch', desc: 'Búsqueda web', source: 'builtin' },
+    { name: 'AskUserQuestion', desc: 'Pregunta al usuario', source: 'builtin' },
+    { name: 'EnterPlanMode', desc: 'Entra en modo planificación', source: 'builtin' },
+    { name: 'ExitPlanMode', desc: 'Sale del modo planificación', source: 'builtin' },
+    { name: 'EnterWorktree', desc: 'Crea git worktree aislado', source: 'builtin' },
+    { name: 'TaskOutput', desc: 'Obtiene resultado de tareas en segundo plano', source: 'builtin' },
+    { name: 'TaskStop', desc: 'Detiene tarea en segundo plano', source: 'builtin' },
+    { name: 'Skill', desc: 'Ejecuta skills especializados', source: 'builtin' },
+    { name: 'ListMcpResourcesTool', desc: 'Lista recursos MCP', source: 'builtin' },
+    { name: 'ReadMcpResourceTool', desc: 'Lee recurso MCP', source: 'builtin' },
 ];
+
+// Muta el array in-place para preservar la referencia importada por otros módulos.
+export function updateAvailableTools(tools) {
+    AVAILABLE_TOOLS.length = 0;
+    tools.forEach(t => AVAILABLE_TOOLS.push(t));
+}
 
 export const state = {
     tabs: new Map(),

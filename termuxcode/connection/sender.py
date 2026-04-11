@@ -164,6 +164,14 @@ class MessageSender:
             "input": input_data
         })
 
+    async def send_tools_list(self, tools: list[dict[str, Any]]) -> None:
+        """Envía la lista de tools disponibles al frontend.
+
+        Args:
+            tools: Lista de tools con formato {name, desc, source, server?}
+        """
+        await self._send_or_buffer({"type": "tools_list", "tools": tools})
+
     async def send_message(self, message: dict[str, Any]) -> None:
         """Envía un mensaje genérico al frontend.
 
