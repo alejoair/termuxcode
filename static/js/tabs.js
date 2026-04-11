@@ -24,7 +24,7 @@ function createTabElement(tabId, tabName) {
         closeTab(tabId);
     });
 
-    tabEl.addEventListener('click', () => switchTab(tabId));
+    tabEl.addEventListener('click', () => switchTab(tabEl.dataset.tabId));
     document.getElementById('tabsHeader').appendChild(tabEl);
 }
 

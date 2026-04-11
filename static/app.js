@@ -80,58 +80,77 @@ function openSettings() {
 
     const overlay = document.createElement('div');
     overlay.id = 'settingsOverlay';
-    overlay.className = 'question-overlay';
+    overlay.className = 'question-overlay settings-overlay';
     overlay.innerHTML = `
         <div class="question-modal settings-modal">
-            <div class="question-header"><span class="question-chip">Configuración</span></div>
-            <div class="settings-field">
-                <label class="settings-label">Modo de permisos</label>
-                <select class="settings-select" id="cfg-permission_mode">
-                    <option value="default">default</option>
-                    <option value="acceptEdits">acceptEdits</option>
-                    <option value="plan">plan</option>
-                    <option value="bypassPermissions">bypassPermissions</option>
-                </select>
+            <div class="question-header">
+                <span class="question-chip">Configuración</span>
+                <span class="settings-tab-label">${esc(tab.name)}</span>
             </div>
-            <div class="settings-field">
-                <label class="settings-label">Modelo</label>
-                <select class="settings-select" id="cfg-model">
-                    <option value="sonnet">sonnet</option>
-                    <option value="opus">opus</option>
-                    <option value="haiku">haiku</option>
-                </select>
-            </div>
-            <div class="settings-field">
-                <label class="settings-label">Máximo de turnos</label>
-                <input class="settings-input" id="cfg-max_turns" type="number" min="1" placeholder="Sin límite" value="${esc(s.max_turns)}">
-            </div>
-            <div class="settings-field">
-                <label class="settings-label">Ventana de historial <span class="settings-hint">(mensajes a conservar)</span></label>
-                <input class="settings-input" id="cfg-rolling_window" type="number" min="10" placeholder="100" value="${esc(s.rolling_window)}">
-            </div>
-            <div class="settings-field">
-                <label class="settings-label">Herramientas disponibles <span class="settings-hint">(dejar vacío = todas)</span></label>
-                <div class="tools-checkbox-grid">
-                    ${toolsCheckboxes}
+            <div class="settings-body">
+                <div class="settings-section">
+                    <div class="settings-section-title">Sesión</div>
+                    <div class="settings-row">
+                        <div class="settings-field">
+                            <label class="settings-label">Modo de permisos</label>
+                            <select class="settings-select" id="cfg-permission_mode">
+                                <option value="default">default</option>
+                                <option value="acceptEdits">acceptEdits</option>
+                                <option value="plan">plan</option>
+                                <option value="bypassPermissions">bypassPermissions</option>
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <label class="settings-label">Modelo</label>
+                            <select class="settings-select" id="cfg-model">
+                                <option value="sonnet">sonnet</option>
+                                <option value="opus">opus</option>
+                                <option value="haiku">haiku</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-field">
+                            <label class="settings-label">Máximo de turnos</label>
+                            <input class="settings-input" id="cfg-max_turns" type="number" min="1" placeholder="Sin límite" value="${esc(s.max_turns)}">
+                        </div>
+                        <div class="settings-field">
+                            <label class="settings-label">Ventana de historial</label>
+                            <input class="settings-input" id="cfg-rolling_window" type="number" min="10" placeholder="100" value="${esc(s.rolling_window)}">
+                        </div>
+                    </div>
                 </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">Herramientas <span class="settings-hint">— vacío = todas</span></div>
+                    <div class="settings-field">
+                        <div class="tools-checkbox-grid">
+                            ${toolsCheckboxes}
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-field">
+                            <label class="settings-label">Permitidas</label>
+                            <input class="settings-input" id="cfg-allowed_tools" type="text" placeholder="Bash,Edit,Read,..." value="${esc(s.allowed_tools)}">
+                        </div>
+                        <div class="settings-field">
+                            <label class="settings-label">Bloqueadas</label>
+                            <input class="settings-input" id="cfg-disallowed_tools" type="text" placeholder="WebSearch,..." value="${esc(s.disallowed_tools)}">
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">Prompts del sistema</div>
+                    <div class="settings-field">
+                        <label class="settings-label">System prompt</label>
+                        <textarea class="settings-textarea" id="cfg-system_prompt" rows="3">${esc(s.system_prompt)}</textarea>
+                    </div>
+                    <div class="settings-field">
+                        <label class="settings-label">Append system prompt</label>
+                        <textarea class="settings-textarea" id="cfg-append_system_prompt" rows="3">${esc(s.append_system_prompt)}</textarea>
+                    </div>
+                </div>
+                <div class="settings-note">Los cambios se aplican en la próxima conexión.</div>
             </div>
-            <div class="settings-field">
-                <label class="settings-label">Herramientas permitidas <span class="settings-hint">(separadas por coma)</span></label>
-                <input class="settings-input" id="cfg-allowed_tools" type="text" placeholder="Bash,Edit,Read,..." value="${esc(s.allowed_tools)}">
-            </div>
-            <div class="settings-field">
-                <label class="settings-label">Herramientas bloqueadas <span class="settings-hint">(separadas por coma)</span></label>
-                <input class="settings-input" id="cfg-disallowed_tools" type="text" placeholder="WebSearch,..." value="${esc(s.disallowed_tools)}">
-            </div>
-            <div class="settings-field">
-                <label class="settings-label">System prompt</label>
-                <textarea class="settings-textarea" id="cfg-system_prompt" rows="3">${esc(s.system_prompt)}</textarea>
-            </div>
-            <div class="settings-field">
-                <label class="settings-label">Append system prompt</label>
-                <textarea class="settings-textarea" id="cfg-append_system_prompt" rows="3">${esc(s.append_system_prompt)}</textarea>
-            </div>
-            <div class="settings-note">Los cambios se aplican en la próxima conexión.</div>
             <div class="question-actions">
                 <button class="question-btn question-btn-cancel" id="settingsCancelBtn">Cancelar</button>
                 <button class="question-btn question-btn-submit" id="settingsSaveBtn">Guardar</button>
