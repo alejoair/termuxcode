@@ -1,6 +1,7 @@
 // ===== termux-code - Entry Point =====
 
 import { state, dom, DEFAULT_SETTINGS, AVAILABLE_TOOLS } from './js/state.js';
+import { openMCPModal } from './js/modal-mcp.js';
 import { createTab, switchTab, loadTabs, send, sendStop, sendDisconnect, clearChat } from './js/tabs.js';
 import { connectTab, disconnectTab } from './js/connection.js';
 import { saveTabs } from './js/storage.js';
@@ -40,6 +41,7 @@ window.sendStop = sendStop;
 window.sendDisconnect = sendDisconnect;
 window.clearChat = clearChat;
 window.openSettings = openSettings;
+window.openMCPModal = openMCPModal;
 window.showPlanModal = () => {
     console.log('[showPlanModal] Called, activeTabId:', state.activeTabId);
     if (state.activeTabId) {

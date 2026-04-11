@@ -179,8 +179,37 @@ class Session:
             all_tools = BUILTIN_TOOLS + mcp_tools
             await self._sender.send_tools_list(all_tools)
             logger.info(f"Tools list enviada: {len(BUILTIN_TOOLS)} builtins + {len(mcp_tools)} MCP")
+            # Enviar estado detallado de MCP servers al frontend
+            await self._send_mcp_status(mcp_status)
         except Exception as e:
             logger.warning(f"Error enviando tools list: {e}")
+
+    async def _send_mcp_status(self, mcp_status: dict | None = None) -> None:
+        """Consulta el estado de los MCP servers y lo envía al frontend.
+
+        Args:
+            mcp_status: Resultado pre-obtenido de get_mcp_status(), o None para consultarlo.
+        """
+        if not self._sdk_client or not self._sdk_client.is_connected:
+            return
+        try:
+            if mcp_status is None:
+                mcp_status = await self._sdk_client.get_mcp_status()
+            servers = []
+            for s in mcp_status.get("mcpServers", []):
+                servers.append({
+                    "name": s.get("name", ""),
+                    "status": s.get("status", "unknown"),
+                    "tools": [
+                        {"name": t["name"], "desc": t.get("description", "")}
+                        for t in s.get("tools", [])
+                    ],
+                    "error": s.get("error"),
+                })
+            await self._sender.send_mcp_status(servers)
+            logger.debug(f"MCP status enviado: {len(servers)} servers")
+        except Exception as e:
+            logger.warning(f"Error enviando mcp_status: {e}")
 
     async def resume(self, websocket: Any, agent_options: dict | None = None,
                      cwd: str | None = None) -> None:
@@ -272,6 +301,8 @@ class Session:
             )
         elif data.get('type') == 'request_buffer_replay':
             await self._sender.replay_buffer()
+        elif data.get('type') == 'request_mcp_status':
+            await self._send_mcp_status()
         else:
             try:
                 self.message_queue.put_nowait(data)

@@ -45,6 +45,14 @@ export function updateAvailableTools(tools) {
     tools.forEach(t => AVAILABLE_TOOLS.push(t));
 }
 
+// Estado de MCP servers — se actualiza dinámicamente desde el backend vía 'mcp_status'.
+export const mcpServers = [];  // [{name, status, tools: [{name, desc}], error}]
+
+export function updateMcpServers(servers) {
+    mcpServers.length = 0;
+    servers.forEach(s => mcpServers.push(s));
+}
+
 export const state = {
     tabs: new Map(),
     activeTabId: null,

@@ -1,6 +1,6 @@
 // ===== Renderizado de mensajes y UI =====
 
-import { state, dom, updateAvailableTools } from './state.js';
+import { state, dom, updateAvailableTools, updateMcpServers } from './state.js';
 import { saveTabs } from './storage.js';
 import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion, showPlanViewer, migrateQuestionModal } from './modals.js';
 import { vibrateReceive, vibrateResult, vibrateAttention } from './haptics.js';
@@ -381,6 +381,23 @@ export function handleMessage(data, tabId) {
     // Actualizar lista de tools disponibles (llega ~3s después de conectar)
     if (data.type === 'tools_list') {
         updateAvailableTools(data.tools);
+        return;
+    }
+
+    // Actualizar estado de MCP servers y refrescar modal si está abierto
+    if (data.type === 'mcp_status') {
+        updateMcpServers(data.servers);
+        const modal = document.getElementById('mcpModal');
+        if (modal) {
+            import('./modal-mcp.js').then(m => m.renderMcpModalContent(modal, data.servers, tabId));
+        }
+        // Actualizar indicador del botón MCP en toolbar
+        const btnMcp = document.getElementById('btnMcp');
+        if (btnMcp) {
+            const hasConnected = data.servers.some(s => s.status === 'connected');
+            btnMcp.classList.toggle('btn-mcp--active', hasConnected);
+            btnMcp.classList.toggle('btn-mcp--error', !hasConnected && data.servers.length > 0);
+        }
         return;
     }
 

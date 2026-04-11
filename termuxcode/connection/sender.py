@@ -172,6 +172,14 @@ class MessageSender:
         """
         await self._send_or_buffer({"type": "tools_list", "tools": tools})
 
+    async def send_mcp_status(self, servers: list[dict[str, Any]]) -> None:
+        """Envía el estado detallado de los MCP servers al frontend.
+
+        Args:
+            servers: Lista de servers con formato {name, status, tools, error?}
+        """
+        await self._send_or_buffer({"type": "mcp_status", "servers": servers})
+
     async def send_message(self, message: dict[str, Any]) -> None:
         """Envía un mensaje genérico al frontend.
 

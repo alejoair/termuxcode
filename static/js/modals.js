@@ -28,9 +28,15 @@ export {
     showPlanViewer
 } from './modal-fileview.js';
 
+// Re-exportar desde modal-mcp.js
+export { openMCPModal, renderMcpModalContent } from './modal-mcp.js';
+
 // Cleanup function que limpia todos los modales de un tab
 export function cleanupTabModals(tabId) {
     hideAskUserQuestion(tabId);
     hideToolApproval(tabId);
     hideFileView(tabId);
+    // Cerrar modal MCP si está abierto (es global, no por tab)
+    const mcpModal = document.getElementById('mcpModal');
+    if (mcpModal) mcpModal.remove();
 }
