@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS = {
     disallowed_tools: '',
     rolling_window: 100,
     tools: ['TaskOutput', 'Bash', 'Glob', 'Grep', 'Read', 'Edit', 'Write', 'TodoWrite', 'EnterPlanMode', 'ExitPlanMode', 'TaskStop'],
+    disabledMcpServers: [],  // nombres de MCP servers desactivados para este tab
 };
 
 // Lista de tools disponibles — se actualiza dinámicamente desde el backend vía 'tools_list'.

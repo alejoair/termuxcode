@@ -1,7 +1,6 @@
 // ===== Modal MCP Servers =====
 
-import { state } from './state.js';
-import { mcpServers } from './state.js';
+import { state, mcpServers } from './state.js';
 import { saveTabs } from './storage.js';
 import { escapeHtml, createOverlay, showModal } from './modal-utils.js';
 import { disconnectTab, connectTab } from './connection.js';
