@@ -381,6 +381,32 @@ export function handleMessage(data, tabId) {
     // Actualizar lista de tools disponibles (llega ~3s después de conectar)
     if (data.type === 'tools_list') {
         updateAvailableTools(data.tools);
+
+        // Sincronizar tab.settings.tools con las MCP tools habilitadas
+        const mcpTools = data.tools.filter(t => t.source === 'mcp');
+        if (mcpTools.length > 0) {
+            const disabledServers = new Set(tab.settings.disabledMcpServers || []);
+            const enabledMcpNames = mcpTools
+                .filter(t => !disabledServers.has(t.server))
+                .map(t => t.name);
+
+            // Eliminar del tools actual todas las MCP tools conocidas, luego añadir las habilitadas
+            const allKnownMcpNames = new Set(mcpTools.map(t => t.name));
+            const builtinTools = (tab.settings.tools || []).filter(n => !allKnownMcpNames.has(n));
+            const newTools = [...builtinTools, ...enabledMcpNames];
+
+            // Reconectar solo si la lista cambió (evita bucle infinito)
+            const current = tab.settings.tools || [];
+            const changed = newTools.length !== current.length ||
+                newTools.some(t => !current.includes(t));
+
+            if (changed) {
+                tab.settings.tools = newTools;
+                saveTabs();
+                // Disparar evento para reconectar sin importar connection.js (evita circular dep)
+                window.dispatchEvent(new CustomEvent('tab-reconnect', { detail: { tabId } }));
+            }
+        }
         return;
     }
 

@@ -165,6 +165,7 @@ class Session:
         try:
             if not self._sdk_client or not self._sdk_client.is_connected:
                 return
+
             mcp_status = await self._sdk_client.get_mcp_status()
             mcp_tools = []
             for server in mcp_status.get("mcpServers", []):
@@ -334,8 +335,7 @@ class Session:
         if agent_options:
             rebuild_keys = {
                 'model', 'system_prompt', 'append_system_prompt',
-                'max_turns', 'permission_mode', 'allowed_tools',
-                'disallowed_tools', 'tools',
+                'max_turns', 'permission_mode', 'tools',
             }
             for key in rebuild_keys:
                 if agent_options.get(key) != self.agent_options.get(key):

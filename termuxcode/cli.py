@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -23,6 +24,127 @@ def port_in_use(port: int) -> bool:
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 
+def _find_pids_by_port(port: int) -> list[int]:
+    """Encuentra PIDs usando el puerto. Intenta múltiples métodos para compatibilidad con Termux/Android."""
+    # 1. /proc/net/tcp (Linux estándar con permisos)
+    hex_port = format(port, '04X')
+    inodes: set[str] = set()
+
+    for tcp_file in ('/proc/net/tcp', '/proc/net/tcp6'):
+        try:
+            with open(tcp_file) as f:
+                next(f)
+                for line in f:
+                    parts = line.split()
+                    if len(parts) < 10:
+                        continue
+                    local_port = parts[1].split(':')[1] if ':' in parts[1] else ''
+                    if local_port.upper() == hex_port:
+                        inodes.add(parts[9])
+        except OSError:
+            pass
+
+    if inodes:
+        pids: list[int] = []
+        try:
+            for entry in os.listdir('/proc'):
+                if not entry.isdigit():
+                    continue
+                fd_dir = f'/proc/{entry}/fd'
+                try:
+                    for fd in os.listdir(fd_dir):
+                        try:
+                            link = os.readlink(f'{fd_dir}/{fd}')
+                            if link.startswith('socket:[') and link[8:-1] in inodes:
+                                pids.append(int(entry))
+                                break
+                        except OSError:
+                            pass
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        if pids:
+            return pids
+
+    # 2. lsof (disponible en Termux)
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+        )
+        if result.stdout.strip():
+            return [int(p) for p in result.stdout.strip().split() if p.isdigit()]
+    except FileNotFoundError:
+        pass
+
+    # 3. fuser (disponible en Termux)
+    try:
+        result = subprocess.run(
+            ["fuser", f"{port}/tcp"], capture_output=True, text=True
+        )
+        if result.stdout.strip():
+            return [int(p) for p in result.stdout.strip().split() if p.isdigit()]
+    except FileNotFoundError:
+        pass
+
+    return []
+
+
+def _kill_termuxcode_processes() -> list[int]:
+    """Mata procesos de termuxcode por nombre (fallback para Android/Termux).
+
+    Mata ws_server.py y serve.py primero, luego el proceso padre termuxcode stale.
+    Nunca mata el proceso actual ni sus padres.
+    """
+    my_pid = os.getpid()
+    my_ppid = os.getppid()
+    killed: list[int] = []
+
+    # Primero matar los servidores hijos (son los que realmente ocupan los puertos)
+    for script in ['ws_server.py', 'serve.py']:
+        try:
+            result = subprocess.run(['ps', '-ef'], capture_output=True, text=True)
+            for line in result.stdout.splitlines():
+                parts = line.split()
+                if len(parts) < 8:
+                    continue
+                pid = int(parts[1])
+                if pid in (my_pid, my_ppid):
+                    continue
+                cmd = ' '.join(parts[7:])
+                if script in cmd and 'grep' not in cmd:
+                    subprocess.run(['kill', '-9', str(pid)], capture_output=True)
+                    print(f"  [kill] PID {pid} ({script})")
+                    killed.append(pid)
+                    break
+        except Exception:
+            pass
+
+    # Luego matar proceso termuxcode padre stale (si existe uno anterior)
+    try:
+        result = subprocess.run(['ps', '-ef'], capture_output=True, text=True)
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) < 8:
+                continue
+            pid = int(parts[1])
+            if pid in (my_pid, my_ppid):
+                continue
+            cmd = ' '.join(parts[7:])
+            if 'termuxcode' in cmd and 'grep' not in cmd \
+                    and 'python3 -c' not in cmd \
+                    and 'ws_server.py' not in cmd \
+                    and 'serve.py' not in cmd:
+                subprocess.run(['kill', '-9', str(pid)], capture_output=True)
+                print(f"  [kill] PID {pid} (termuxcode)")
+                killed.append(pid)
+                break
+    except Exception:
+        pass
+
+    return killed
+
+
 def kill_port(port: int) -> bool:
     """Mata los procesos que están usando el puerto dado."""
     if sys.platform == "win32":
@@ -31,7 +153,6 @@ def kill_port(port: int) -> bool:
         )
         pids = set()
         for line in result.stdout.splitlines():
-            # Match lines like: TCP    127.0.0.1:2025    ...    LISTENING    12345
             parts = line.split()
             if len(parts) >= 5 and f":{port}" in parts[1] and parts[3] == "LISTENING":
                 try:
@@ -39,19 +160,21 @@ def kill_port(port: int) -> bool:
                 except ValueError:
                     pass
         for pid in pids:
-            subprocess.run(["taskkill", "/PID", str(pid), "/F"],
-                           capture_output=True)
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
             print(f"  [kill] PID {pid} (puerto {port})")
         return bool(pids)
     else:
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
-        )
-        pids = result.stdout.strip().split()
-        for pid in pids:
-            subprocess.run(["kill", "-9", pid], capture_output=True)
-            print(f"  [kill] PID {pid} (puerto {port})")
-        return bool(pids)
+        # Intentar por puerto
+        pids = _find_pids_by_port(port)
+        if pids:
+            for pid in pids:
+                subprocess.run(["kill", "-9", str(pid)], capture_output=True)
+                print(f"  [kill] PID {pid} (puerto {port})")
+            return True
+
+        # Fallback: matar procesos termuxcode por nombre (Android/Termux)
+        killed = _kill_termuxcode_processes()
+        return bool(killed)
 
 
 def check_ports(mode: str, force: bool = False) -> None:
@@ -106,6 +229,35 @@ def print_banner() -> None:
     print("=" * 50 + "\n")
 
 
+def _acquire_wake_lock() -> bool:
+    """Adquiere un wake lock en Android/Termux para mantener CPU y red activos."""
+    if shutil.which('termux-wake-lock'):
+        try:
+            subprocess.Popen(
+                ['termux-wake-lock'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            print("[wake-lock] CPU y red se mantendran activos con pantalla apagada")
+            return True
+        except OSError:
+            pass
+    return False
+
+
+def _release_wake_lock() -> None:
+    """Libera el wake lock al detener los servidores."""
+    if shutil.which('termux-wake-unlock'):
+        try:
+            subprocess.Popen(
+                ['termux-wake-unlock'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            pass
+
+
 def run_servers(mode: str = "both", force: bool = False) -> None:
     """
     Ejecuta los servidores.
@@ -116,6 +268,9 @@ def run_servers(mode: str = "both", force: bool = False) -> None:
     """
     check_ports(mode, force=force)
     print_banner()
+
+    wake_lock_held = _acquire_wake_lock()
+
     processes = []
 
     # Capturar el directorio actual antes de lanzar subprocesos
@@ -162,6 +317,9 @@ def run_servers(mode: str = "both", force: bool = False) -> None:
             except subprocess.TimeoutExpired:
                 proc.kill()
         print("[OK] Servidores detenidos")
+    finally:
+        if wake_lock_held:
+            _release_wake_lock()
 
 
 def main() -> None:

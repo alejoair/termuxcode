@@ -9,10 +9,13 @@ export const DEFAULT_SETTINGS = {
     system_prompt: '',
     append_system_prompt: '',
     max_turns: '',
-    allowed_tools: '',
-    disallowed_tools: '',
     rolling_window: 100,
-    tools: ['TaskOutput', 'Bash', 'Glob', 'Grep', 'Read', 'Edit', 'Write', 'TodoWrite', 'EnterPlanMode', 'ExitPlanMode', 'TaskStop'],
+    // Lista explícita de tools disponibles para el agente (built-ins + MCP habilitadas).
+    // Se actualiza automáticamente cuando llega tools_list del backend.
+    tools: ['Agent', 'Bash', 'Glob', 'Grep', 'Read', 'Edit', 'Write', 'NotebookEdit',
+            'TodoWrite', 'WebSearch', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode',
+            'EnterWorktree', 'TaskOutput', 'TaskStop', 'Skill',
+            'ListMcpResourcesTool', 'ReadMcpResourceTool'],
     disabledMcpServers: [],  // nombres de MCP servers desactivados para este tab
 };
 

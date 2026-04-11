@@ -20,27 +20,6 @@ function getDisabledServers(tab) {
 
 function setDisabledServers(tab, disabledSet) {
     tab.settings.disabledMcpServers = [...disabledSet];
-
-    // Reconstruir disallowed_tools a partir del estado de todos los servers
-    const currentDisallowed = (tab.settings.disallowed_tools || '')
-        .split(',').map(t => t.trim()).filter(Boolean);
-
-    // Quitar todas las tools MCP del disallowed actual (se recalculan desde cero)
-    const allMcpToolNames = new Set(
-        mcpServers.flatMap(s => (s.tools || []).map(t => t.name))
-    );
-    const nonMcpDisallowed = currentDisallowed.filter(t => !allMcpToolNames.has(t));
-
-    // Añadir tools de los servers desactivados
-    const disabledToolNames = [];
-    for (const serverName of disabledSet) {
-        const server = mcpServers.find(s => s.name === serverName);
-        if (server) {
-            disabledToolNames.push(...(server.tools || []).map(t => t.name));
-        }
-    }
-
-    tab.settings.disallowed_tools = [...nonMcpDisallowed, ...disabledToolNames].join(',');
     saveTabs();
 }
 
@@ -110,8 +89,9 @@ export function renderMcpModalContent(overlay, servers, tabId) {
             const currentTab = state.tabs.get(state.activeTabId);
             if (!currentTab) return;
 
+            const enabled = input.checked;
             const disabled = getDisabledServers(currentTab);
-            if (input.checked) {
+            if (enabled) {
                 disabled.delete(serverName);
             } else {
                 disabled.add(serverName);
@@ -120,7 +100,27 @@ export function renderMcpModalContent(overlay, servers, tabId) {
 
             // Actualizar apariencia de la card
             const card = input.closest('.mcp-server-card');
-            if (card) card.classList.toggle('mcp-server-card--disabled', !input.checked);
+            if (card) card.classList.toggle('mcp-server-card--disabled', !enabled);
+
+            // Actualizar tab.settings.tools: añadir/quitar tools del server toggleado
+            const server = mcpServers.find(s => s.name === serverName);
+            if (server && server.tools) {
+                const serverToolNames = server.tools.map(t => t.name);
+                if (enabled) {
+                    // Añadir tools del server habilitado (si no están ya)
+                    for (const name of serverToolNames) {
+                        if (!currentTab.settings.tools.includes(name)) {
+                            currentTab.settings.tools.push(name);
+                        }
+                    }
+                } else {
+                    // Quitar tools del server deshabilitado
+                    currentTab.settings.tools = currentTab.settings.tools.filter(
+                        n => !serverToolNames.includes(n)
+                    );
+                }
+                saveTabs();
+            }
 
             // Mostrar hint de reconexión
             const hint = overlay.querySelector('.mcp-reconnect-hint');

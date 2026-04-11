@@ -72,10 +72,6 @@ class SDKClient:
             options.append_system_prompt = o["append_system_prompt"]
         if o.get("max_turns"):
             options.max_turns = int(o["max_turns"])
-        if o.get("allowed_tools"):
-            options.allowed_tools = o["allowed_tools"]
-        if o.get("disallowed_tools"):
-            options.disallowed_tools = o["disallowed_tools"]
         if o.get("tools"):
             options.tools = o["tools"]
 
@@ -190,6 +186,16 @@ class SDKClient:
         if not self._client:
             return {"mcpServers": []}
         return await self._client.get_mcp_status()
+
+    async def toggle_mcp_server(self, server_name: str, enabled: bool) -> None:
+        """Habilita o deshabilita un MCP server en la sesión activa.
+
+        Args:
+            server_name: Nombre del servidor MCP
+            enabled: True para habilitar, False para deshabilitar
+        """
+        if self._client:
+            await self._client.toggle_mcp_server(server_name, enabled)
 
     @property
     def transport(self) -> Transport | None:

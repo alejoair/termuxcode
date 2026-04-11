@@ -236,6 +236,20 @@ initTypewriter();
 initInputFeedback();
 initScrollFeedback();
 
+// Reconexion inmediata al volver la pantalla (red de seguridad)
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    for (const [tabId, tab] of state.tabs) {
+        if (!tab.isConnected) {
+            if (tab.reconnectTimeout) {
+                clearTimeout(tab.reconnectTimeout);
+                tab.reconnectTimeout = null;
+            }
+            connectTab(tabId);
+        }
+    }
+});
+
 // Event listener directo para el botón del plan (respaldo al onclick inline)
 const fabPlan = document.getElementById('fabPlan');
 if (fabPlan) {
