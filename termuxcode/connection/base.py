@@ -33,6 +33,10 @@ class WebSocketConnection:
     async def handle(self) -> None:
         """Maneja el ciclo de vida de la conexión."""
         logger.info(f"[Nueva conexión] {self.remote_address}")
+        # Capturar referencia al WebSocket de esta llamada para detectar si
+        # un reconnect() lo reemplazó mientras esperábamos session.create().
+        original_ws = self.websocket
+        ran_loop = False
 
         try:
             if self._session is None:
@@ -43,13 +47,21 @@ class WebSocketConnection:
                     agent_options=self._agent_options,
                     connection=self,
                 )
-                await self._session.create(self.websocket)
+                await self._session.create(original_ws)
             else:
                 # Sesión existente reanudada — attach del nuevo WebSocket
                 self._session.attach_websocket(self.websocket)
 
-            # Loop de mensajes del WebSocket
-            await self._message_loop()
+            # Si durante create() llegó un reconnect() que actualizó self.websocket,
+            # el otro handle() ya correrá el message loop — evitar dos recv() en paralelo.
+            if self.websocket is original_ws:
+                ran_loop = True
+                await self._message_loop()
+            else:
+                logger.debug(
+                    f"WebSocket reemplazado durante create() — saltando message loop "
+                    f"({original_ws.remote_address} → {self.websocket.remote_address})"
+                )
 
         except websockets.exceptions.ConnectionClosed:
             logger.info("[Conexión cerrada]")
@@ -60,12 +72,12 @@ class WebSocketConnection:
                     await self._session.send_message(
                         {"type": "system", "message": f"Error: {e}"}
                     )
-                await self.websocket.wait_closed()
+                await original_ws.wait_closed()
             except Exception:
                 pass
         finally:
-            # Solo detach del WebSocket — la Session sigue viva para reconexión
-            if self._session:
+            # Solo detach si este handle() fue el que corrió el message loop
+            if ran_loop and self._session:
                 self._session.detach_websocket()
 
     async def reconnect(self, new_websocket: ServerConnection, agent_options: dict | None = None,

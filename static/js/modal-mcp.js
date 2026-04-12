@@ -1,6 +1,6 @@
 // ===== Modal MCP Servers =====
 
-import { state, mcpServers } from './state.js';
+import { state } from './state.js';
 import { saveTabs } from './storage.js';
 import { escapeHtml, createOverlay, showModal } from './modal-utils.js';
 import { disconnectTab, connectTab } from './connection.js';
@@ -102,21 +102,27 @@ export function renderMcpModalContent(overlay, servers, tabId) {
             const card = input.closest('.mcp-server-card');
             if (card) card.classList.toggle('mcp-server-card--disabled', !enabled);
 
+            // Enviar toggle al backend para desactivar/activar en tiempo real
+            sendToActiveTab({
+                type: 'toggle_mcp_server',
+                server_name: serverName,
+                enabled: enabled
+            });
+
             // Actualizar tab.settings.tools: añadir/quitar tools del server toggleado
-            const server = mcpServers.find(s => s.name === serverName);
+            // Los nombres MCP para --tools siguen formato mcp__<server>__<tool>
+            const server = servers.find(s => s.name === serverName);
             if (server && server.tools) {
-                const serverToolNames = server.tools.map(t => t.name);
+                const serverMcpNames = server.tools.map(t => `mcp__${serverName}__${t.name}`);
                 if (enabled) {
-                    // Añadir tools del server habilitado (si no están ya)
-                    for (const name of serverToolNames) {
-                        if (!currentTab.settings.tools.includes(name)) {
-                            currentTab.settings.tools.push(name);
+                    for (const mcpName of serverMcpNames) {
+                        if (!currentTab.settings.tools.includes(mcpName)) {
+                            currentTab.settings.tools.push(mcpName);
                         }
                     }
                 } else {
-                    // Quitar tools del server deshabilitado
                     currentTab.settings.tools = currentTab.settings.tools.filter(
-                        n => !serverToolNames.includes(n)
+                        n => !serverMcpNames.includes(n)
                     );
                 }
                 saveTabs();
@@ -174,11 +180,25 @@ export function openMCPModal() {
 
     showModal(overlay);
 
-    // Poblar contenido inicial con estado actual
-    renderMcpModalContent(overlay, mcpServers, state.activeTabId);
+    // Poblar contenido inicial con estado del tab activo
+    const initialTab = state.tabs.get(state.activeTabId);
+    renderMcpModalContent(overlay, initialTab?.mcpServers || [], state.activeTabId);
 
     // Solicitar estado actualizado al backend
     sendToActiveTab({ type: 'request_mcp_status' });
+
+    // Re-render cuando el usuario cambia de tab
+    function onTabChange() {
+        const currentTab = state.tabs.get(state.activeTabId);
+        renderMcpModalContent(overlay, currentTab?.mcpServers || [], state.activeTabId);
+        sendToActiveTab({ type: 'request_mcp_status' });
+    }
+    window.addEventListener('tab-changed', onTabChange);
+
+    function closeModal() {
+        window.removeEventListener('tab-changed', onTabChange);
+        overlay.remove();
+    }
 
     // Botón refresh
     overlay.querySelector('#mcpRefreshBtn').addEventListener('click', () => {
@@ -194,8 +214,8 @@ export function openMCPModal() {
 
     // Botón reconectar
     overlay.querySelector('#mcpReconnectBtn').addEventListener('click', () => {
-        overlay.remove();
         const tabId = state.activeTabId;
+        closeModal();
         if (tabId) {
             disconnectTab(tabId);
             connectTab(tabId);
@@ -203,10 +223,10 @@ export function openMCPModal() {
     });
 
     // Botón cerrar
-    overlay.querySelector('#mcpCloseBtn').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#mcpCloseBtn').addEventListener('click', closeModal);
 
     // Cerrar al click fuera del modal
     overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.remove();
+        if (e.target === overlay) closeModal();
     });
 }

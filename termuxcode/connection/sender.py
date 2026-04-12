@@ -59,17 +59,16 @@ class MessageSender:
         """Envía todos los mensajes acumulados en el buffer."""
         if not self._websocket or not self._buffer:
             return
-        logger.info(f"Replay de {len(self._buffer)} mensajes del buffer")
-        sent_count = 0
-        for i, msg in enumerate(self._buffer):
+        buffer_copy = self._buffer[:]
+        self._buffer = []
+        logger.info(f"Replay de {len(buffer_copy)} mensajes del buffer")
+        for i, msg in enumerate(buffer_copy):
             try:
                 await self._websocket.send(json.dumps(msg))
-                sent_count = i + 1
             except Exception as e:
-                logger.error(f"Replay falló en mensaje {i}/{len(self._buffer)}: {e}")
-                self._buffer = self._buffer[sent_count:]
+                logger.error(f"Replay falló en mensaje {i}/{len(buffer_copy)}: {e}")
+                self._buffer = buffer_copy[i:] + self._buffer
                 raise
-        self._buffer.clear()
 
     def _evict_if_needed(self) -> None:
         """Evict oldest messages if buffer exceeds MAX_BUFFER_SIZE."""

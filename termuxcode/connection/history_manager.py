@@ -2,6 +2,7 @@
 """Gestión del historial de conversaciones JSONL."""
 
 import os
+import tempfile
 from pathlib import Path
 
 from termuxcode.ws_config import logger
@@ -60,9 +61,19 @@ def truncate_history(cwd: str, session_id: str, keep_last: int = 100) -> bool:
         # Conservar solo las últimas N líneas
         truncated_lines = lines[-keep_last:]
 
-        # Escribir de vuelta
-        with open(history_path, "w", encoding="utf-8") as f:
-            f.writelines(truncated_lines)
+        # Escribir a archivo temporal y renombrar atómicamente (POSIX)
+        # para evitar corrupción si el proceso muere durante la escritura
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=history_path.parent, suffix=".tmp")
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                f.writelines(truncated_lines)
+            os.replace(tmp_path, history_path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
         logger.info(f"Historial truncado: {total_lines} -> {keep_last} líneas")
         return True

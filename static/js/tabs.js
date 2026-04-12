@@ -2,7 +2,7 @@
 
 import { state, dom, DEFAULT_SETTINGS } from './state.js';
 import { saveTabs, loadTabsData } from './storage.js';
-import { addMessage, addSystemMessage, renderMessage, updateGlobalStatus, updateCwdDisplay, showLoading, hideLoading, showAskUserQuestion, showToolApproval, hasPendingQuestionModal, getPendingQuestion, updatePlanButton, skipAnimationsDuring, trimRenderedMessages } from './ui.js';
+import { addMessage, addSystemMessage, renderMessage, handleMessage, updateGlobalStatus, updateCwdDisplay, showLoading, hideLoading, showAskUserQuestion, showToolApproval, hasPendingQuestionModal, getPendingQuestion, updatePlanButton, skipAnimationsDuring, trimRenderedMessages } from './ui.js';
 import { connectTab, disconnectTab } from './connection.js';
 import { vibrateSend, vibrateError } from './haptics.js';
 import { cleanupTabModals } from './modals.js';
@@ -61,6 +61,7 @@ export async function createTab(name, cwd) {
         isConnected: false,
         sessionId: null,
         settings: { ...DEFAULT_SETTINGS },
+        mcpServers: [],
     });
 
     createTabElement(tabId, tabName);
@@ -78,6 +79,7 @@ export function switchTab(tabId) {
     if (!state.tabs.has(tabId)) return;
 
     state.activeTabId = tabId;
+    window.dispatchEvent(new CustomEvent('tab-changed', { detail: { tabId } }));
 
     document.querySelectorAll('.tab').forEach(el => {
         el.classList.toggle('active', el.dataset.tabId === tabId);
@@ -94,8 +96,7 @@ export function switchTab(tabId) {
         // Mover mensajes del buffer a renderedMessages y renderizar
         while (tab.messages.length > 0) {
             const data = tab.messages.shift();
-            tab.renderedMessages.push(data);
-            renderMessage(data, tabId);
+            handleMessage(data, tabId);
         }
     });
     trimRenderedMessages(tab);
@@ -122,6 +123,15 @@ export function switchTab(tabId) {
     updateGlobalStatus();
     updateCwdDisplay(tabId);
     updatePlanButton();
+
+    // Actualizar indicador del botón MCP según el estado del tab entrante
+    const btnMcp = document.getElementById('btnMcp');
+    if (btnMcp) {
+        const servers = tab.mcpServers || [];
+        const hasConnected = servers.some(s => s.status === 'connected');
+        btnMcp.classList.toggle('btn-mcp--active', hasConnected);
+        btnMcp.classList.toggle('btn-mcp--error', !hasConnected && servers.length > 0);
+    }
 
     // Actualizar selector de modelo
     const modelSelect = document.getElementById('modelSelector');
@@ -237,12 +247,13 @@ export function clearChat() {
         saveTabs();
     }
     dom.messages.innerHTML = '';
+    hideLoading(state.activeTabId);
     addSystemMessage('Chat limpiado', state.activeTabId);
 }
 
 export function loadTabs() {
     const data = loadTabsData();
-    data.forEach(({ id, name, cwd, sessionId, renderedMessages, settings, plan }) => {
+    data.forEach(({ id, name, cwd, sessionId, renderedMessages, settings, plan, mcpServers }) => {
         const effectiveCwd = cwd || null;
         state.tabs.set(id, {
             id,
@@ -257,6 +268,7 @@ export function loadTabs() {
             sessionId: sessionId || null,
             settings: settings || { ...DEFAULT_SETTINGS },
             plan: plan || null,
+            mcpServers: mcpServers || [],
         });
         createTabElement(id, name);
 

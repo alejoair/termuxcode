@@ -115,6 +115,12 @@ class Session:
         )
         await self._sdk_client.connect()
 
+        # Desactivar MCP servers que el usuario tiene desactivados
+        disabled = self.agent_options.get('disabledMcpServers', [])
+        if disabled:
+            await self._sdk_client.disable_mcp_servers(disabled)
+            logger.info(f"MCP servers desactivados al conectar: {disabled}")
+
         # Enviar lista de tools al frontend tras dar tiempo a MCP servers de conectar
         asyncio.create_task(self._send_tools_list())
 
@@ -159,23 +165,65 @@ class Session:
 
         logger.info(f"Session created: cwd={self.cwd}, session_id={self.session_id}")
 
-    async def _send_tools_list(self) -> None:
-        """Espera 3s para que los MCP servers conecten, luego envía la lista de tools al frontend."""
-        await asyncio.sleep(3)
+    async def _wait_for_mcp_ready(self, timeout: float = 15.0, poll_interval: float = 0.5) -> dict:
+        """Espera a que los MCP servers terminen de conectar (ninguno en estado 'pending').
+
+        Hace polling de get_mcp_status() hasta que todos los servers tengan un estado
+        definitivo (connected, failed, disabled, etc.) o se alcance el timeout.
+
+        Args:
+            timeout: Tiempo máximo de espera en segundos
+            poll_interval: Intervalo entre consultas en segundos
+
+        Returns:
+            Último resultado de get_mcp_status()
+        """
+        deadline = asyncio.get_event_loop().time() + timeout
+        while True:
+            mcp_status = await self._sdk_client.get_mcp_status()
+            servers = mcp_status.get("mcpServers", [])
+
+            # Si no hay servers configurados, no hay nada que esperar
+            if not servers:
+                return mcp_status
+
+            pending = [s["name"] for s in servers if s.get("status") == "pending"]
+            if not pending:
+                return mcp_status
+
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                logger.warning(f"Timeout esperando MCP servers: {pending} siguen en pending")
+                return mcp_status
+
+            await asyncio.sleep(min(poll_interval, remaining))
+
+    async def _send_tools_list(self, wait_for_mcp: bool = True) -> None:
+        """Espera a que los MCP servers estén listos y envía la lista de tools al frontend.
+
+        Args:
+            wait_for_mcp: Si True, espera polling hasta que no haya servers en 'pending'.
+                          Si False, consulta el estado inmediatamente (re-attach).
+        """
         try:
             if not self._sdk_client or not self._sdk_client.is_connected:
                 return
 
-            mcp_status = await self._sdk_client.get_mcp_status()
+            if wait_for_mcp:
+                mcp_status = await self._wait_for_mcp_ready()
+            else:
+                mcp_status = await self._sdk_client.get_mcp_status()
             mcp_tools = []
+            disabled = set(self.agent_options.get('disabledMcpServers', []))
             for server in mcp_status.get("mcpServers", []):
-                if server.get("status") == "connected":
+                if server.get("status") == "connected" and server["name"] not in disabled:
                     for tool in server.get("tools", []):
                         mcp_tools.append({
                             "name": tool["name"],
                             "desc": tool.get("description", ""),
                             "source": "mcp",
                             "server": server["name"],
+                            "mcp_name": f"mcp__{server['name']}__{tool['name']}",
                         })
             all_tools = BUILTIN_TOOLS + mcp_tools
             await self._sender.send_tools_list(all_tools)
@@ -198,15 +246,17 @@ class Session:
                 mcp_status = await self._sdk_client.get_mcp_status()
             servers = []
             for s in mcp_status.get("mcpServers", []):
+                tools = s.get("tools", [])
                 servers.append({
                     "name": s.get("name", ""),
                     "status": s.get("status", "unknown"),
                     "tools": [
                         {"name": t["name"], "desc": t.get("description", "")}
-                        for t in s.get("tools", [])
+                        for t in tools
                     ],
                     "error": s.get("error"),
                 })
+                logger.info(f"MCP server '{s.get('name')}': status={s.get('status')}, tools={len(tools)}, error={s.get('error')}")
             await self._sender.send_mcp_status(servers)
             logger.debug(f"MCP status enviado: {len(servers)} servers")
         except Exception as e:
@@ -235,6 +285,7 @@ class Session:
                 self.agent_options = agent_options
             self._sender.set_websocket(websocket)
             await self._sender.replay_buffer()
+            asyncio.create_task(self._send_tools_list(wait_for_mcp=False))
             logger.info(
                 f"Session re-attached (no rebuild): session_id={self.session_id}"
             )
@@ -303,7 +354,23 @@ class Session:
         elif data.get('type') == 'request_buffer_replay':
             await self._sender.replay_buffer()
         elif data.get('type') == 'request_mcp_status':
-            await self._send_mcp_status()
+            mcp_status = await self._wait_for_mcp_ready()
+            await self._send_mcp_status(mcp_status)
+        elif data.get('type') == 'toggle_mcp_server':
+            server_name = data.get('server_name')
+            enabled = data.get('enabled', True)
+            if self._sdk_client and server_name:
+                await self._sdk_client.toggle_mcp_server(server_name, enabled)
+                logger.info(f"MCP server '{server_name}' {'habilitado' if enabled else 'desactivado'} via toggle")
+                # Actualizar agent_options local
+                disabled = set(self.agent_options.get('disabledMcpServers', []))
+                if enabled:
+                    disabled.discard(server_name)
+                else:
+                    disabled.add(server_name)
+                self.agent_options['disabledMcpServers'] = list(disabled)
+            # Reenviar tools list actualizada (servidores ya conectados, no esperar)
+            await self._send_tools_list(wait_for_mcp=False)
         else:
             try:
                 self.message_queue.put_nowait(data)
@@ -340,6 +407,11 @@ class Session:
             for key in rebuild_keys:
                 if agent_options.get(key) != self.agent_options.get(key):
                     return True
+            # disabledMcpServers es un conjunto (el orden no importa)
+            old_disabled = set(self.agent_options.get('disabledMcpServers') or [])
+            new_disabled = set(agent_options.get('disabledMcpServers') or [])
+            if old_disabled != new_disabled:
+                return True
         return False
 
     async def _init_lsp_background(self) -> None:

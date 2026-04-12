@@ -11,6 +11,7 @@ export function saveTabs() {
         renderedMessages: tab.renderedMessages,
         settings: tab.settings,
         plan: tab.plan || null,
+        mcpServers: tab.mcpServers || [],
     }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }

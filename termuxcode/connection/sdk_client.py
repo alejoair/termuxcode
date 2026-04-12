@@ -197,6 +197,15 @@ class SDKClient:
         if self._client:
             await self._client.toggle_mcp_server(server_name, enabled)
 
+    async def disable_mcp_servers(self, server_names: list[str]) -> None:
+        """Desactiva múltiples MCP servers al conectar.
+
+        Args:
+            server_names: Lista de nombres de servidores a desactivar
+        """
+        for name in server_names:
+            await self.toggle_mcp_server(name, False)
+
     @property
     def transport(self) -> Transport | None:
         """Retorna el transporte del SDK para envío directo de mensajes."""

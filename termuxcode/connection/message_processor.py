@@ -147,10 +147,10 @@ class MessageProcessor:
                         if remaining_type == "ResultMessage":
                             if hasattr(remaining, 'session_id') and remaining.session_id:
                                 self._session_id = remaining.session_id
-                                await self._sender.send_session_id(remaining.session_id)
-                                await self._sender.send_cwd(self._cwd)
                                 if self._on_session_id_update:
                                     await self._on_session_id_update(self._session_id)
+                                await self._sender.send_session_id(remaining.session_id)
+                                await self._sender.send_cwd(self._cwd)
                             break
                     await self._sender.send_system_message("Query detenido")
                     break
@@ -161,12 +161,13 @@ class MessageProcessor:
                     # Capturar session_id del SDK y enviarlo al frontend
                     if hasattr(msg, 'session_id') and msg.session_id:
                         self._session_id = msg.session_id
+                        # Registrar en registry ANTES de enviar al frontend
+                        # para evitar que un reconnect inmediato no encuentre la sesión
+                        if self._on_session_id_update:
+                            await self._on_session_id_update(self._session_id)
                         await self._sender.send_session_id(self._session_id)
                         # Enviar CWD junto con el session_id (sesión establecida)
                         await self._sender.send_cwd(self._cwd)
-                        # Notificar al callback si existe (para actualizar registry)
-                        if self._on_session_id_update:
-                            await self._on_session_id_update(self._session_id)
                     result_data = MessageConverter.convert_result_message(msg)
                     await self._sender.send_message(result_data)
                     break

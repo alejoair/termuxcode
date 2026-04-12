@@ -2,9 +2,12 @@
 # ruff: noqa: ANN401
 """Conversión de mensajes del SDK al formato WebSocket."""
 
+import logging
 from typing import Any
 
 from claude_agent_sdk import AssistantMessage, ResultMessage, UserMessage
+
+logger = logging.getLogger(__name__)
 
 # Tipos de bloques de contenido
 BLOCK_TYPES = {
@@ -61,11 +64,16 @@ class MessageConverter:
             }
 
         if block_format == "tool_result":
+            content = str(block.content)
+            was_truncated = len(content) > 500
+            if was_truncated:
+                logger.debug(f"tool_result truncado: {len(content)} → 500 chars (tool_use_id={block.tool_use_id})")
             return {
                 "type": "tool_result",
                 "tool_use_id": block.tool_use_id,
-                "content": str(block.content)[:500],
+                "content": content[:500],
                 "is_error": block.is_error,
+                "was_truncated": was_truncated,
             }
 
         if block_format == "thinking":

@@ -1,6 +1,6 @@
 // ===== Renderizado de mensajes y UI =====
 
-import { state, dom, updateAvailableTools, updateMcpServers } from './state.js';
+import { state, dom, updateAvailableTools } from './state.js';
 import { saveTabs } from './storage.js';
 import { renderAskUserQuestionInChat, showAskUserQuestion, hideAskUserQuestion, showToolApproval, hideToolApproval, showFileView, hideFileView, hasPendingQuestionModal, getPendingQuestion, showPlanViewer, migrateQuestionModal } from './modals.js';
 import { vibrateReceive, vibrateResult, vibrateAttention } from './haptics.js';
@@ -383,15 +383,16 @@ export function handleMessage(data, tabId) {
         updateAvailableTools(data.tools);
 
         // Sincronizar tab.settings.tools con las MCP tools habilitadas
+        // Los nombres MCP siguen el formato mcp__<server>__<tool> para el argumento --tools
         const mcpTools = data.tools.filter(t => t.source === 'mcp');
         if (mcpTools.length > 0) {
             const disabledServers = new Set(tab.settings.disabledMcpServers || []);
             const enabledMcpNames = mcpTools
                 .filter(t => !disabledServers.has(t.server))
-                .map(t => t.name);
+                .map(t => t.mcp_name);  // mcp__server__tool
 
             // Eliminar del tools actual todas las MCP tools conocidas, luego añadir las habilitadas
-            const allKnownMcpNames = new Set(mcpTools.map(t => t.name));
+            const allKnownMcpNames = new Set(mcpTools.map(t => t.mcp_name));
             const builtinTools = (tab.settings.tools || []).filter(n => !allKnownMcpNames.has(n));
             const newTools = [...builtinTools, ...enabledMcpNames];
 
@@ -403,7 +404,6 @@ export function handleMessage(data, tabId) {
             if (changed) {
                 tab.settings.tools = newTools;
                 saveTabs();
-                // Disparar evento para reconectar sin importar connection.js (evita circular dep)
                 window.dispatchEvent(new CustomEvent('tab-reconnect', { detail: { tabId } }));
             }
         }
@@ -412,17 +412,19 @@ export function handleMessage(data, tabId) {
 
     // Actualizar estado de MCP servers y refrescar modal si está abierto
     if (data.type === 'mcp_status') {
-        updateMcpServers(data.servers);
+        tab.mcpServers = data.servers || [];
         const modal = document.getElementById('mcpModal');
-        if (modal) {
-            import('./modal-mcp.js').then(m => m.renderMcpModalContent(modal, data.servers, tabId));
+        if (modal && state.activeTabId === tabId) {
+            import('./modal-mcp.js').then(m => m.renderMcpModalContent(modal, tab.mcpServers, tabId));
         }
-        // Actualizar indicador del botón MCP en toolbar
-        const btnMcp = document.getElementById('btnMcp');
-        if (btnMcp) {
-            const hasConnected = data.servers.some(s => s.status === 'connected');
-            btnMcp.classList.toggle('btn-mcp--active', hasConnected);
-            btnMcp.classList.toggle('btn-mcp--error', !hasConnected && data.servers.length > 0);
+        // Actualizar indicador del botón MCP en toolbar (solo tab activo)
+        if (state.activeTabId === tabId) {
+            const btnMcp = document.getElementById('btnMcp');
+            if (btnMcp) {
+                const hasConnected = data.servers.some(s => s.status === 'connected');
+                btnMcp.classList.toggle('btn-mcp--active', hasConnected);
+                btnMcp.classList.toggle('btn-mcp--error', !hasConnected && data.servers.length > 0);
+            }
         }
         return;
     }

@@ -38,6 +38,7 @@ export function connectTab(tabId) {
         if (s.max_turns) opts.max_turns = parseInt(s.max_turns);
         if (s.rolling_window) opts.rolling_window = parseInt(s.rolling_window);
         if (s.tools && s.tools.length > 0) opts.tools = s.tools;
+        if (Array.isArray(s.disabledMcpServers)) opts.disabledMcpServers = s.disabledMcpServers;
         if (Object.keys(opts).length) params.set('options', JSON.stringify(opts));
         const wsUrl = params.toString() ? `${WS_URL}?${params.toString()}` : WS_URL;
         const ws = new WebSocket(wsUrl);
@@ -48,6 +49,7 @@ export function connectTab(tabId) {
         // del ws viejo deben ser no-ops)
         ws.onopen = () => {
             if (tab.ws !== ws) return; // Stale WebSocket
+            tab._reconnecting = false;
             const currentTabId = tab.id;
             tab.isConnected = true;
             tab.reconnectAttempts = 0;
@@ -80,6 +82,7 @@ export function connectTab(tabId) {
 
         ws.onclose = () => {
             if (tab.ws !== ws) return; // Stale WebSocket
+            tab._reconnecting = false;
             const currentTabId = tab.id;
             tab.isConnected = false;
             tab.reconnectAttempts = (tab.reconnectAttempts || 0) + 1;
@@ -125,6 +128,7 @@ export function connectTab(tabId) {
 
         ws.onerror = () => {
             if (tab.ws !== ws) return; // Stale WebSocket
+            tab._reconnecting = false;
             const currentTabId = tab.id;
             // Solo mostrar mensaje de error en el primer intento, no en cada reintento
             if (state.activeTabId === currentTabId && tab.reconnectAttempts <= 1) {
@@ -159,6 +163,9 @@ export function disconnectTab(tabId) {
 
 // Reconectar cuando ui.js detecta que tab.settings.tools cambió (MCP tools sync)
 window.addEventListener('tab-reconnect', ({ detail: { tabId } }) => {
+    const tab = state.tabs.get(tabId);
+    if (!tab || tab._reconnecting) return;
+    tab._reconnecting = true;
     disconnectTab(tabId);
     connectTab(tabId);
 });
