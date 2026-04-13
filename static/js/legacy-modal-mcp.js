@@ -47,11 +47,17 @@ export function renderMcpModalContent(overlay, servers, tabId) {
     }
 
     body.innerHTML = servers.map(server => {
-        const isDisabled = disabledServers.has(server.name);
+        const isDisabled = disabledServers.has(server.name) || server.status === 'disabled';
         const statusClass = server.status === 'connected' ? 'connected'
-            : server.status === 'disconnected' ? 'disconnected' : 'unknown';
+            : server.status === 'disconnected' ? 'disconnected'
+            : server.status === 'failed' ? 'failed'
+            : server.status === 'pending' ? 'pending'
+            : 'unknown';
         const statusLabel = server.status === 'connected' ? 'conectado'
-            : server.status === 'disconnected' ? 'desconectado' : server.status || 'desconocido';
+            : server.status === 'disconnected' ? 'desconectado'
+            : server.status === 'failed' ? 'error'
+            : server.status === 'pending' ? 'conectando'
+            : server.status || 'desconocido';
         const toolCount = (server.tools || []).length;
         const toolsHtml = toolCount > 0
             ? (server.tools || []).map(t =>
@@ -102,35 +108,9 @@ export function renderMcpModalContent(overlay, servers, tabId) {
             const card = input.closest('.mcp-server-card');
             if (card) card.classList.toggle('mcp-server-card--disabled', !enabled);
 
-            // Enviar toggle al backend para desactivar/activar en tiempo real
-            sendToActiveTab({
-                type: 'toggle_mcp_server',
-                server_name: serverName,
-                enabled: enabled
-            });
-
-            // Actualizar tab.settings.tools: añadir/quitar tools del server toggleado
-            // Los nombres MCP para --tools siguen formato mcp__<server>__<tool>
-            const server = servers.find(s => s.name === serverName);
-            if (server && server.tools) {
-                const serverMcpNames = server.tools.map(t => `mcp__${serverName}__${t.name}`);
-                if (enabled) {
-                    for (const mcpName of serverMcpNames) {
-                        if (!currentTab.settings.tools.includes(mcpName)) {
-                            currentTab.settings.tools.push(mcpName);
-                        }
-                    }
-                } else {
-                    currentTab.settings.tools = currentTab.settings.tools.filter(
-                        n => !serverMcpNames.includes(n)
-                    );
-                }
-                saveTabs();
-            }
-
-            // Mostrar hint de reconexión
-            const hint = overlay.querySelector('.mcp-reconnect-hint');
-            if (hint) hint.style.display = 'block';
+            // Resaltar botón Aplicar para indicar que hay cambios pendientes
+            const applyBtn = overlay.querySelector('#mcpReconnectBtn');
+            if (applyBtn) applyBtn.classList.add('mcp-btn-reconnect--pending');
         });
     });
 }
@@ -160,19 +140,12 @@ export function openMCPModal() {
                 </div>
             </div>
             <div class="mcp-body"></div>
-            <div class="mcp-reconnect-hint" style="display:none">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
-                </svg>
-                Cambios aplicados al reconectar
-            </div>
             <div class="mcp-footer">
                 <button class="mcp-btn-reconnect" id="mcpReconnectBtn">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M23 4v6h-6M1 20v-6h6"/>
-                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        <polyline points="20 6 9 17 4 12"/>
                     </svg>
-                    Reconectar sesión
+                    Aplicar
                 </button>
             </div>
         </div>

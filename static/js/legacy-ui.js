@@ -176,18 +176,27 @@ function insertToolResults(blocks, tabId) {
     for (const block of blocks) {
         if (block.type !== 'tool_result') continue;
         const toolUseEl = dom.messages.querySelector(`[data-tool-id="${block.tool_use_id}"]`);
-        const resultEl = createToolResultEl(block.content);
         if (toolUseEl) {
-            toolUseEl.after(resultEl);
+            // Encontrar el bubble contenedor de este tool use
+            const bubble = toolUseEl.closest('.tool-call-bubble');
+            if (bubble) {
+                // Crear el result element y añadirlo al mismo bubble
+                const resultEl = createToolResultEl(block.content);
+                bubble.appendChild(resultEl);
+            }
         } else {
             // fallback: añadir al final del último tool-call bubble
             const lastToolCall = dom.messages.querySelector('.tool-call-bubble:last-of-type');
             if (lastToolCall) {
+                const resultEl = createToolResultEl(block.content);
                 lastToolCall.appendChild(resultEl);
             } else {
                 // fallback 2: añadir al final del último bubble de asistente
                 const lastBubble = dom.messages.querySelector('.assistant-bubble:last-of-type');
-                if (lastBubble) lastBubble.appendChild(resultEl);
+                if (lastBubble) {
+                    const resultEl = createToolResultEl(block.content);
+                    lastBubble.appendChild(resultEl);
+                }
             }
         }
     }
@@ -422,6 +431,7 @@ export function handleMessage(data, tabId) {
             const btnMcp = document.getElementById('btnMcp');
             if (btnMcp) {
                 const hasConnected = data.servers.some(s => s.status === 'connected');
+                btnMcp.disabled = false;
                 btnMcp.classList.toggle('btn-mcp--active', hasConnected);
                 btnMcp.classList.toggle('btn-mcp--error', !hasConnected && data.servers.length > 0);
             }

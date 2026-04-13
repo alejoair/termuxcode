@@ -3,21 +3,9 @@
   "configurations": [
     {
       "name": "HTTP + WebSocket (all servers)",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "termuxcode.cli"],
-      "port": 8000
-    },
-    {
-      "name": "HTTP Server",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["termuxcode/serve.py"],
-      "port": 8000
-    },
-    {
-      "name": "WebSocket Server",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["termuxcode/ws_server.py"],
-      "port": 8769
+      "runtimeExecutable": "termuxcode",
+      "runtimeArgs": ["--force"],
+      "port": 1988
     }
   ]
 }

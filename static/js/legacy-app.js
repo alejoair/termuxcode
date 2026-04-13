@@ -11,16 +11,21 @@ import { initScrollFeedback } from './js/scroll-feedback.js';
 import { initNotifications } from './js/notifications.js';
 import { showPlanViewer, updatePlanButton } from './js/ui.js';
 
-// Inicializar Framework7
-const f7 = new Framework7({
-    el: '#app',
-    name: 'termux-code',
-    theme: 'auto',
-});
+// Medir altura real del bottom-bar y actualizar CSS variable
+function initBottomBarObserver() {
+    const bottomBar = document.querySelector('.bottom-bar');
+    if (!bottomBar) return;
+    const update = () => {
+        document.documentElement.style.setProperty('--bottom-bar-height', `${bottomBar.offsetHeight}px`);
+    };
+    new ResizeObserver(update).observe(bottomBar);
+    update();
+}
 
 async function init() {
     loadTabs();
     initNotifications();
+    initBottomBarObserver();
 
     if (state.tabs.size === 0) {
         await createTab('Chat 1');
@@ -70,7 +75,7 @@ function openSettings() {
 
     // Generar checkboxes de tools
     const selectedTools = s.tools || [];
-    const toolsCheckboxes = AVAILABLE_TOOLS.map(tool => {
+    const toolsCheckboxes = AVAILABLE_TOOLS.filter(tool => tool.source === 'builtin').map(tool => {
         const checked = selectedTools.includes(tool.name) ? 'checked' : '';
         return `
             <label class="tools-checkbox-label" title="${esc(tool.desc)}">
@@ -113,10 +118,6 @@ function openSettings() {
                     </div>
                     <div class="settings-row">
                         <div class="settings-field">
-                            <label class="settings-label">Máximo de turnos</label>
-                            <input class="settings-input" id="cfg-max_turns" type="number" min="1" placeholder="Sin límite" value="${esc(s.max_turns)}">
-                        </div>
-                        <div class="settings-field">
                             <label class="settings-label">Ventana de historial</label>
                             <input class="settings-input" id="cfg-rolling_window" type="number" min="10" placeholder="100" value="${esc(s.rolling_window)}">
                         </div>
@@ -129,16 +130,6 @@ function openSettings() {
                             ${toolsCheckboxes}
                         </div>
                     </div>
-                    <div class="settings-row">
-                        <div class="settings-field">
-                            <label class="settings-label">Permitidas</label>
-                            <input class="settings-input" id="cfg-allowed_tools" type="text" placeholder="Bash,Edit,Read,..." value="${esc(s.allowed_tools)}">
-                        </div>
-                        <div class="settings-field">
-                            <label class="settings-label">Bloqueadas</label>
-                            <input class="settings-input" id="cfg-disallowed_tools" type="text" placeholder="WebSearch,..." value="${esc(s.disallowed_tools)}">
-                        </div>
-                    </div>
                 </div>
                 <div class="settings-section">
                     <div class="settings-section-title">Prompts del sistema</div>
@@ -146,12 +137,7 @@ function openSettings() {
                         <label class="settings-label">System prompt</label>
                         <textarea class="settings-textarea" id="cfg-system_prompt" rows="3">${esc(s.system_prompt)}</textarea>
                     </div>
-                    <div class="settings-field">
-                        <label class="settings-label">Append system prompt</label>
-                        <textarea class="settings-textarea" id="cfg-append_system_prompt" rows="3">${esc(s.append_system_prompt)}</textarea>
-                    </div>
                 </div>
-                <div class="settings-note">Los cambios se aplican en la próxima conexión.</div>
             </div>
             <div class="question-actions">
                 <button class="question-btn question-btn-cancel" id="settingsCancelBtn">Cancelar</button>
@@ -170,13 +156,9 @@ function openSettings() {
         tab.settings = {
             permission_mode: overlay.querySelector('#cfg-permission_mode').value,
             model: overlay.querySelector('#cfg-model').value,
-            max_turns: overlay.querySelector('#cfg-max_turns').value.trim(),
             rolling_window: parseInt(overlay.querySelector('#cfg-rolling_window').value) || 100,
             tools: selectedTools,
-            allowed_tools: overlay.querySelector('#cfg-allowed_tools').value.trim(),
-            disallowed_tools: overlay.querySelector('#cfg-disallowed_tools').value.trim(),
             system_prompt: overlay.querySelector('#cfg-system_prompt').value,
-            append_system_prompt: overlay.querySelector('#cfg-append_system_prompt').value,
         };
         saveTabs();
         overlay.remove();

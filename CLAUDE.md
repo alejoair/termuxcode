@@ -1,283 +1,327 @@
-# CLAUDE.md
+# TERMUXCODE - Vue 3 Migration
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Resumen de Trabajo Realizado
 
-## Project Overview
+### Estructura Actual
+- **HTML**: `static/index.html` - Solo mount point (`<div id="app"></div>`), scripts y estilos CSS
+- **App Principal**: `static/js/app-vue.js` - Template string del root component, coordina composables, registra componentes globalmente
+- **Componentes montados**:
+  - `AppHeader.js` - Header con pestañas, recibe `state` prop, botón toggle sidebar logs
+  - `LogSidebar.js` - Panel colapsable de logs del servidor con filtro por nivel
+  - `MessageList.js` - Lista de mensajes con markdown y accordions
+  - `InputBar.js` - Barra de input con botón enviar
+- **Composables**:
+  - `useTabs.js` - Gestión de pestañas (crear, cambiar, cerrar, serialización)
+  - `useWebSocket.js` - Conexión WebSocket con reconexión automática
+  - `useStorage.js` - Persistencia en localStorage (tabs + activeTabId)
+  - `useMessages.js` - Procesamiento de mensajes (assistant, tool_use, tool_result)
+  - `useSharedState.js` - Estado reactivo compartido centralizado
+  - `useServerLogs.js` - Estado global de logs del servidor (no per-tab, singleton)
 
-TERMUXCODE is a Claude Code client with two deployment modes:
-1. **Termux/Android**: Python package (`pip install termuxcode`) running WebSocket + HTTP servers
-2. **Desktop**: Tauri app (Windows/macOS/Linux) with embedded Python sidecar
+### Funcionalidades Implementadas
 
-## Architecture
+#### 1. Sistema de Pestañas
+- Crear pestañas nuevas con botón +
+- Cambiar entre pestañas (click en pestaña)
+- Cerrar pestañas (botón ×) con destrucción de sesión en backend (`/destroy`)
+- Indicador visual activa: `bg-zinc-700 text-zinc-100 border-zinc-500`
+- Indicador visual inactiva: `bg-zinc-900/50 text-zinc-500 border-transparent`
+- Indicador de conexión: Verde (conectado) vs Rojo (desconectado)
 
-### Backend (Python)
-- **`termuxcode/cli.py`**: Entry point for the `termuxcode` command. Spawns two subprocesses:
-  - `serve.py` - HTTP server (port 8000) serving static files from `static/`
-  - `ws_server.py` - WebSocket server (port 8769) using `websockets` library
-- **`termuxcode/connection/`**: Modular WebSocket connection handling, fully isolated per-tab:
-  - `session.py` - `Session` class: encapsulates ALL per-tab resources (LspManager, SDKClient, hooks, handlers, processor). Lifecycle: `create()` / `resume()` / `destroy()`. Each tab gets its own LSP servers with independent `rootUri`.
-  - `session_registry.py` - Global registry: `session_id → WebSocketConnection` mapping. Used by `ws_server.py` for reconnection lookups. Session manages registration/unregistration via `_known_session_ids` set.
-  - `base.py` - `WebSocketConnection` thin wrapper: connects WebSocket lifecycle to `Session`. Only handles WebSocket I/O (message loop) and delegates all logic to `Session`.
-  - `sdk_client.py` - `SDKClient` wrapper for `ClaudeSDKClient` (connect, query, receive, interrupt, resume). Accepts a per-session `LspManager` instance and creates LSP hooks via closure factories.
-  - `sender.py` - `MessageSender` sends typed JSON messages to the frontend WebSocket. Supports buffer/replay for reconnection.
-  - `message_processor.py` - `MessageProcessor` processes user messages from the queue, iterates SDK responses, handles stop signals
-  - `ask_handler.py` - `AskUserQuestionHandler` detects `AskUserQuestion` tool use, sends questions to frontend, waits for response, sends tool_result back to SDK
-  - `tool_approval_handler.py` - `ToolApprovalHandler` implements `can_use_tool` callback for tool approval flow
-  - `history_manager.py` - `truncate_history()` trims SDK conversation history JSONL files before each query
-  - `lsp/` - LSP client module (refactored into focused components):
-    - `uri.py` - Path/URI conversion utilities (`file_path_to_uri`, `uri_to_file_path`, `extension_to_language_id`)
-    - `protocol.py` - JSON-RPC message building and parsing (`build_request`, `build_notification`, `encode_message`, `parse_message`)
-    - `diagnostics.py` - `DiagnosticsManager` class: cache de diagnósticos con eventos async para sincronización
-    - `transport.py` - `StdioTransport` class: manejo de proceso LSP + comunicación stdio (start/shutdown/send_request/send_notification)
-    - `client.py` - `LSPClient` class: high-level API que combina transporte, diagnósticos y operaciones de texto (open_file, get_symbols, get_hover, validate)
-    - `__init__.py` - Re-exports públicos: `LSPClient`, `file_path_to_uri`, `uri_to_file_path`, `extension_to_language_id`
-  - `lsp_manager.py` - `LspManager` (per-session instance): registry of LSP servers by extension (`SERVERS` dict) + semantic analyzer. Auto-discovers available servers (`shutil.which`), provides `analyze_file()` (symbols + hover + references), `validate_file()` (LSP diagnostics), and baseline comparison for edit validation. Each `Session` creates its own `LspManager` with its own `rootUri`.
-  - `hooks.py` - SDK hooks via LSP as **closure factories**: `make_pre_tool_use_hook(lsp_manager)`, `make_post_tool_use_read_hook(lsp_manager)`, `make_post_tool_use_edit_hook(lsp_manager)`. Each factory captures a session's `LspManager` by closure, ensuring per-session isolation.
-- **`termuxcode/message_converter.py`**: Converts SDK messages (AssistantMessage, ResultMessage) to WebSocket JSON format. Filters out `AskUserQuestion` from normal assistant messages.
-- **`termuxcode/ws_config.py`**: Configuration and logging setup (log file: `~/.termuxcode/websocket_server.log`)
-- **`termuxcode/desktop_server.py`**: Entry point for PyInstaller-built sidecar on desktop. On Windows, patches `subprocess.Popen` with `CREATE_NO_WINDOW` to prevent ghost console windows.
+#### 2. Conexiones WebSocket
+- Conexión automática al crear pestaña
+- Reconexión con exponential backoff (hasta 30s)
+- Máximo 10 intentos de reconexión
+- Manejo de session_id updates (re-key de tabs)
+- URL: `ws://localhost:2025`
 
-### Frontend (static/)
-- Served from localhost:8000
-- Single-page WebSocket client connecting to ws://localhost:8769
-- **`static/app.js`**: Entry point, initializes Framework7, starfield background, and typewriter header effect
-- **`static/js/state.js`**: Global state and DOM references
-- **`static/js/ui.js`**: Message rendering, loading/working state management
-- **`static/js/tabs.js`**: Tab management, send/stop/disconnect commands
-- **`static/js/connection.js`**: WebSocket connection lifecycle per tab, auto-reconnect with timer cancellation
-- **`static/js/modals.js`**: AskUserQuestion, tool approval, and file view modals
-- **`static/js/storage.js`**: Tab persistence via localStorage
-- **`static/js/haptics.js`**: Haptic feedback (vibration) for connect/disconnect/error events on mobile
-- **`static/js/pipeline.js`**: Ambient pipeline background canvas animation (replaces starfield), transitions between idle/work states
+#### 3. Persistencia LocalStorage
+- Auto-save de pestañas con watch profundo
+- Restauración automática al recargar página
+- Reconexión de WebSocket para tabs guardados
+- Sistema de versiones para migraciones futuras
 
-### Desktop (Tauri)
-- **`src-tauri/src/lib.rs`**: On desktop only, spawns Python `termuxcode-server` sidecar via Tauri's shell plugin
-- On Android, backend runs separately via Termux - app just loads http://localhost:8000
+#### 4. Manejo de Mensajes WebSocket
+- `cwd` - Actualiza directorio de trabajo
+- `session_id` - Actualiza ID del tab
+- `tools_list` - Filtra solo tools con `source === "builtin"`, las guarda en `tab.builtinTools` y pone `tab.toolsReady = true`. Las tools MCP no se muestran en la modal de configuración (van en la modal MCP).
+- `mcp_status` - Guarda servidores en `tab.mcpServers`, pone `tab.mcpReady = true`
+- `assistant`, `user`, `result`, `system` - Mensajes de chat
 
-## Common Commands
+### Arquitectura Frontend
+- **Desacoplada**: Composables independientes coordinados por app-vue.js
+- **Reactiva**: Vue 3 Composition API con refs y computed
+- **sharedState** (`useSharedState.js`): `reactive({ get ... })` con getters que leen de los composables. Centraliza todo el estado que se pasa como props a los componentes hijos.
+- **Persistente**: Auto-save en localStorage (tabs + activeTabId)
+- **Nota**: El root component usa template inline (`index.html`) — los refs devueltos por `setup()` no re-renderizan props de hijos. Solución: pasar estado vía `reactive` con getters
+- **Template string**: El root component define su template como string en `app-vue.js`, no en `index.html`. Los componentes se registran globalmente con `app.component()`.
 
-### Development
-```bash
-# Install package in editable mode
-pip install -e .
+#### useSharedState — Estado Reactivo Compartido
 
-# Run both servers (HTTP + WebSocket)
-termuxcode
+Archivo: `static/js/composables/useSharedState.js`
 
-# Run only WebSocket server
-termuxcode --ws
+Recibe `tabs` (de `useTabs`) y retorna `{ state, inputMessage }`:
 
-# Run only HTTP server
-termuxcode --http
+| Propiedad `state.*` | Tipo | Fuente | Usado por |
+|---------------------|------|--------|-----------|
+| `activeTabId` | getter | `tabs.activeTabId.value` | `AppHeader` (indicador pestaña activa) |
+| `tabsArray` | getter | `tabs.tabsArray.value` | `AppHeader` (renderizar pestañas) |
+| `statusColor` | getter | `tabs.statusColor.value` | `AppHeader` (indicador conexión) |
+| `statusText` | getter | `tabs.statusText.value` | `AppHeader` (texto estado) |
+| `activeMessages` | getter | `tabs.activeTab.value.renderedMessages` | `MessageList` (mensajes del chat) |
+| `mcpReady` | getter | `tab.mcpReady` | `ActionToolbar` (estado botón MCP) |
+| `toolsReady` | getter | `tab.toolsReady` | `ActionToolbar` (estado botón Config) |
+| `availableTools` | getter | `tab.builtinTools` | `SettingsModal` (lista tools builtin) |
+| `activeMcpServers` | getter | `tab.mcpServers` | `McpModal` (lista servidores MCP) |
+| `activeSettings` | getter | `tab.settings` | `SettingsModal` (configuración del tab) |
+| `selectedModel` | getter | `tab.settings.model` | `ActionToolbar` (selector modelo) |
+| `inputMessage` | getter/setter | ref local | `InputBar` (texto del input) |
 
-# Build Python sidecar (desktop only)
-pyinstaller pyinstaller.spec --distpath src-tauri/binaries
+**Regla**: Todo estado que necesite pasar del root component a un hijo debe vivir en `useSharedState`. Los refs sueltos retornados por `setup()` NO son reactivos en el template inline de `index.html`.
+
+### Lecciones Aprendidas
+- **Props reactivas en template inline**: `createApp({ setup() }).mount('#app')` con template en HTML externo no re-renderiza hijos cuando cambian refs del `setup()`. Workaround: envolver en `reactive({ get prop() { return ref.value } })` y pasar el reactive como prop.
+- **Template string vs HTML inline**: Los componentes hijos registrados con `components: {}` no se resuelven desde templates inline del HTML. Solución: usar `template:` string en JS y `app.component()` para registro global.
+- **Tailwind CDN + Vue templates**: Las clases dinámicas en `:class` sí funcionan con Tailwind CDN (MutationObserver detecta cambios en el DOM).
+
+### Patron: Sidebars Colapsables
+
+Las sidebars son paneles laterales a la izquierda del chat que se muestran/ocultan con un botón toggle en el header. Siguen un patron fijo de 4 capas: composable → unwrapping → template → componente.
+
+#### Paso 1: Composable (`static/js/composables/useXxxSidebar.js`)
+
+Estado global singleton (refs a nivel de modulo, no dentro de la funcion exportada):
+
+```js
+// Refs singleton (fuera de la funcion) — compartidas entre todas las instancias
+const items = ref([]);
+const isOpen = ref(false);
+
+export function useXxxSidebar() {
+    // Computeds dentro de la funcion — pueden leer las refs singleton
+    const filteredItems = computed(() => ...);
+
+    function toggleSidebar() { isOpen.value = !isOpen.value; }
+    function clearItems() { items.value = []; }
+
+    return { items, isOpen, filteredItems, toggleSidebar, clearItems, ... };
+}
 ```
 
-### Publishing (Automatic via GitHub Actions on tags)
-```bash
-# 1. Update version in both pyproject.toml and package.json
-# 2. Create and push tag
-git tag v1.0.0
-git push origin v1.0.0
+**Regla**: `isOpen` es una ref compartida (singleton) para que solo haya una sidebar abierta. Si se quiere exclusión mutua entre sidebars, poner la logica en `toggleSidebar()`.
 
-# This triggers:
-# - .github/workflows/build-release.yml → Builds Tauri apps + APKs, creates GitHub Release
-# - .github/workflows/pypi.yaml → Publishes to PyPI
+#### Paso 2: Unwrapping en `app-vue.js` setup()
+
+Los refs dentro de objetos planos retornados por `setup()` NO se auto-desenvuelven en el template string de Vue 3. Solucion: crear `computed` wrappers de nivel superior y retornarlos:
+
+```js
+// En setup():
+const xxxSidebar = useXxxSidebar();
+
+// Desenvolver para el template
+const xxxSidebarOpen = computed(() => xxxSidebar.isOpen.value);
+const xxxSidebarItems = computed(() => xxxSidebar.items.value);
+
+// Retornar AMBOS: el objeto (para metodos) y los computed (para props)
+return {
+    xxxSidebar,              // para llamar xxxSidebar.toggleSidebar() desde @click
+    xxxSidebarOpen,          // para :is-open="xxxSidebarOpen" en template
+    xxxSidebarItems,         // para :items="xxxSidebarItems" en template
+};
 ```
 
-### Testing
-```bash
-# Check running processes
-ps aux | grep termuxcode
+#### Paso 3: Template en `app-vue.js`
 
-# Kill all termuxcode processes
-pkill -f termuxcode
+Layout flex-row con sidebars a la izquierda y el contenido principal con `flex-1 min-w-0`:
 
-# View logs
-cat ~/.termuxcode/websocket_server.log
+```html
+<div class="flex h-screen overflow-hidden">
+    <!-- Sidebar(s) -->
+    <xxx-sidebar
+        :is-open="xxxSidebarOpen"
+        :items="xxxSidebarItems"
+        @toggle="xxxSidebar.toggleSidebar()"
+        @clear="xxxSidebar.clearItems()"
+    />
+    <!-- Contenido principal -->
+    <div class="flex flex-col flex-1 min-w-0 p-4 safe-areas overflow-hidden">
+        <!-- header, messages, toolbar, input, modals -->
+    </div>
+</div>
 ```
 
-## Key Flow: Session Lifecycle
+**Regla**: Los computed props van al componente, los metodos del composable se llaman directo en los event handlers.
 
-Each browser tab maps to one `Session` with fully isolated resources:
+#### Paso 4: Componente (`static/js/components/XxxSidebar.js`)
 
-```
-ws_server.py handle_connection(websocket)
-  ├─ resume_id? → session_registry.get(resume_id)
-  │    ├─ found → conn.reconnect(ws, opts, cwd)
-  │    │           └─ session.resume(ws, opts, cwd)
-  │    │                ├─ _destroy_resources() [LSP + SDK + tasks]
-  │    │                └─ create(ws) [new LspManager + SDK + hooks + processor]
-  │    └─ not found → new connection (error to frontend)
-  └─ new tab → WebSocketConnection(ws, resume_id, cwd, opts)
-                 └─ session.create(ws)
-                      ├─ LspManager() → initialize(cwd) in background
-                      ├─ Hooks: make_*_hook(lsp_manager) → closures
-                      ├─ SDKClient(lsp_manager, hooks) → connect()
-                      ├─ Handlers: AskHandler, ToolApprovalHandler
-                      ├─ MessageProcessor → start in background
-                      └─ session_registry.register(session_id, connection)
+Template con `<transition name="sidebar">` + `v-if="isOpen"`:
+
+```html
+<transition name="sidebar">
+    <div v-if="isOpen" class="flex flex-col h-full bg-base border-r border-border w-96 flex-shrink-0">
+        <!-- Header: titulo + controles + boton cerrar -->
+        <!-- Body: contenido scrollable -->
+    </div>
+</transition>
 ```
 
-**Per-session resources** (no sharing between tabs):
-- `LspManager` — own LSP servers with own `rootUri` (different CWDs)
-- `SDKClient` — own Claude SDK process with own hooks
-- `MessageSender` — own WebSocket + buffer
-- `AskUserQuestionHandler` / `ToolApprovalHandler` — own cancel events
-- `MessageProcessor` — own asyncio.Queue and asyncio.Task
+Props: `isOpen`, datos especificos. Emits: `toggle`, acciones.
 
-**Cleanup flow**: `Session.destroy()` cancels processor task → disconnects SDK → shuts down LSP → resets handlers → unregisters all session_ids from `session_registry`.
+#### Paso 5: Botón toggle en `AppHeader.js`
 
-## Key Flow: AskUserQuestion
+Agregar un emit `'toggle-xxx-sidebar'` y un boton SVG en el header:
 
-The tool `AskUserQuestion` requires special handling:
-1. SDK sends `AssistantMessage` containing `ToolUseBlock` with name "AskUserQuestion"
-2. `ask_handler.py` detects this via `MessageConverter.extract_ask_user_question()`
-3. Questions are sent to frontend via WebSocket message type `ask_user_question`
-4. Frontend shows modal, user selects answers
-5. Frontend sends `question_response` message back
-6. `ask_handler.py` formats response as `tool_result` and sends to SDK via `_transport.write()`
+```html
+<button @click="$emit('toggle-xxx-sidebar')" title="XXX" class="...">
+    <svg ...></svg>
+</button>
+```
 
-## Key Flow: Session ID
+En `app-vue.js`, conectar el emit del header al composable:
 
-The session_id enables session resumption and history management:
+```html
+<app-header ... @toggle-xxx-sidebar="xxxSidebar.toggleSidebar()" />
+```
 
-1. **Frontend sends session_id** via WebSocket query string (`?session_id=xxx&cwd=/path`)
-2. **Backend receives as `resume_id`** in `ws_server.py`, looks up `session_registry.get(resume_id)` for reconnection or creates a new `WebSocketConnection` → `Session`
-3. **Session registers** the session_id in `session_registry` via `register(session_id, connection)`, tracked in `_known_session_ids` for multi-ID mapping (re-key)
-4. **SDK uses it for resume** via `ClaudeAgentOptions.resume = resume_id`
-5. **ResultMessage contains session_id** from SDK, which is:
-   - Saved in `MessageProcessor._session_id` for `truncate_history()`
-   - Registered in `session_registry` via `on_session_id_update` callback
-   - Sent back to frontend via `send_session_id()` to persist for reconnection
-6. **History truncation** uses `session_id` to find `~/.claude/projects/{project}/{session_id}.jsonl`
+#### Paso 6: CSS de transición en `index.html`
 
-### Tab Re-Key
+Ya existe la clase `.sidebar-enter/leave` para todas las sidebars (definida una sola vez):
 
-When the SDK sends a `session_id`, the frontend migrates the tab's temporary ID (`tab_xxx`) to the real session_id:
+```css
+.sidebar-enter-active, .sidebar-leave-active { transition: margin-left 0.25s ease, opacity 0.2s ease; }
+.sidebar-enter-from, .sidebar-leave-to { margin-left: -24rem; opacity: 0; }
+```
 
-1. Backend sends `{"type": "session_id", "session_id": "abc123"}`
-2. Frontend deletes old key from `state.tabs` Map, updates `tab.id` to `abc123`, re-inserts
-3. DOM attribute `data-tab-id` is updated on the tab element
-4. `state.activeTabId` is updated if the active tab was re-keyed
-5. `tab.sessionId` is set for future reconnection
-6. WebSocket handlers in `connection.js` resolve `tab.id` dynamically (not via captured closure) so they work correctly after re-key
+#### Paso 7: Datos via WebSocket (si aplica)
 
-Note: The SDK client does NOT expose `session_id` directly after `connect()`. It only arrives in `ResultMessage` during streaming.
+Si la sidebar consume datos del backend:
 
-## Key Flow: Reconnection Buffer
+1. **Backend**: Crear un handler/message type nuevo (ej: `log_handler.py`)
+2. **useWebSocket.js**: Intercepta el message type con `window.dispatchEvent(new CustomEvent(...))` antes del dispatch per-tab, hace `return` para evitar duplicacion
+3. **app-vue.js onMounted()**: Escuchar el CustomEvent y llamar al composable: `window.addEventListener('xxx-data', (e) => xxxSidebar.addData(e.detail))`
 
-When WebSocket disconnects, messages are preserved for reconnection:
+#### Ejemplo: LogSidebar (implementado)
 
-1. **Session Registry**: `session_registry` module maps `session_id → WebSocketConnection`. Each `Session` registers all known IDs via `_known_session_ids` set.
-2. **On WebSocket close**: `Session.detach_websocket()` detaches WebSocket and calls `cancel()` on handlers (AskHandler, ToolApprovalHandler) to unblock any pending waits. SDK continues running.
-3. **MessageSender buffer**: `_send_or_buffer()` accumulates messages in `_buffer` list when no WebSocket. Buffer has `MAX_BUFFER_SIZE = 1000` with FIFO eviction.
-4. **On reconnect**: `ws_server.py` looks up `session_registry.get(resume_id)` → finds the existing `WebSocketConnection` → calls `conn.reconnect()` → `session.resume()` destroys old SDK/LSP and creates fresh ones → `replay_buffer()` sends accumulated messages.
-5. **Session update**: When SDK generates new session_id, `on_session_id_update` callback registers the new ID in `session_registry`. Registry keeps ALL previous IDs mapping to the same connection (`_known_session_ids` set). This ensures reconnection works even with stale session_ids.
-6. **Timeouts**: No timeouts on `Event.wait()` calls — only `_cancel_event` for immediate unblock on disconnect. Waits block indefinitely until the frontend responds or the WebSocket disconnects (which triggers `cancel()`). Sessions live forever until explicitly cleaned up via `Session.destroy()`.
-7. **Frontend**: `connection.js` cancels old reconnect timers before creating new connections. UI calls `hideLoading()` on disconnect to prevent stuck loading states.
+| Capa | Archivo |
+|------|---------|
+| Composable | `static/js/composables/useServerLogs.js` |
+| Componente | `static/js/components/LogSidebar.js` |
+| Datos backend | `termuxcode/connection/log_handler.py` (`WebSocketLogHandler`) |
+| Intercept WS | `useWebSocket.js` → CustomEvent `server-log` / `server-log-history` |
+| Toggle button | `AppHeader.js` (icono terminal, emit `toggle-sidebar`) |
+| Unwrapping | `app-vue.js` lineas ~98-103 (`logSidebarOpen`, `logSidebarFilteredLogs`, etc.) |
 
-## Agent Options
+### Pendientes
+- Conectar handlers faltantes: `question`, `tool_approval_request`, `file_view`
+- Montar `FloatingActionButton`, `TypingIndicator`
+- Importar `useTypewriter`, `useHaptics`
+- Implementar modales faltantes: `question`, `approval`, `fileView`, `plan`
+- `handleSaveSettings` solo actualiza estado local — no reconecta WebSocket para aplicar cambios en backend (model, tools, permission_mode). Comparar con `handleApplyMcp` que sí hace disconnect/reconnect.
 
-Frontend can pass options via query string `?options=<json>`:
+### Archivos Modificados
+- `static/index.html` - Solo mount point + CSS + scripts
+- `static/js/app-vue.js` - Template string del root, componentes globales, coordina composables y handlers de mensajes
+- `static/js/components/AppHeader.js` - Header con tabs, recibe `state` prop, botón toggle sidebar logs
+- `static/js/components/LogSidebar.js` - Panel colapsable de logs del servidor (filtro por nivel, auto-scroll, badges de errores/warnings)
+- `static/js/components/MessageList.js` - Lista de mensajes con markdown y accordions
+- `static/js/components/InputBar.js` - Barra de input con botón enviar
+- `static/js/components/ActionToolbar.js` - Toolbar con botones de acción (stop, clear, reconnect, config, MCP). Botones Config y MCP tienen estado loading con spinner hasta que llega `toolsReady`/`mcpReady` del backend.
+- `static/js/components/SettingsModal.js` - Modal de configuración. La lista de tools viene del backend vía `tools_list` (solo builtins), no hardcodeada. Cada tool muestra `name` y tooltip con `desc`.
+- `static/js/components/McpModal.js` - Modal de servidores MCP con toggles enable/disable
+- `static/js/composables/useSharedState.js` - Estado reactivo compartido centralizado
+- `static/js/composables/useServerLogs.js` - Estado global de logs del servidor (singleton, filteredLogs computed, levelFilter)
+- `static/js/composables/useMessages.js` - Procesamiento de mensajes (assistant, tool_use, tool_result)
+- `static/js/composables/useTabs.js` - Gestión de pestañas. Cada tab tiene `builtinTools`, `toolsReady` (análogo a `mcpServers`, `mcpReady`) que se llenan al recibir `tools_list` del backend y se resetean al deserializar de localStorage.
 
-- `permission_mode`: Tool approval mode (e.g., "auto", "interactive")
-- `model`: Model override (e.g., "claude-sonnet-4-6")
-- `system_prompt` / `append_system_prompt`: Custom system prompts
-- `max_turns`: Maximum agent turns
-- `rolling_window`: History truncation window (default: 100)
-- `allowed_tools` / `disallowed_tools`: Comma-separated tool names
+---
 
-## Key Flow: Per-Tab CWD
+## Backend (Python)
 
-Each tab has its own CWD (working directory) independent of the backend's `os.getcwd()`:
+### Arquitectura General
 
-1. **New tab**: Frontend passes `cwd` via WebSocket query string (Tauri uses folder picker, browser uses backend default)
-2. **Backend sends CWD** after SDK connects via `sender.send_cwd()` → `{"type": "cwd", "cwd": "/path"}`
-3. **Frontend stores** `tab.cwd` and persists to localStorage via `saveTabs()`
-4. **Reconnection**: Frontend sends stored `tab.cwd` in query string, backend passes to `conn.reconnect(cwd=cwd)` which updates `self.cwd`
-5. **Session rebuild**: When SDK is rebuilt on reconnect, it uses the updated `self.cwd` for `ClaudeAgentOptions.cwd`
+Dos servidores corren como subprocesos desde `cli.py`:
 
-## Key Flow: Working State Animations
+| Servidor | Archivo | Puerto | Rol |
+|----------|---------|--------|-----|
+| HTTP | `serve.py` | 1988 | Sirve archivos estáticos (SPA) |
+| WebSocket | `ws_server.py` | 2025 | Comunicación bidireccional con el frontend |
 
-When the agent is processing, visual feedback is provided:
-1. `showLoading()` in `ui.js` activates starfield acceleration + header typewriter via `setWorking(true)`
-2. `assistant` messages with `tool_use` blocks re-trigger `showLoading()` (agent still working)
-3. `assistant` messages without tools only hide the typing indicator (animations continue)
-4. `result` message calls `hideLoading()` which stops all animations
-5. User interactions (AskUserQuestion response, tool approval) re-activate animations
+Dependencia clave: `claude-agent-sdk` - SDK de Python que spawnea un subproceso `claude` CLI.
 
-## Ports
+### Mapa de Archivos
 
-- HTTP: 8000 (static files)
-- WebSocket: 8769 (SDK communication)
+| Archivo | Rol |
+|---------|-----|
+| `termuxcode/cli.py` | Entry point CLI, lanza HTTP+WS como subprocesos |
+| `termuxcode/desktop_server.py` | Entry point Tauri, solo WS server |
+| `termuxcode/ws_server.py` | Servidor WebSocket, despacha conexiones |
+| `termuxcode/serve.py` | Servidor HTTP para archivos estáticos |
+| `termuxcode/ws_config.py` | Config del WS (host, port, logging) |
+| `termuxcode/connection/base.py` | `WebSocketConnection` - bridge entre WS lifecycle y Session |
+| `termuxcode/connection/session.py` | `Session` - posee todos los recursos por pestaña (SDK, LSP, handlers) |
+| `termuxcode/connection/session_registry.py` | Dict global `session_id -> WebSocketConnection` para reconexión |
+| `termuxcode/connection/sdk_client.py` | `SDKClient` - wrapper de `claude-agent-sdk.ClaudeSDKClient` |
+| `termuxcode/connection/message_processor.py` | Consume cola de mensajes, envía queries al SDK, streamea respuestas |
+| `termuxcode/connection/sender.py` | `MessageSender` - envía mensajes al frontend, buffer cuando desconectado |
+| `termuxcode/connection/ask_handler.py` | Flujo bidireccional de AskUserQuestion |
+| `termuxcode/connection/tool_approval_handler.py` | Flujo de aprobación de tools |
+| `termuxcode/connection/hooks.py` | Hooks del SDK (PreToolUse para Write/Edit, PostToolUse para Read/Edit) |
+| `termuxcode/connection/history_manager.py` | Truncado de historial JSONL (rolling window) |
+| `termuxcode/connection/log_handler.py` | `WebSocketLogHandler` - captura logs, ring buffer, broadcast via WebSocket |
+| `termuxcode/connection/lsp_manager.py` | Lifecycle de servidores LSP, registry, facade de análisis |
+| `termuxcode/message_converter.py` | Convierte mensajes del SDK (AssistantMessage, ResultMessage, etc.) a JSON |
 
-## WebSocket Message Types
+### Flujo: Crear Pestaña
 
-**Frontend → Backend:**
-- `{content, attachments}`: User chat message
-- `{command: "/stop"}`: Stop current operation
-- `{type: "tool_approval_response", ...}`: Tool approval decision
-- `{type: "question_response", responses, cancelled}`: AskUserQuestion response
-- `{type: "request_buffer_replay"}`: Request buffered messages on reconnect
+1. Frontend abre WebSocket a `ws://localhost:2025?session_id=XXX&cwd=/path&options={...}`
+2. `ws_server.py:handle_connection()` parsea query params
+3. Si hay `session_id` y existe en `session_registry` → `reconnect()` (reattach o rebuild)
+4. Si no → crea `WebSocketConnection` + `Session`
+5. `Session.create()` inicializa: MessageSender, LspManager (background), SDKClient (spawnea subproceso `claude`), ToolApprovalHandler, AskUserQuestionHandler, MessageProcessor
+6. Sincroniza estado de MCP servers (habilitar/deshabilitar según `disabledMcpServers`)
+7. Envía `tools_list` y `mcp_status` al frontend
 
-**Backend → Frontend:**
-- `{type: "assistant", blocks}`: Assistant message with content blocks
-- `{type: "result", ...}`: SDK result message
-- `{type: "session_id", session_id}`: New session ID from SDK (triggers tab re-key)
-- `{type: "cwd", cwd}`: Working directory for the session
-- `{type: "system", message}`: System status message
-- `{type: "ask_user_question", questions}`: AskUserQuestion modal
-- `{type: "tool_approval_request", tool_name, input}`: Tool approval modal
-- `{type: "file_view", file_path, content}`: File content for viewing
+### Flujo: Cerrar Pestaña (implementado)
 
-## Design: OLED Dark Theme
+1. Frontend envía `{command: "/destroy"}` antes de cerrar el WebSocket
+2. `base.py:_message_loop()` intercepta `/destroy` y llama `destroy_session()`
+3. `Session.destroy()` ejecuta `_destroy_resources()` (cancela processor, desconecta SDK, apaga LSP) + limpia `session_registry`
+4. El message loop termina con `return`, `handle()` sale del `finally` (chequea `self._session` no es None antes de detach)
 
-The UI is optimized for OLED screens (Android/Termux nighttime use):
-- **Pure black `#000000`** backgrounds — pixels off, zero battery drain
-- **Text `#e4e4e7`** instead of pure white — less eye strain at night
-- **Low-opacity surfaces** (4-7%) for subtle depth without pixel illumination
-- **Muted accents** — primary blues/purples slightly desaturated to reduce glare
-- **Reduced glow intensity** — working state animations use dimmer text-shadows
-- **Pipeline canvas** — pure black fill, pipe strokes at 40% opacity/45% lightness
+### Flujo: Reconexión
 
-All colors flow through `static/css/variables.css`. The only hardcoded exceptions are the pipeline canvas in `pipeline.js` and a few `base.css` glow colors. The `manifest.json` also uses `background_color: #000000`.
+1. Frontend reconecta con mismo `session_id` en query params
+2. `session_registry` encuentra la `WebSocketConnection` existente
+3. `resume()` evalúa si necesita rebuild (cambiaron cwd, model, permission_mode, etc.)
+4. Sin cambios: solo re-attach del WebSocket + replay del buffer
+5. Con cambios: `_destroy_resources()` + `create()` desde cero
 
-## Key Flow: LSP Hooks
+### Comandos del Frontend al Backend
 
-SDK hooks enrich Claude's understanding of code and prevent errors via Language Server Protocol:
+| Mensaje | Tipo | Efecto |
+|---------|------|--------|
+| `{command: "/destroy"}` | Comando | Destruye la sesión completamente (SDK, LSP, tasks, registry) |
+| `{command: "/stop"}` | Comando | Interrumpe la query actual del SDK (no destruye sesión) |
+| `{command: "/disconnect"}` | Comando | Cierra el WebSocket limpiamente (detach only) |
+| `{content: "..."}` | Query | Envía texto al SDK como query del usuario |
+| `{type: "tool_approval_response"}` | Respuesta | Responde a una solicitud de aprobación de tool |
+| `{type: "question_response"}` | Respuesta | Responde a un AskUserQuestion del SDK |
+| `{type: "request_buffer_replay"}` | Request | Pide replay del buffer de mensajes |
+| `{type: "request_mcp_status"}` | Request | Pide estado actual de MCP servers |
 
-**Architecture**: Each `Session` creates its own `LspManager` instance (in `lsp_manager.py`), which manages a registry of LSP clients (`LSPClient` in `lsp_client.py`), one per file extension. Servers are auto-discovered per-session via `shutil.which`. Supported extensions: `.py` (pylsp), `.ts/.js/.tsx/.jsx` (typescript-language-server), `.go` (gopls).
+### Mensajes del Backend al Frontend
 
-**Per-Session Isolation**: Hooks are created via closure factories in `hooks.py` (`make_pre_tool_use_hook(lsp_manager)`, `make_post_tool_use_read_hook(lsp_manager)`, `make_post_tool_use_edit_hook(lsp_manager)`). Each factory captures a session's `LspManager` by closure, ensuring that each tab's hooks operate on its own LSP servers with its own `rootUri`. LSP initialization is non-blocking — `session.create()` launches `lsp_manager.initialize(cwd)` in background via `asyncio.create_task`. Hooks check `lsp_manager._initialized` and passthrough if not ready.
-
-1. **PostToolUse Read** (`matcher="Read"`): When Claude reads a supported file, `LspManager.analyze_file()` injects semantic context via `additionalContext`:
-   - **Signatures**: Top-level symbols with hover info (full type signatures via `textDocument/hover`)
-   - **Methods**: Class methods with hover signatures
-   - **References**: Cross-file usages of classes/functions via `textDocument/references` — shows which files and lines reference each symbol. Limited to 10 symbols × 8 refs each.
-   - Uses `textDocument/documentSymbol` for hierarchical symbol discovery
-2. **PreToolUse Write|Edit** (`matcher="Write|Edit"`): Before writing/editing, validates the resulting code via LSP diagnostics (`textDocument/publishDiagnostics`). For **Edit**, reads the current file, applies `old_string → new_string` replacement in memory, and validates the complete result. On new errors → returns `{"decision": "block", "reason": "..."}` and Claude auto-corrects.
-
-   **Baseline Check**: The hook takes a snapshot of current diagnostics before the edit. If the file already had errors → allows the edit (Claude is fixing something broken). If the file was clean and the edit introduces errors → blocks with an educational reason.
-3. **PostToolUse Write|Edit** (`matcher="Write|Edit"`): After writing, reports all LSP diagnostics (errors, warnings, info) from the cached diagnostics as `additionalContext`.
-4. Unsupported files pass through untouched (only extensions with a running LSP server trigger analysis).
-5. The `_dummy_hook` with `matcher=None` remains for `can_use_tool` compatibility.
-
-### LSP Protocol Notes
-
-- `LSPClient` communicates over stdio via JSON-RPC with Content-Length headers
-- File sync uses full-content mode (`didOpen`/`didChange` with full text)
-- Diagnostics are cached per URI and signaled via `asyncio.Event` for `wait_diagnostics()`
-- All LSP positions are 0-based (line and character)
-- Server startup is non-blocking — `Session.create()` initializes LSP in background via `asyncio.create_task`
-- On `Session.destroy()`, LSP servers are shut down (`lsp_manager.shutdown()`), releasing all resources
-
-Dependencies: LSP servers must be installed separately (`pylsp`, `typescript-language-server`, `gopls`). Servers not found are silently skipped.
-
-## Version Sync
-
-When releasing, update version in:
-- `pyproject.toml` (project.version)
-- `package.json` (version)
-- `termuxcode/__init__.py` (__version__)
+| Tipo | Contenido |
+|------|-----------|
+| `session_id` | ID de sesión (nuevo o existente) |
+| `cwd` | Directorio de trabajo actual |
+| `tools_list` | Lista de tools disponibles (builtins + MCP). Cada tool tiene `{name, desc, source}`. Frontend filtra `source === "builtin"` para la modal de configuración. |
+| `mcp_status` | Estado detallado de servidores MCP |
+| `assistant` | Bloques del mensaje del asistente |
+| `user` | Bloques del mensaje del usuario |
+| `result` | Resultado de la query |
+| `system` | Mensajes del sistema (errores, estado) |
+| `tool_approval_request` | Solicitud de aprobación de tool |
+| `question` | Pregunta del SDK al usuario |
+| `server_log` | Log individual del servidor en tiempo real (`{type, level, timestamp, logger, message}`) |
+| `server_log_history` | Batch de logs históricos al conectar (`{type, entries: [...]}`) |

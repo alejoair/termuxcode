@@ -24,6 +24,13 @@ export function connectTab(tabId) {
     }
 
     updateTabStatus(tabId, 'connecting');
+    if (state.activeTabId === tabId) {
+        const btnMcp = document.getElementById('btnMcp');
+        if (btnMcp) {
+            btnMcp.disabled = true;
+            btnMcp.classList.remove('btn-mcp--active', 'btn-mcp--error');
+        }
+    }
 
     try {
         const params = new URLSearchParams();
@@ -34,8 +41,6 @@ export function connectTab(tabId) {
         if (s.permission_mode) opts.permission_mode = s.permission_mode;
         if (s.model) opts.model = s.model;
         if (s.system_prompt) opts.system_prompt = s.system_prompt;
-        if (s.append_system_prompt) opts.append_system_prompt = s.append_system_prompt;
-        if (s.max_turns) opts.max_turns = parseInt(s.max_turns);
         if (s.rolling_window) opts.rolling_window = parseInt(s.rolling_window);
         if (s.tools && s.tools.length > 0) opts.tools = s.tools;
         if (Array.isArray(s.disabledMcpServers)) opts.disabledMcpServers = s.disabledMcpServers;

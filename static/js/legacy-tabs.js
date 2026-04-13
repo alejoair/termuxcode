@@ -129,8 +129,11 @@ export function switchTab(tabId) {
     if (btnMcp) {
         const servers = tab.mcpServers || [];
         const hasConnected = servers.some(s => s.status === 'connected');
-        btnMcp.classList.toggle('btn-mcp--active', hasConnected);
-        btnMcp.classList.toggle('btn-mcp--error', !hasConnected && servers.length > 0);
+        // Deshabilitar si el tab está conectando y aún no tiene datos MCP
+        const loading = tab.isConnected === false && servers.length === 0;
+        btnMcp.disabled = loading;
+        btnMcp.classList.toggle('btn-mcp--active', !loading && hasConnected);
+        btnMcp.classList.toggle('btn-mcp--error', !loading && !hasConnected && servers.length > 0);
     }
 
     // Actualizar selector de modelo

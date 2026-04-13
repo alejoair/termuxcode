@@ -111,4 +111,11 @@ class WebSocketConnection:
         """Lee mensajes del WebSocket y los despacha a la Session."""
         async for message in self.websocket:
             data = json.loads(message)
+            if data.get('command') == '/destroy':
+                await self.destroy_session()
+                return
+            if data.get('command') == '/disconnect':
+                await self._session.handle_message(data)
+                await self.websocket.close(1000, "Disconnect requested")
+                return
             await self._session.handle_message(data)

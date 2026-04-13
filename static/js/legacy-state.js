@@ -7,8 +7,6 @@ export const DEFAULT_SETTINGS = {
     permission_mode: 'acceptEdits',
     model: 'sonnet',
     system_prompt: '',
-    append_system_prompt: '',
-    max_turns: '',
     rolling_window: 100,
     // Lista explícita de tools disponibles para el agente (built-ins + MCP habilitadas).
     // Se actualiza automáticamente cuando llega tools_list del backend.

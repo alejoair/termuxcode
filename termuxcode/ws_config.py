@@ -4,6 +4,7 @@
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 # Configuración del servidor
 WS_HOST = "localhost"
@@ -50,3 +51,20 @@ def setup_logging() -> logging.Logger:
 
 
 logger = setup_logging()
+
+
+def attach_ws_log_handler(loop: Any) -> None:
+    """Adjunta el WebSocketLogHandler al root logger.
+
+    Debe llamarse después de que el event loop arranque.
+
+    Args:
+        loop: Event loop de asyncio activo
+    """
+    from termuxcode.connection.log_handler import WebSocketLogHandler
+
+    handler = WebSocketLogHandler(loop)
+    handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+    root_logger = logging.getLogger()
+    root_logger.addHandler(handler)
+    logger.info("WebSocketLogHandler adjuntado al root logger")

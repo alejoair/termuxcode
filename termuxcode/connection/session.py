@@ -93,6 +93,18 @@ class Session:
         # 1. Sender
         self._sender = MessageSender(websocket)
 
+        # Enviar historial de logs del servidor al frontend
+        try:
+            from termuxcode.connection.log_handler import get_log_history
+            history = get_log_history()
+            if history:
+                await self._sender.send_message({
+                    "type": "server_log_history",
+                    "entries": history,
+                })
+        except Exception as e:
+            logger.warning(f"Error enviando log history: {e}")
+
         # 2. LspManager propio (init en background para no bloquear)
         self._lsp_manager = LspManager()
         self._lsp_init_task = asyncio.create_task(
@@ -115,11 +127,24 @@ class Session:
         )
         await self._sdk_client.connect()
 
-        # Desactivar MCP servers que el usuario tiene desactivados
-        disabled = self.agent_options.get('disabledMcpServers', [])
-        if disabled:
-            await self._sdk_client.disable_mcp_servers(disabled)
-            logger.info(f"MCP servers desactivados al conectar: {disabled}")
+        # Sincronizar estado de MCP servers: deshabilitar/habilitar explícitamente
+        # para sobrescribir cualquier estado heredado de la sesión anterior (resume).
+        disabled_set = set(self.agent_options.get('disabledMcpServers', []))
+        mcp_status = await self._sdk_client.get_mcp_status()
+        all_servers = [s['name'] for s in mcp_status.get('mcpServers', [])]
+        for name in all_servers:
+            try:
+                if name in disabled_set:
+                    await self._sdk_client.toggle_mcp_server(name, False)
+                else:
+                    await self._sdk_client.toggle_mcp_server(name, True)
+            except Exception as e:
+                logger.warning(f"No se pudo cambiar estado de MCP '{name}': {e}")
+        if disabled_set:
+            logger.info(f"MCP servers desactivados al conectar: {sorted(disabled_set)}")
+        enabled = [n for n in all_servers if n not in disabled_set]
+        if enabled:
+            logger.info(f"MCP servers habilitados al conectar: {enabled}")
 
         # Enviar lista de tools al frontend tras dar tiempo a MCP servers de conectar
         asyncio.create_task(self._send_tools_list())
@@ -356,21 +381,6 @@ class Session:
         elif data.get('type') == 'request_mcp_status':
             mcp_status = await self._wait_for_mcp_ready()
             await self._send_mcp_status(mcp_status)
-        elif data.get('type') == 'toggle_mcp_server':
-            server_name = data.get('server_name')
-            enabled = data.get('enabled', True)
-            if self._sdk_client and server_name:
-                await self._sdk_client.toggle_mcp_server(server_name, enabled)
-                logger.info(f"MCP server '{server_name}' {'habilitado' if enabled else 'desactivado'} via toggle")
-                # Actualizar agent_options local
-                disabled = set(self.agent_options.get('disabledMcpServers', []))
-                if enabled:
-                    disabled.discard(server_name)
-                else:
-                    disabled.add(server_name)
-                self.agent_options['disabledMcpServers'] = list(disabled)
-            # Reenviar tools list actualizada (servidores ya conectados, no esperar)
-            await self._send_tools_list(wait_for_mcp=False)
         else:
             try:
                 self.message_queue.put_nowait(data)

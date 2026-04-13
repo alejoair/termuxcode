@@ -1,0 +1,296 @@
+// ===== Composable: Gestión de Pestañas =====
+
+import { reactive, ref, computed, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+
+const DEFAULT_SETTINGS = {
+    permission_mode: 'acceptEdits',
+    model: 'sonnet',
+    system_prompt: '',
+    rolling_window: 100,
+    tools: ['Agent', 'Bash', 'Glob', 'Grep', 'Read', 'Edit', 'Write', 'NotebookEdit',
+            'TodoWrite', 'WebSearch', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode',
+            'EnterWorktree', 'TaskOutput', 'TaskStop', 'Skill',
+            'ListMcpResourcesTool', 'ReadMcpResourceTool'],
+    disabledMcpServers: [],
+};
+
+let tabCounter = 0;
+
+export function useTabs() {
+    // Estado reactivo
+    const tabs = reactive(new Map());
+    const activeTabId = ref(null);
+
+    // Computed properties
+    const activeTab = computed(() => {
+        return activeTabId.value ? tabs.get(activeTabId.value) : null;
+    });
+
+    const tabsArray = computed(() => {
+        return Array.from(tabs.values());
+    });
+
+    const statusColor = computed(() => {
+        const allTabs = tabsArray.value;
+        if (allTabs.length === 0) return 'bg-warn';
+
+        const connectedCount = allTabs.filter(t => t.isConnected).length;
+
+        if (connectedCount === allTabs.length) return 'bg-ok';
+        if (connectedCount > 0) return 'bg-warn';
+        return 'bg-err';
+    });
+
+    const statusText = computed(() => {
+        const allTabs = tabsArray.value;
+        if (allTabs.length === 0) return 'Sin pestañas';
+
+        const connectedCount = allTabs.filter(t => t.isConnected).length;
+
+        return `${connectedCount}/${allTabs.length} conectados`;
+    });
+
+    // Métodos
+    function createTab(name = null, cwd = null) {
+        tabCounter++;
+        const tabId = `tab_${Date.now()}_${tabCounter}`;
+        const tabName = name || `Chat ${tabCounter}`;
+
+        const newTab = reactive({
+            id: tabId,
+            name: tabName,
+            cwd: cwd || null,
+            sessionId: null,
+            settings: { ...DEFAULT_SETTINGS },
+            isConnected: false,
+            messages: [],
+            renderedMessages: [],
+            mcpServers: [],
+            mcpReady: false,
+            builtinTools: [],
+            toolsReady: false,
+            // WebSocket connection
+            ws: null,
+            reconnectTimeout: null,
+            reconnectAttempts: 0,
+            // Plan
+            plan: null,
+        });
+
+        tabs.set(tabId, newTab);
+        activeTabId.value = tabId;
+
+        return tabId;
+    }
+
+    function switchTab(tabId) {
+        if (!tabs.has(tabId)) return false;
+
+        activeTabId.value = tabId;
+        return true;
+    }
+
+    function closeTab(tabId) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        // Desconectar si está conectado
+        if (tab.ws) {
+            try {
+                tab.ws.close();
+            } catch (e) {
+                console.warn('[useTabs] Error closing WebSocket:', e);
+            }
+        }
+
+        // Eliminar del Map
+        tabs.delete(tabId);
+
+        // Si era el tab activo, cambiar a otro
+        if (activeTabId.value === tabId) {
+            const remainingTabs = Array.from(tabs.keys());
+            if (remainingTabs.length > 0) {
+                activeTabId.value = remainingTabs[0];
+            } else {
+                activeTabId.value = null;
+            }
+        }
+
+        return true;
+    }
+
+    function renameTab(tabId, newName) {
+        const tab = tabs.get(tabId);
+        if (!tab || !newName?.trim()) return false;
+
+        tab.name = newName.trim();
+        return true;
+    }
+
+    function getTab(tabId) {
+        return tabs.get(tabId);
+    }
+
+    function updateTabSessionId(tabId, sessionId) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        // Re-key: migrar del viejo ID al nuevo session_id
+        const oldId = tabId;
+        const newId = sessionId;
+
+        if (oldId === newId) return true;
+
+        // Crear nuevo tab con el nuevo ID
+        tabs.delete(oldId);
+        tab.id = newId;
+        tab.sessionId = sessionId;
+        tabs.set(newId, tab);
+
+        // Actualizar activeTabId si corresponde
+        if (activeTabId.value === oldId) {
+            activeTabId.value = newId;
+        }
+
+        return true;
+    }
+
+    function clearTabMessages(tabId) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        tab.messages = [];
+        tab.renderedMessages = [];
+        return true;
+    }
+
+    function updateTabSettings(tabId, settings) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        tab.settings = { ...tab.settings, ...settings };
+        return true;
+    }
+
+    function updateTabCwd(tabId, cwd) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        tab.cwd = cwd;
+        return true;
+    }
+
+    function updateTabMcpServers(tabId, servers) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        tab.mcpServers = servers || [];
+        return true;
+    }
+
+    function updateTabBuiltinTools(tabId, tools) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        tab.builtinTools = tools || [];
+        tab.toolsReady = true;
+        return true;
+    }
+
+    function updateTabPlan(tabId, plan) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        tab.plan = plan;
+        return true;
+    }
+
+    function resetTabReadyFlags(tabId) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        tab.toolsReady = false;
+        tab.mcpReady = false;
+        tab.builtinTools = [];
+        tab.mcpServers = [];
+        return true;
+    }
+
+    // Serialización para localStorage
+    function serializeTabs() {
+        return Array.from(tabs.entries()).map(([id, tab]) => ({
+            id,
+            name: tab.name,
+            cwd: tab.cwd,
+            sessionId: tab.sessionId,
+            renderedMessages: tab.renderedMessages,
+            settings: tab.settings,
+            plan: tab.plan,
+            mcpServers: tab.mcpServers,
+        }));
+    }
+
+    function deserializeTabs(data) {
+        if (!Array.isArray(data)) return;
+
+        tabs.clear();
+        tabCounter = 0;
+
+        data.forEach((tabData) => {
+            const tab = reactive({
+                ...tabData,
+                isConnected: false,
+                mcpReady: false,
+                toolsReady: false,
+                builtinTools: [],
+                messages: [],
+                ws: null,
+                reconnectTimeout: null,
+                reconnectAttempts: 0,
+            });
+
+            tabs.set(tabData.id, tab);
+
+            // Actualizar contador
+            const match = tabData.name.match(/Chat (\d+)/);
+            if (match) {
+                tabCounter = Math.max(tabCounter, parseInt(match[1]));
+            }
+        });
+
+        // Restaurar tab activo
+        if (tabs.size > 0 && !activeTabId.value) {
+            const firstTabId = tabs.keys().next().value;
+            activeTabId.value = firstTabId;
+        }
+    }
+
+    return {
+        // Estado
+        tabs,
+        activeTabId,
+        activeTab,
+        tabsArray,
+        statusColor,
+        statusText,
+
+        // Métodos
+        createTab,
+        switchTab,
+        closeTab,
+        renameTab,
+        getTab,
+        updateTabSessionId,
+        clearTabMessages,
+        updateTabSettings,
+        updateTabCwd,
+        updateTabMcpServers,
+        updateTabBuiltinTools,
+        updateTabPlan,
+        resetTabReadyFlags,
+
+        // Serialización
+        serializeTabs,
+        deserializeTabs,
+    };
+}

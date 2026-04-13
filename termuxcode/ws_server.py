@@ -9,7 +9,7 @@ from typing import Any
 
 import websockets
 
-from termuxcode.ws_config import WS_HOST, WS_PORT, logger
+from termuxcode.ws_config import WS_HOST, WS_PORT, attach_ws_log_handler, logger
 from termuxcode.connection import WebSocketConnection
 from termuxcode.connection import session_registry
 from termuxcode.connection.lsp.uri import normalize_path
@@ -53,6 +53,10 @@ async def handle_connection(websocket: Any) -> None:
 async def main() -> None:
     """Inicia el servidor WebSocket."""
     logger.info(f"Iniciando servidor en puerto {WS_PORT}")
+
+    # Adjuntar log handler que transmite logs via WebSocket
+    loop = asyncio.get_event_loop()
+    attach_ws_log_handler(loop)
 
     async with websockets.serve(handle_connection, WS_HOST, WS_PORT):
         print(f"Servidor WebSocket en ws://{WS_HOST}:{WS_PORT}")

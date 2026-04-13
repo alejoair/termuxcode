@@ -95,9 +95,12 @@ class MessageProcessor:
         await self._sender.send_system_message("Deteniendo...")
 
     async def _handle_disconnect(self) -> None:
-        """Maneja el comando /disconnect."""
+        """Maneja el comando /disconnect.
+
+        Envía mensaje de despedida y retorna. El base.py detecta
+        que el mensaje era /disconnect y cierra el WebSocket limpiamente.
+        """
         await self._sender.send_system_message("Bye")
-        raise websockets.exceptions.ConnectionClosed(1000, "Disconnect requested")
 
     async def _handle_query(self, content: str) -> None:
         """Maneja una consulta del usuario.
