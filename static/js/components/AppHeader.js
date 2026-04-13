@@ -22,7 +22,8 @@ export default {
                     </div>
                 </div>
                 </div>
-                <div class="right">
+                <div class="right flex items-center gap-4">
+                    <span v-if="cwd" class="text-sm text-txt font-mono truncate max-w-[400px] bg-surface px-2 py-0.5 rounded border border-border" :title="cwd">{{ cwd }}</span>
                     <div class="status flex items-center gap-2">
                         <div :class="['w-2 h-2 rounded-full', localStatusColor]"></div>
                         <span class="text-sm text-muted">{{ localStatusText }}</span>
@@ -76,6 +77,7 @@ export default {
         const localTabs = computed(() => props.state.tabsArray);
         const localStatusColor = computed(() => props.state.statusColor);
         const localStatusText = computed(() => props.state.statusText);
+        const cwd = computed(() => props.state.activeCwd);
 
         function handleSwitchTab(tabId) {
             emit('switch-tab', tabId);
@@ -93,6 +95,7 @@ export default {
             localTabs,
             localStatusColor,
             localStatusText,
+            cwd,
             handleSwitchTab,
             handleCloseTab,
             handleNewTab,

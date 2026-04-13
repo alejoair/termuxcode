@@ -55,7 +55,6 @@ def truncate_history(cwd: str, session_id: str, keep_last: int = 100) -> bool:
         total_lines = len(lines)
 
         if total_lines <= keep_last:
-            logger.info(f"Historial tiene {total_lines} líneas, no necesita truncado")
             return False  # No se truncó
 
         # Conservar solo las últimas N líneas

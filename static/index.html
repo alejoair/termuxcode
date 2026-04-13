@@ -300,6 +300,22 @@
             margin-left: -24rem;
             opacity: 0;
         }
+
+        /* Loading bar animation */
+        @keyframes loadingSlide {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+        }
+
+        .loading-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.3), transparent);
+            animation: loadingSlide 1.5s ease-in-out infinite;
+        }
     </style>
 </head>
 <body class="bg-base text-txt">

@@ -187,3 +187,116 @@ class LanguageFeatures:
         if isinstance(result, list) and len(result) > 0:
             return result
         return None
+
+    async def prepare_rename(
+        self,
+        file_path: str,
+        line: int,
+        col: int,
+    ) -> dict | None:
+        """textDocument/prepareRename -> verifica si se puede renombrar.
+
+        Retorna:
+            Placeholder con rango del símbolo, o None si no se puede renombrar.
+        """
+        if not self._supports("textDocument/prepareRename"):
+            return None
+        uri = file_path_to_uri(file_path)
+        result = await self._transport.send_request(
+            "textDocument/prepareRename",
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": col},
+            },
+        )
+        return result
+
+    async def rename(
+        self,
+        file_path: str,
+        line: int,
+        col: int,
+        new_name: str,
+    ) -> dict[str, list[dict]] | None:
+        """textDocument/rename -> edits de renombrado.
+
+        Retorna:
+            {file_uri: [TextEdit, ...], ...} mapeando URIs a lista de edits.
+            None si el servidor no soporta rename o falla.
+        """
+        if not self._supports("textDocument/rename"):
+            return None
+        uri = file_path_to_uri(file_path)
+        result = await self._transport.send_request(
+            "textDocument/rename",
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": col},
+                "newName": new_name,
+            },
+        )
+        if not result or "changes" not in result:
+            return None
+        return result["changes"]
+
+    async def get_definition(
+        self,
+        file_path: str,
+        line: int,
+        col: int,
+    ) -> list[dict]:
+        """textDocument/definition -> lista de Location.
+
+        Retorna:
+            Lista de Location con uri, range. Vacío si no hay definición.
+        """
+        if not self._supports("textDocument/definition"):
+            return []
+        uri = file_path_to_uri(file_path)
+        result = await self._transport.send_request(
+            "textDocument/definition",
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": col},
+            },
+        )
+        if isinstance(result, list):
+            return result
+        return []
+
+    async def get_code_actions(
+        self,
+        file_path: str,
+        line: int | None = None,
+        col: int | None = None,
+    ) -> list[dict]:
+        """textDocument/codeAction -> lista de CodeAction.
+
+        Retorna:
+            Lista de CodeAction con title, kind, edit. Vacío si no hay acciones.
+        """
+        if not self._supports("textDocument/codeAction"):
+            return []
+        uri = file_path_to_uri(file_path)
+
+        # Si no se especifica línea/col, pedir acciones para todo el archivo
+        range_val = (
+            {
+                "start": {"line": line, "character": col},
+                "end": {"line": line, "character": col},
+            }
+            if line is not None and col is not None
+            else None
+        )
+
+        result = await self._transport.send_request(
+            "textDocument/codeAction",
+            {
+                "textDocument": {"uri": uri},
+                "range": range_val,
+                "context": {"diagnostics": []},
+            },
+        )
+        if isinstance(result, list):
+            return result
+        return []

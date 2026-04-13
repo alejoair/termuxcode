@@ -44,9 +44,9 @@ export function useTabs() {
     const statusText = computed(() => {
         const allTabs = tabsArray.value;
         if (allTabs.length === 0) return 'Sin pestañas';
-
         const connectedCount = allTabs.filter(t => t.isConnected).length;
-
+        const failedCount = allTabs.filter(t => t.reconnectFailed).length;
+        if (failedCount === allTabs.length) return 'Sin conexion';
         return `${connectedCount}/${allTabs.length} conectados`;
     });
 
@@ -73,6 +73,8 @@ export function useTabs() {
             ws: null,
             reconnectTimeout: null,
             reconnectAttempts: 0,
+            reconnectFailed: false,
+            isProcessing: false,
             // Plan
             plan: null,
         });
@@ -247,6 +249,8 @@ export function useTabs() {
                 ws: null,
                 reconnectTimeout: null,
                 reconnectAttempts: 0,
+                reconnectFailed: false,
+                isProcessing: false,
             });
 
             tabs.set(tabData.id, tab);

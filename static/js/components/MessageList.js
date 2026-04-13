@@ -69,7 +69,7 @@ export default {
                                     <span class="tool-result-label">resultado</span>
                                 </div>
                                 <div class="tool-content accordion-item-content">
-                                    <pre>{{ msg.result }}</pre>
+                                    <pre>{{ truncateContent(msg.result) }}</pre>
                                 </div>
                             </div>
                         </div>
@@ -92,7 +92,7 @@ export default {
                                     <span class="tool-result-label">resultado</span>
                                 </div>
                                 <div class="tool-content accordion-item-content">
-                                    <pre>{{ msg.result }}</pre>
+                                    <pre>{{ truncateContent(msg.result) }}</pre>
                                 </div>
                             </div>
                         </div>
@@ -115,7 +115,7 @@ export default {
                                 <span class="tool-result-label">resultado</span>
                             </div>
                             <div class="tool-content accordion-item-content">
-                                <pre>{{ msg.content }}</pre>
+                                <pre>{{ truncateContent(msg.content) }}</pre>
                             </div>
                         </div>
                     </div>
@@ -187,6 +187,15 @@ export default {
             return computeDiffLines(msg.input.old_string, msg.input.new_string);
         }
 
+        function truncateContent(content) {
+            if (!content || typeof content !== 'string') return content;
+            const limit = 1000;
+            if (content.length > limit) {
+                return content.slice(0, limit) + '\n\n...[truncated]';
+            }
+            return content;
+        }
+
         // Manejar accordion toggle
         onMounted(() => {
             if (!container.value) return;
@@ -223,6 +232,7 @@ export default {
             getMessageLabel,
             scrollToBottom,
             getDiffLines,
+            truncateContent,
         };
     },
 };

@@ -110,6 +110,10 @@ class MessageProcessor:
         """
         from termuxcode.message_converter import MessageConverter
 
+        # Log del mensaje del usuario
+        session_info = f"session={self._session_id}" if self._session_id else "no session"
+        logger.info(f"Usuario envió mensaje ({session_info}): {content[:100]}{'...' if len(content) > 100 else ''}")
+
         self._stop_event.clear()
 
         # Truncar historial y reconectar para que el SDK cargue el JSONL recortado
@@ -117,6 +121,15 @@ class MessageProcessor:
             did_truncate = truncate_history(self._cwd, self._session_id, self._rolling_window)
             if did_truncate:
                 await self._sdk_client.reconnect(self._session_id)
+
+        # Actualizar CLAUDE.md con información actualizada del proyecto
+        # El SDK lo leerá antes de procesar la query
+        if self._cwd:
+            try:
+                from termuxcode.connection.claude_md_manager import update_claude_md
+                update_claude_md(self._cwd, self._session_id)
+            except Exception as e:
+                logger.debug(f"Error actualizando CLAUDE.md (no crítico): {e}")
 
         try:
             await self._sdk_client.query(content)

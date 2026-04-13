@@ -15,6 +15,7 @@ from termuxcode.connection.hooks import (
     make_post_tool_use_read_hook,
     make_post_tool_use_edit_hook,
 )
+from termuxcode.custom_tools import get_custom_mcp_server
 from termuxcode.ws_config import logger
 
 if TYPE_CHECKING:
@@ -65,6 +66,7 @@ class SDKClient:
             model=o.get("model", "glm-5"),
             setting_sources=["user", "project", "local"],
             stderr=lambda line: logger.error(f"Claude CLI stderr: {line}"),
+            mcp_servers={"termuxcode": get_custom_mcp_server(lsp_manager=self._lsp_manager)},
         )
         if o.get("system_prompt"):
             options.system_prompt = o["system_prompt"]

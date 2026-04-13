@@ -10,6 +10,7 @@ import ActionToolbar from './components/ActionToolbar.js';
 import McpModal from './components/McpModal.js';
 import SettingsModal from './components/SettingsModal.js';
 import LogSidebar from './components/LogSidebar.js';
+import TypingIndicator from './components/TypingIndicator.js';
 
 // Importar composables
 import { useTabs } from './composables/useTabs.js';
@@ -62,9 +63,15 @@ const app = createApp({
 
                 <input-bar
                     :message="sharedState.inputMessage"
+                    :no-tab="!sharedState.hasActiveTab"
+                    :disabled="!sharedState.toolsReady || !sharedState.isConnected"
+                    :failed="sharedState.reconnectFailed"
+                    loading-text="Reconectando..."
                     @update:message="sharedState.inputMessage = $event"
                     @send="handleSend"
                 />
+
+                <typing-indicator :visible="sharedState.isProcessing" />
 
                 <!-- Modals -->
                 <mcp-modal
@@ -145,6 +152,7 @@ const app = createApp({
                         results.forEach(r => msg.addMessageToTab(tab, r));
                     }
                     msg.addMessageToTab(tab, { type: 'result', subtype: data.subtype, cost: data.cost });
+                    tab.isProcessing = false;
                 },
                 system: () => {
                     msg.addMessageToTab(tab, { type: 'system', message: data.message });
@@ -185,6 +193,7 @@ const app = createApp({
             if (!tab) return;
 
             msg.addMessageToTab(tab, { type: 'user', content: text });
+            tab.isProcessing = true;
 
             // Si el tab ya tiene WebSocket conectado, enviar directamente
             if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
@@ -205,14 +214,20 @@ const app = createApp({
 
         // ===== Action Toolbar Handlers =====
         function handleChangeModel(model) {
-            const tabId = tabs.activeTabId.value;
-            if (tabId) tabs.updateTabSettings(tabId, { model });
+            const tab = tabs.activeTab.value;
+            if (!tab) return;
+
+            tabs.updateTabSettings(tab.id, { model });
+            tabs.resetTabReadyFlags(tab.id);
+            ws.disconnectTab(tab);
+            ws.connectTab(tab, handleMessage);
         }
 
         function handleStop() {
             const tab = tabs.activeTab.value;
             if (tab) {
                 ws.sendCommand(tab, '/stop');
+                tab.isProcessing = false;
                 msg.addMessageToTab(tab, { type: 'system', message: '⏹ Deteniendo...' });
             }
         }
@@ -245,6 +260,9 @@ const app = createApp({
             // Actualizar settings localmente
             tabs.updateTabSettings(tab.id, { disabledMcpServers: disabledServers });
 
+            // Resetear flags de ready para que los botones muestren spinner
+            tabs.resetTabReadyFlags(tab.id);
+
             // Reconectar para que el backend rebuild el SDK con los nuevos MCP settings
             ws.disconnectTab(tab);
             ws.connectTab(tab, handleMessage);
@@ -253,10 +271,19 @@ const app = createApp({
         }
 
         function handleSaveSettings(settings) {
-            const tabId = tabs.activeTabId.value;
-            if (tabId) {
-                tabs.updateTabSettings(tabId, settings);
-            }
+            const tab = tabs.activeTab.value;
+            if (!tab) return;
+
+            // Actualizar settings localmente
+            tabs.updateTabSettings(tab.id, settings);
+
+            // Resetear flags de ready para que los botones muestren spinner
+            tabs.resetTabReadyFlags(tab.id);
+
+            // Reconectar para que el backend aplique los nuevos settings (model, tools, permission_mode, etc.)
+            ws.disconnectTab(tab);
+            ws.connectTab(tab, handleMessage);
+
             showSettingsModal.value = false;
         }
 
@@ -278,6 +305,45 @@ const app = createApp({
                 console.log('[Vue] Session ID update:', oldId, '->', newId);
                 tabs.updateTabSessionId(oldId, newId);
                 storage.saveTabs(tabs.serializeTabs());
+            });
+
+            // Conexion: reset reconnectFailed al reconectar
+            window.addEventListener('tab-connected', (event) => {
+                const tab = tabs.getTab(event.detail.tabId);
+                if (tab) tab.reconnectFailed = false;
+            });
+
+            // Conexion: marcar tab como fallido
+            window.addEventListener('tab-reconnect-failed', (event) => {
+                const tab = tabs.getTab(event.detail.tabId);
+                if (tab) tab.reconnectFailed = true;
+            });
+
+            // Reconexion inmediata al volver a la pestaña del navegador
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) return;
+                for (const [, tab] of tabs.tabs) {
+                    if (!tab.isConnected) {
+                        if (tab.reconnectTimeout) clearTimeout(tab.reconnectTimeout);
+                        tab.reconnectTimeout = null;
+                        tab.reconnectAttempts = 0;
+                        tab.reconnectFailed = false;
+                        ws.connectTab(tab, handleMessage);
+                    }
+                }
+            });
+
+            // Reconexion cuando vuelve la red
+            window.addEventListener('online', () => {
+                for (const [, tab] of tabs.tabs) {
+                    if (!tab.isConnected) {
+                        if (tab.reconnectTimeout) clearTimeout(tab.reconnectTimeout);
+                        tab.reconnectTimeout = null;
+                        tab.reconnectAttempts = 0;
+                        tab.reconnectFailed = false;
+                        ws.connectTab(tab, handleMessage);
+                    }
+                }
             });
 
             // Cargar tabs guardados
@@ -353,5 +419,6 @@ app.component('ActionToolbar', ActionToolbar);
 app.component('McpModal', McpModal);
 app.component('SettingsModal', SettingsModal);
 app.component('LogSidebar', LogSidebar);
+app.component('TypingIndicator', TypingIndicator);
 
 app.mount('#app');

@@ -40,6 +40,25 @@ export function useSharedState(tabs) {
             const tab = tabs.activeTab.value;
             return tab?.builtinTools || [];
         },
+        get isConnected() {
+            const tab = tabs.activeTab.value;
+            return tab?.isConnected || false;
+        },
+        get reconnectFailed() {
+            const tab = tabs.activeTab.value;
+            return tab?.reconnectFailed || false;
+        },
+        get hasActiveTab() {
+            return !!tabs.activeTab.value;
+        },
+        get isProcessing() {
+            const tab = tabs.activeTab.value;
+            return tab?.isProcessing || false;
+        },
+        get activeCwd() {
+            const tab = tabs.activeTab.value;
+            return tab?.cwd || '';
+        },
         get inputMessage() { return inputMessage.value; },
         set inputMessage(v) { inputMessage.value = v; },
     });

@@ -65,15 +65,11 @@ class MessageConverter:
 
         if block_format == "tool_result":
             content = str(block.content)
-            was_truncated = len(content) > 500
-            if was_truncated:
-                logger.debug(f"tool_result truncado: {len(content)} → 500 chars (tool_use_id={block.tool_use_id})")
             return {
                 "type": "tool_result",
                 "tool_use_id": block.tool_use_id,
-                "content": content[:500],
+                "content": content,
                 "is_error": block.is_error,
-                "was_truncated": was_truncated,
             }
 
         if block_format == "thinking":

@@ -270,6 +270,11 @@ Dependencia clave: `claude-agent-sdk` - SDK de Python que spawnea un subproceso 
 | `termuxcode/connection/log_handler.py` | `WebSocketLogHandler` - captura logs, ring buffer, broadcast via WebSocket |
 | `termuxcode/connection/lsp_manager.py` | Lifecycle de servidores LSP, registry, facade de análisis |
 | `termuxcode/message_converter.py` | Convierte mensajes del SDK (AssistantMessage, ResultMessage, etc.) a JSON |
+| `termuxcode/custom_tools/` | Tools custom in-process servidas vía MCP |
+| `termuxcode/custom_tools/registry.py` | Registry de auto-registro para tools LSP (evita imports circulares) |
+| `termuxcode/custom_tools/server.py` | MCP server que agrupa custom tools + inyecta LspManager |
+| `termuxcode/custom_tools/tools/` | Implementación de tools custom |
+| `termuxcode/custom_tools/tools/type_check.py` | Tool de type checking usando LSP (ty, ruff, etc.) |
 
 ### Flujo: Crear Pestaña
 
@@ -325,3 +330,439 @@ Dependencia clave: `claude-agent-sdk` - SDK de Python que spawnea un subproceso 
 | `question` | Pregunta del SDK al usuario |
 | `server_log` | Log individual del servidor en tiempo real (`{type, level, timestamp, logger, message}`) |
 | `server_log_history` | Batch de logs históricos al conectar (`{type, entries: [...]}`) |
+
+---
+
+## Custom Tools con LSP
+
+### Arquitectura
+
+Las tools custom se sirven vía un servidor MCP in-process (`termuxcode`) que se inyecta en el SDK client. Las tools que necesitan acceso al LSP de la sesión pueden usar un sistema de **auto-registro** para recibir el `LspManager`.
+
+```
+SDKClient
+  └─> mcp_servers={"termuxcode": get_custom_mcp_server(lsp_manager)}
+       └─> server.py → registry.py: inject_lsp_manager(lsp_manager)
+            └─> type_check.py: _lsp_manager.validate_file()
+```
+
+### Patrón: Crear una Tool LSP
+
+Para agregar una nueva tool que use el LSP, sigue estos 4 pasos:
+
+#### Paso 1: Crear archivo de la tool
+
+`termuxcode/custom_tools/tools/my_tool.py`:
+
+```python
+#!/usr/bin/env python3
+"""Tool: my_feature — descripción de lo que hace."""
+
+import os
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from claude_agent_sdk import tool
+from termuxcode.connection.lsp.uri import normalize_path
+
+if TYPE_CHECKING:
+    from termuxcode.connection.lsp_manager import LspManager
+
+# ── Paso 1: Variable global + setter ───────────────────────────────
+
+_lsp_manager: "LspManager | None" = None
+
+
+def set_lsp_manager(lsp_manager: "LspManager | None") -> None:
+    """Inyecta el LspManager para ser usado por la tool."""
+    global _lsp_manager
+    _lsp_manager = lsp_manager
+
+
+# ── Paso 2: Auto-registro (OBLIGATORIO) ─────────────────────────────
+
+from termuxcode.custom_tools.registry import register_lsp_tool
+
+register_lsp_tool(set_lsp_manager)
+
+
+# ── Paso 3: Definir la tool ───────────────────────────────────────────
+
+@tool(
+    "my_tool_name",
+    "Human-readable description of what this tool does.",
+    {"file_path": str, "optional_param": int},
+)
+async def my_tool_name(args: dict[str, Any]) -> dict[str, Any]:
+    """Implementación de la tool usando el LspManager."""
+    # IMPORTANTE: Normalizar el file_path (como hacen los hooks)
+    file_path = normalize_path(args.get("file_path", "").strip())
+
+    if not file_path:
+        return {"content": [{"type": "text", "text": "Error: file_path is required"}]}
+
+    if not os.path.isfile(file_path):
+        return {"content": [{"type": "text", "text": f"Error: file not found: {file_path}"}]}
+
+    # Verificar si hay LSP disponible
+    if not _lsp_manager:
+        return {"content": [{"type": "text", "text": "Error: LSP not available for this session"}]}
+
+    try:
+        # Usar el LspManager según lo que necesites
+        content = Path(file_path).read_text(encoding="utf-8", errors="replace")
+
+        # Opción 1: Validación (diagnósticos)
+        diagnostics = await _lsp_manager.validate_file(file_path, content)
+
+        # Opción 2: Análisis semántico (contexto completo)
+        analysis = await _lsp_manager.analyze_file(file_path)
+
+        # Opción 3: Cliente directo
+        client = _lsp_manager.get_client(file_path)
+        if client:
+            symbols = await client.get_symbols(file_path)
+            hover = await client.get_hover(file_path, line, col)
+            references = await client.get_references(file_path, line, col)
+            inlay_hints = await client.get_inlay_hints(file_path)
+
+        return {"content": [{"type": "text", "text": "Result..."}]}
+
+    except Exception as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}]}
+```
+
+#### Paso 4: Registrar en `__init__.py`
+
+`termuxcode/custom_tools/tools/__init__.py`:
+
+```python
+from termuxcode.custom_tools.tools.type_check import type_check
+from termuxcode.custom_tools.tools.my_tool import my_tool_name  # <-- Importar
+
+TOOLS = [
+    type_check,
+    my_tool_name,  # <-- Agregar a la lista
+]
+```
+
+### API del LspManager
+
+El `LspManager` expone las siguientes operaciones:
+
+#### Métodos de alto nivel (recomendados)
+
+| Método | Retorna | Descripción |
+|--------|---------|-------------|
+| `validate_file(file_path, content)` | `list[dict]` | Diagnósticos de todos los LSPs (ty, ruff, etc.) |
+| `analyze_file(file_path)` | `str` | Contexto semántico completo (símbolos, tipos, referencias) |
+| `is_supported_file(file_path)` | `bool` | True si hay servidor LSP para esa extensión |
+| `get_client(file_path)` | `LSPClient \| None` | Cliente LSP principal para la extensión |
+| `get_all_clients(file_path)` | `list[LSPClient]` | TODOS los clientes LSP para la extensión |
+
+#### Métodos del LSPClient (uso avanzado)
+
+```python
+client = _lsp_manager.get_client(file_path)
+
+# Información semántica
+symbols = await client.get_symbols(file_path)  # DocumentSymbol[]
+hover = await client.get_hover(file_path, line, col)  # str | None
+references = await client.get_references(file_path, line, col)  # Location[]
+type_def = await client.get_type_definition(file_path, line, col)  # Location[]
+type_hierarchy = await client.get_type_hierarchy(file_path, line, col)  # dict | None
+
+# Hints de tipos
+inlay_hints = await client.get_inlay_hints(file_path)  # InlayHint[]
+
+# Formateo
+edits = await client.format_file(file_path)  # TextEdit[] | None
+
+# Cache de diagnósticos (no bloquea)
+diagnostics = client.get_cached_diagnostics(file_path)  # list[dict]
+```
+
+### Ejemplo: Tool `type_check` (implementado)
+
+Ubicación: `termuxcode/custom_tools/tools/type_check.py`
+
+Esta tool valida archivos Python usando el servidor LSP:
+
+1. Lee el contenido del archivo
+2. Llama a `LspManager.validate_file(file_path, content)`
+3. Combina diagnósticos de todos los LSPs configurados (ty, ruff, etc.)
+4. Retorna errores formateados con formato `file:line:col: [source] severity: message`
+5. Retorna error si no hay LSP disponible (requiere LSP para funcionar)
+
+**Ventajas sobre el CLI:**
+- ✅ Usa el servidor LSP que ya está corriendo (más eficiente)
+- ✅ Combina múltiples servidores LSP simultáneamente
+- ✅ No requiere subprocess separado
+- ✅ Diagnósticos cacheados disponibles
+- ✅ Requisito explícito: falla claro si no hay LSP configurado
+
+### Registry de Auto-registro
+
+El sistema de auto-registro (`register_lsp_tool`) permite que cada tool se registre automáticamente sin modificar `server.py`. Para evitar imports circulares, el registry vive en un módulo separado (`registry.py`).
+
+**Arquitectura:**
+```
+server.py → tools/__init__.py → type_check.py → registry.py ✅ (sin ciclo)
+```
+
+**El proceso:**
+1. Al importar la tool (via `from termuxcode.custom_tools.tools import TOOLS`), se ejecuta `register_lsp_tool(set_lsp_manager)` en `type_check.py`
+2. `registry.py` mantiene una lista `_LSP_TOOLS` con todas las funciones setter
+3. `server.py:get_custom_mcp_server()` llama a `inject_lsp_manager()` desde `registry.py`
+4. `inject_lsp_manager()` itera sobre `_LSP_TOOLS` e inyecta el manager en cada tool
+5. Si una tool falla al inyectar, no rompe las demás (fail-safe)
+
+### Notas
+
+- **TYPE_CHECKING**: El import de `LspManager` está dentro de `if TYPE_CHECKING:` para evitar imports circulares. El tipo se usa solo para type hints, no en runtime.
+- **Imports absolutos**: **REQUERIDO** — Todos los imports en `custom_tools/` deben ser absolutos (ej: `from termuxcode.custom_tools.registry import ...`). Los imports relativos (`from . import`) causan errores de import circular.
+- **Fallback**: Las tools LSP deben manejar el caso donde `_lsp_manager` es `None` (sesiones sin LSP configurado).
+- **MCP server**: El servidor MCP se crea en `sdk_client.py` con el `lsp_manager` inyectado: `get_custom_mcp_server(lsp_manager=self._lsp_manager)`.
+- **Estado global**: `_lsp_manager` es una variable a nivel de módulo. Se resetea en cada sesión al crear un nuevo MCP server.
+- **normalize_path()**: **CRÍTICO** — Siempre usar `normalize_path()` del módulo `lsp.uri` en el file_path recibido en los args. Esto convierte rutas relativas a absolutas y maneja rutas MSYS en Windows. Sin esto, ty recibirá URIs `file:///` inválidas (ej: `file:///src/file.py` en lugar de `file:///C:/project/src/file.py`).
+- **Consistencia con hooks**: Los hooks LSP (`PreToolUse`, `PostToolUse`) también usan `normalize_path()` antes de pasar el file_path al `LspManager`. Las tools custom deben seguir el mismo patrón.
+
+---
+
+## Sistema de Context Providers para CLAUDE.md
+
+### Propósito
+
+El sistema de **Context Providers** inyecta información actualizada del proyecto en el archivo `CLAUDE.md` antes de cada query del SDK. Esto permite que el agente tenga contexto fresco sobre el estado actual del código (filetree, git status, estadísticas, etc.) sin que el usuario tenga que mantener esta información manualmente.
+
+### Arquitectura
+
+```
+termuxcode/connection/
+├── claude_md_manager.py       # Orquesta providers y actualiza CLAUDE.md
+└── context/
+    ├── __init__.py            # Registry de providers con decorador
+    ├── filetree_provider.py   # File tree + estadísticas del proyecto
+    ├── git_provider.py        # Git info (branch, commits, status)
+    └── example_custom_provider.py  # Ejemplo para crear nuevos
+```
+
+### Flujo de Actualización
+
+```
+1. Usuario envía mensaje
+   ↓
+2. message_processor._handle_query()
+   ↓
+3. claude_md_manager.update_claude_md(cwd, session_id)
+   ↓
+4. Ejecuta todos los providers registrados (en orden de prioridad)
+   ↓
+5. Genera sección "## Project Context (Auto-generated)"
+   ↓
+6. REEMPLAZA la sección existente en CLAUDE.md (no duplica)
+   ↓
+7. SDK lee CLAUDE.md con la info actualizada
+   ↓
+8. SDK procesa la query con el contexto fresco
+```
+
+**Importante**: La sección se **REEMPLAZA** en cada mensaje, no se acumula. Si existe el marcador `## Project Context (Auto-generated)`, se busca desde ahí hasta el próximo `##` de nivel 2 y se reemplaza todo ese bloque.
+
+### Providers Implementados
+
+| Provider | Prioridad | Requiere Git | Descripción |
+|----------|-----------|--------------|-------------|
+| `generate_system_context` | 5 | No | Información del sistema (OS, usuario, fecha, Python, shell) |
+| `generate_extended_system_context` | 6 | No | Variables de entorno (PATH, LANG, TERM) |
+| `generate_filetree_context` | 10 | No | Árbol de archivos (profundidad 3, excluye node_modules, .git, etc.) |
+| `generate_stats_context` | 20 | No | Estadísticas (cantidad de archivos Python/JS/TS) |
+| `generate_git_context` | 30 | Sí | Branch actual + últimos 3 commits |
+| `generate_git_status_context` | 31 | Sí | Archivos modificados (git status --short) |
+
+### Patrón: Crear un Context Provider
+
+Los context providers usan un sistema de **auto-registro** similar a las tools LSP. Solo necesitas 2 pasos:
+
+#### Paso 1: Crear el archivo del provider
+
+`termuxcode/connection/context/mi_provider.py`:
+
+```python
+from termuxcode.connection.context import register_context_provider
+
+@register_context_provider(
+    name="mi_provider",
+    priority=50,              # Menor = se ejecuta primero
+    requires_git=False,       # True si necesita repo git
+)
+def generate_mi_context(cwd: str) -> str:
+    """Genera información personalizada para CLAUDE.md.
+
+    Args:
+        cwd: Directorio raíz del proyecto
+
+    Returns:
+        String con el contexto en formato markdown (con encabezado ###)
+    """
+    # Tu lógica aquí
+    return """### Mi Contexto Personalizado
+
+- **Dato importante**: valor
+- **Otro dato**: valor
+"""
+```
+
+#### Paso 2: Importar en el manager
+
+`termuxcode/connection/claude_md_manager.py` (agregar una línea al inicio):
+
+```python
+# Importar todos los providers para que se registren automáticamente
+from termuxcode.connection.context import filetree_provider  # noqa: F401
+from termuxcode.connection.context import git_provider  # noqa: F401
+from termuxcode.connection.context import mi_provider  # noqa: F401  ← AGREGAR
+```
+
+**No necesitas modificar nada más**. El sistema es auto-descubrible: cualquier módulo importado que use el decorador `@register_context_provider()` se incluye automáticamente.
+
+### Decorador `@register_context_provider`
+
+```python
+@register_context_provider(
+    name="nombre",           # Identificador para logs/debugging
+    priority=100,            # Orden de ejecución (menor = antes)
+    requires_git=False,      # True solo se ejecuta si hay repo git
+)
+def mi_funcion(cwd: str) -> str:
+    return "### Mi Sección\n\nContenido"
+```
+
+### Prioridades Recomendadas
+
+| Rango | Uso típico |
+|-------|------------|
+| 1-10 | Información crítica (debe ir primero) |
+| 10-30 | Estructura del proyecto (filetree, stats) |
+| 30-50 | Info de git/SCM |
+| 50-100 | Contexto secundario o custom |
+| 100+ | Información opcional |
+
+### Comportamiento con Git
+
+- Si el proyecto **NO tiene git**, los providers con `requires_git=True` se **saltean automáticamente**
+- Esto evita errores de subprocess y mejora performance
+- `claude_md_manager._is_git_repo()` detecta si hay repo con `git rev-parse --git-dir`
+
+### Output en CLAUDE.md
+
+La sección generada tiene este formato:
+
+```markdown
+## Project Context (Auto-generated)
+
+> **Nota**: Esta sección se genera automáticamente antes de cada query.
+> No la edites manualmente ya que se sobrescribirá.
+>
+> Providers activos: generate_system_context, generate_extended_system_context, generate_filetree_context, generate_stats_context, generate_git_context, generate_git_status_context
+
+### System Info
+
+- **OS**: 🪟 Windows 10 (x86_64)
+- **User**: `alejandro@DESKTOP-ABC123`
+- **Home**: `C:\Users\alejandro`
+- **Shell**: `C:\Windows\System32\cmd.exe`
+- **Python**: `3.11.0` → `C:\Python311\python.exe`
+- **Date/Time**: 2025-01-15 14:30:25 (UTC-5)
+- **Unix Timestamp**: `1736954625`
+
+### Extended System Info
+
+- **LANG**: `en_US.UTF-8`
+- **TERM**: `xterm-256color`
+- **PATH**:
+  ```
+  /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+  ```
+
+### File Tree
+
+```
+termuxcode/
+├── connection/
+│   ├── context/
+│   │   ├── __init__.py
+│   │   ├── filetree_provider.py
+│   │   ├── git_provider.py
+│   │   └── system_provider.py
+│   └── ...
+└── ...
+```
+
+### Project Stats
+
+- **Python files**: 42
+- **JS/TS files**: 15
+- **Total tracked files**: 57
+
+### Git Info
+
+- **Branch**: `main`
+  - 9fe6877 feat: migración Vue 3 completa
+  - 2c7d8f1 feat: MCP per-tab state
+  - 7dd1b03 feat: wake lock + reconexión
+
+### Git Status
+
+```
+M static/js/app-vue.js
+A termuxcode/connection/context/mi_provider.py
+```
+
+---
+```
+
+### Manejo de Errores
+
+- Si un provider falla (excepción), se loguea como debug y **no rompe** los demás
+- Si todos los providers fallan o no generan contenido, `update_claude_md()` retorna `False` y no modifica el archivo
+- Los providers deben retornar string vacío (`""`) si no tienen contenido que aportar
+
+### Debugging
+
+Para ver qué providers están registrados:
+
+```python
+from termuxcode.connection.claude_md_manager import list_active_providers
+
+providers = list_active_providers()
+for p in providers:
+    print(f"{p['name']} (priority={p['priority']}, git={p['requires_git']})")
+```
+
+### Integración con Message Processor
+
+`termuxcode/connection/message_processor.py` (líneas ~125-132):
+
+```python
+# Actualizar CLAUDE.md con información actualizada del proyecto
+# El SDK lo leerá antes de procesar la query
+if self._cwd:
+    try:
+        from termuxcode.connection.claude_md_manager import update_claude_md
+        update_claude_md(self._cwd, self._session_id)
+    except Exception as e:
+        logger.debug(f"Error actualizando CLAUDE.md (no crítico): {e}")
+```
+
+El error se maneja como **no crítico** porque si falla la actualización del contexto, la query puede proseguir de todas formas (solo que con información posiblemente desactualizada).
+
+### Diferencias con Custom Tools
+
+| Aspecto | Context Providers | Custom Tools |
+|---------|-------------------|--------------|
+| **Propósito** | Inyectar contexto en CLAUDE.md | Ejecutar acciones del SDK |
+| **Momento** | Antes de cada query | Durante la conversación |
+| **Output** | Markdown (texto) | JSON (tool result) |
+| **Registro** | `@register_context_provider()` | `@tool()` + `TOOLS` list |
+| **Aislamiento** | Global (mismo para todas las sesiones) | Per-session (cada sesión tiene su LspManager) |

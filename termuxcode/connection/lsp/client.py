@@ -11,6 +11,25 @@ from termuxcode.connection.lsp.uri import file_path_to_uri
 from termuxcode.ws_config import logger
 
 
+def _normalize_path_cwd(file_path: str, cwd: str) -> str:
+    """Normaliza un path relativo a absoluto usando el cwd del LSP.
+
+    Si el path ya es absoluto, no lo modifica.
+    Si es relativo, lo convierte a absoluto usando cwd.
+
+    Args:
+        file_path: Path del archivo (relativo o absoluto)
+        cwd: Directorio de trabajo del servidor LSP
+
+    Returns:
+        Path absoluto normalizado
+    """
+    if os.path.isabs(file_path):
+        return file_path
+    # Path relativo: convertir a absoluto usando cwd
+    return os.path.normpath(os.path.join(cwd, file_path))
+
+
 class LSPClient:
     """Cliente LSP de alto nivel que combina transporte, documentos y features."""
 
@@ -102,6 +121,10 @@ class LSPClient:
             "textDocument/typeHierarchy": "typeHierarchyProvider",
             "textDocument/inlayHint": "inlayHintProvider",
             "textDocument/formatting": "documentFormattingProvider",
+            "textDocument/prepareRename": "renameProvider",
+            "textDocument/rename": "renameProvider",
+            "textDocument/definition": "definitionProvider",
+            "textDocument/codeAction": "codeActionProvider",
         }
 
         cap_key = CAPABILITY_MAP.get(method)
@@ -118,15 +141,18 @@ class LSPClient:
 
     async def open_file(self, file_path: str, content: str) -> None:
         """Envia textDocument/didOpen."""
-        await self._documents.open(file_path, content)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        await self._documents.open(normalized, content)
 
     async def update_file(self, file_path: str, content: str) -> None:
         """Envia textDocument/didChange (full sync)."""
-        await self._documents.update(file_path, content)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        await self._documents.update(normalized, content)
 
     async def close_file(self, file_path: str) -> None:
         """Envia textDocument/didClose."""
-        await self._documents.close(file_path)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        await self._documents.close(normalized)
 
     async def open_and_wait(
         self,
@@ -135,7 +161,8 @@ class LSPClient:
         timeout: float = 10.0,
     ) -> list[dict]:
         """Envia didOpen y espera publishDiagnostics atomicamente."""
-        return await self._documents.open_and_wait(file_path, content, timeout)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._documents.open_and_wait(normalized, content, timeout)
 
     async def update_and_wait(
         self,
@@ -144,13 +171,15 @@ class LSPClient:
         timeout: float = 10.0,
     ) -> list[dict]:
         """Envia didChange y espera publishDiagnostics atomicamente."""
-        return await self._documents.update_and_wait(file_path, content, timeout)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._documents.update_and_wait(normalized, content, timeout)
 
     # ── Delegacion a LanguageFeatures ────────────────────────────────────
 
     async def get_symbols(self, file_path: str) -> list[dict]:
         """textDocument/documentSymbol -> lista de DocumentSymbol."""
-        return await self._features.get_symbols(file_path)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.get_symbols(normalized)
 
     async def get_hover(
         self,
@@ -159,7 +188,8 @@ class LSPClient:
         col: int,
     ) -> str | None:
         """textDocument/hover -> contenido como texto plano."""
-        return await self._features.get_hover(file_path, line, col)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.get_hover(normalized, line, col)
 
     async def get_references(
         self,
@@ -168,7 +198,8 @@ class LSPClient:
         col: int,
     ) -> list[dict]:
         """textDocument/references -> lista de Location."""
-        return await self._features.get_references(file_path, line, col)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.get_references(normalized, line, col)
 
     async def get_type_definition(
         self,
@@ -177,7 +208,8 @@ class LSPClient:
         col: int,
     ) -> list[dict]:
         """textDocument/typeDefinition -> lista de Location."""
-        return await self._features.get_type_definition(file_path, line, col)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.get_type_definition(normalized, line, col)
 
     async def get_type_hierarchy(
         self,
@@ -186,19 +218,64 @@ class LSPClient:
         col: int,
     ) -> dict | None:
         """textDocument/typeHierarchy -> jerarquia de tipos."""
-        return await self._features.get_type_hierarchy(file_path, line, col)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.get_type_hierarchy(normalized, line, col)
 
     async def get_inlay_hints(self, file_path: str) -> list[dict]:
         """textDocument/inlayHint -> hints de tipos inline."""
-        return await self._features.get_inlay_hints(file_path)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.get_inlay_hints(normalized)
 
     async def format_file(self, file_path: str) -> list[dict] | None:
         """textDocument/formatting -> lista de TextEdit."""
-        return await self._features.format_file(file_path)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.format_file(normalized)
+
+    async def prepare_rename(
+        self,
+        file_path: str,
+        line: int,
+        col: int,
+    ) -> dict | None:
+        """textDocument/prepareRename -> verifica si se puede renombrar."""
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.prepare_rename(normalized, line, col)
+
+    async def rename(
+        self,
+        file_path: str,
+        line: int,
+        col: int,
+        new_name: str,
+    ) -> dict[str, list[dict]] | None:
+        """textDocument/rename -> edits de renombrado."""
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.rename(normalized, line, col, new_name)
+
+    async def get_definition(
+        self,
+        file_path: str,
+        line: int,
+        col: int,
+    ) -> list[dict]:
+        """textDocument/definition -> lista de Location."""
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.get_definition(normalized, line, col)
+
+    async def get_code_actions(
+        self,
+        file_path: str,
+        line: int | None = None,
+        col: int | None = None,
+    ) -> list[dict]:
+        """textDocument/codeAction -> lista de CodeAction."""
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        return await self._features.get_code_actions(normalized, line, col)
 
     # ── Diagnostico cacheado ─────────────────────────────────────────────
 
     def get_cached_diagnostics(self, file_path: str) -> list[dict]:
         """Retorna diagnosticos cacheados (no bloquea)."""
-        uri = file_path_to_uri(file_path)
+        normalized = _normalize_path_cwd(file_path, self._transport.cwd)
+        uri = file_path_to_uri(normalized)
         return self._diagnostics.get(uri)
