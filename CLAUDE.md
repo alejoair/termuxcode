@@ -6,11 +6,17 @@
 - **HTML**: `static/index.html` - Solo mount point (`<div id="app"></div>`), scripts y estilos CSS
 - **App Principal**: `static/js/app-vue.js` - Template string del root component, coordina composables, registra componentes globalmente
 - **Componentes montados**:
-  - `AppHeader.js` - Header con pestañas, recibe `state` + `todoCount` + `todoOpen` props, botones toggle sidebar logs y todo
-  - `LogSidebar.js` - Panel colapsable de logs del servidor con filtro por nivel
+  - `AppHeader.js` - Header con pestañas, recibe `state` + props de sidebars, botones toggle logs/filetree/todo/tasks
+  - `LogSidebar.js` - Panel colapsable izquierdo de logs del servidor con filtro por nivel
+  - `FiletreeSidebar.js` - Panel colapsable izquierdo de árbol de archivos del proyecto
   - `TodoSidebar.js` - Widget flotante de tareas del agente (progress bar, estados pending/in_progress/completed)
+  - `TasksSidebar.js` - Panel colapsable derecho con slim/expanded modes para tasks del agente (reutiliza datos de `todo_update`)
   - `MessageList.js` - Lista de mensajes con markdown y accordions
   - `InputBar.js` - Barra de input con botón enviar
+  - `ActionToolbar.js` - Toolbar con botones de acción (stop, clear, reconnect, config, MCP)
+  - `SettingsModal.js` - Modal de configuración con tools del backend
+  - `McpModal.js` - Modal de servidores MCP con toggles
+  - `PlanModal.js` - Modal para vista de contenido (file_view)
 - **Composables**:
   - `useTabs.js` - Gestión de pestañas (crear, cambiar, cerrar, serialización)
   - `useWebSocket.js` - Conexión WebSocket con reconexión automática
@@ -19,6 +25,8 @@
   - `useSharedState.js` - Estado reactivo compartido centralizado
   - `useServerLogs.js` - Estado global de logs del servidor (no per-tab, singleton)
   - `useTodoSidebar.js` - Estado global de todos del agente (singleton, setTodos, toggleSidebar)
+  - `useTasksSidebar.js` - Estado global de tasks con slim/expanded modes (singleton, reutiliza datos de `todo_update`)
+  - `useFiletree.js` - Estado global del árbol de archivos del proyecto (singleton)
 
 ### Funcionalidades Implementadas
 
@@ -49,7 +57,7 @@
 - `tools_list` - Filtra solo tools con `source === "builtin"`, las guarda en `tab.builtinTools` y pone `tab.toolsReady = true`. Las tools MCP no se muestran en la modal de configuración (van en la modal MCP).
 - `mcp_status` - Guarda servidores en `tab.mcpServers`, pone `tab.mcpReady = true`
 - `assistant`, `user`, `result`, `system` - Mensajes de chat
-- `todo_update` - Lista de tareas del agente (`data.todos`), auto-abre el widget si estaba cerrado
+- `todo_update` - Lista de tareas del agente (`data.todos`), alimenta `TodoSidebar` + `TasksSidebar`, auto-abre TasksSidebar si estaba cerrado
 - `file_view` - Contenido para el modal de Plan (planContent, showPlanModal)
 
 ### Arquitectura Frontend
@@ -90,7 +98,7 @@ Recibe `tabs` (de `useTabs`) y retorna `{ state, inputMessage }`:
 
 ### Patron: Sidebars Colapsables
 
-Las sidebars son paneles laterales a la izquierda del chat que se muestran/ocultan con un botón toggle en el header. Siguen un patron fijo de 4 capas: composable → unwrapping → template → componente.
+Las sidebars son paneles laterales (izquierda o derecha) del chat que se muestran/ocultan con un botón toggle en el header. Siguen un patron fijo de 4 capas: composable → unwrapping → template → componente. Las sidebars izquierdas (Log, Filetree) usan `transition name="sidebar"` con `margin-left`. La sidebar derecha (Tasks) usa `transition name="sidebar-right"` con `margin-right`.
 
 #### Paso 1: Composable (`static/js/composables/useXxxSidebar.js`)
 
@@ -136,11 +144,11 @@ return {
 
 #### Paso 3: Template en `app-vue.js`
 
-Layout flex-row con sidebars a la izquierda y el contenido principal con `flex-1 min-w-0`:
+Layout flex-row con sidebars a la izquierda, contenido principal con `flex-1 min-w-0`, y sidebars derechas al final:
 
 ```html
 <div class="flex h-screen overflow-hidden">
-    <!-- Sidebar(s) -->
+    <!-- Sidebar(s) izquierda -->
     <xxx-sidebar
         :is-open="xxxSidebarOpen"
         :items="xxxSidebarItems"
@@ -151,6 +159,14 @@ Layout flex-row con sidebars a la izquierda y el contenido principal con `flex-1
     <div class="flex flex-col flex-1 min-w-0 p-4 safe-areas overflow-hidden">
         <!-- header, messages, toolbar, input, modals -->
     </div>
+    <!-- Sidebar(s) derecha -->
+    <tasks-sidebar
+        :is-open="tasksSidebarOpen"
+        :tasks="tasksSidebarItems"
+        :expanded="tasksSidebarExpanded"
+        ...
+        @toggle="tasksSidebar.toggleSidebar()"
+    />
 </div>
 ```
 
@@ -189,11 +205,16 @@ En `app-vue.js`, conectar el emit del header al composable:
 
 #### Paso 6: CSS de transición en `index.html`
 
-Ya existe la clase `.sidebar-enter/leave` para todas las sidebars (definida una sola vez):
+Ya existen las clases `.sidebar-enter/leave` (izquierda) y `.sidebar-right-enter/leave` (derecha):
 
 ```css
+/* Sidebar izquierda */
 .sidebar-enter-active, .sidebar-leave-active { transition: margin-left 0.25s ease, opacity 0.2s ease; }
 .sidebar-enter-from, .sidebar-leave-to { margin-left: -24rem; opacity: 0; }
+
+/* Sidebar derecha */
+.sidebar-right-enter-active, .sidebar-right-leave-active { transition: margin-right 0.25s ease, opacity 0.2s ease; }
+.sidebar-right-enter-from, .sidebar-right-leave-to { margin-right: -20rem; opacity: 0; }
 ```
 
 #### Paso 7: Datos via WebSocket (si aplica)
@@ -204,7 +225,7 @@ Si la sidebar consume datos del backend:
 2. **useWebSocket.js**: Intercepta el message type con `window.dispatchEvent(new CustomEvent(...))` antes del dispatch per-tab, hace `return` para evitar duplicacion
 3. **app-vue.js onMounted()**: Escuchar el CustomEvent y llamar al composable: `window.addEventListener('xxx-data', (e) => xxxSidebar.addData(e.detail))`
 
-#### Ejemplo: LogSidebar (implementado)
+#### Ejemplo: LogSidebar (implementado, izquierda)
 
 | Capa | Archivo |
 |------|---------|
@@ -215,27 +236,43 @@ Si la sidebar consume datos del backend:
 | Toggle button | `AppHeader.js` (icono terminal, emit `toggle-sidebar`) |
 | Unwrapping | `app-vue.js` lineas ~98-103 (`logSidebarOpen`, `logSidebarFilteredLogs`, etc.) |
 
+#### Ejemplo: TasksSidebar (implementado, derecha)
+
+| Capa | Archivo |
+|------|---------|
+| Composable | `static/js/composables/useTasksSidebar.js` |
+| Componente | `static/js/components/TasksSidebar.js` |
+| Datos backend | Reutiliza `todo_update` (mismo mensaje que TodoSidebar) |
+| Toggle button | `AppHeader.js` (icono lista, emit `toggle-tasks-sidebar`) |
+| Unwrapping | `app-vue.js` (`tasksSidebarOpen`, `tasksSidebarItems`, `tasksSidebarExpanded`, counts, progress) |
+
+**Nota**: TasksSidebar tiene dos modos: **slim** (~48px, solo iconos de estado verticales) y **expanded** (~320px, lista con subject, descripción, progress bar). Toggle con `toggleExpanded()`. Se abre automáticamente al recibir `todo_update` con tasks.
+
 ### Pendientes
 - Conectar handlers faltantes: `question`, `tool_approval_request`
 - Montar `FloatingActionButton`
 - Importar `useTypewriter`, `useHaptics`
 - Implementar modales faltantes: `question`, `approval`
-- `handleSaveSettings` solo actualiza estado local — no reconecta WebSocket para aplicar cambios en backend (model, tools, permission_mode). Comparar con `handleApplyMcp` que sí hace disconnect/reconnect.
 
 ### Archivos Modificados
-- `static/index.html` - Solo mount point + CSS + scripts
+- `static/index.html` - Solo mount point + CSS + scripts. CSS transitions para `.sidebar` (izquierda) y `.sidebar-right` (derecha).
 - `static/js/app-vue.js` - Template string del root, componentes globales, coordina composables y handlers de mensajes
-- `static/js/components/AppHeader.js` - Header con tabs, recibe `state` + `todoCount` + `todoOpen` props, botones toggle sidebar logs y todo
-- `static/js/components/LogSidebar.js` - Panel colapsable de logs del servidor (filtro por nivel, auto-scroll, badges de errores/warnings)
+- `static/js/components/AppHeader.js` - Header con tabs, recibe `state` + props de sidebars (log, filetree, todo, tasks), botones toggle
+- `static/js/components/LogSidebar.js` - Panel colapsable izquierdo de logs del servidor (filtro por nivel, auto-scroll, badges de errores/warnings)
+- `static/js/components/FiletreeSidebar.js` - Panel colapsable izquierdo de árbol de archivos del proyecto
 - `static/js/components/TodoSidebar.js` - Widget flotante de tareas (emits: `toggle`, no `clear`). Se muestra solo si `isOpen && todos.length > 0`
+- `static/js/components/TasksSidebar.js` - Panel colapsable derecho con slim (48px) / expanded (320px) modes. Progress bar, status icons, activeForm spinner.
 - `static/js/components/MessageList.js` - Lista de mensajes con markdown y accordions
 - `static/js/components/InputBar.js` - Barra de input con botón enviar
 - `static/js/components/ActionToolbar.js` - Toolbar con botones de acción (stop, clear, reconnect, config, MCP). Botones Config y MCP tienen estado loading con spinner hasta que llega `toolsReady`/`mcpReady` del backend.
 - `static/js/components/SettingsModal.js` - Modal de configuración. La lista de tools viene del backend vía `tools_list` (solo builtins), no hardcodeada. Cada tool muestra `name` y tooltip con `desc`.
 - `static/js/components/McpModal.js` - Modal de servidores MCP con toggles enable/disable
+- `static/js/components/PlanModal.js` - Modal de vista de contenido (file_view)
 - `static/js/composables/useSharedState.js` - Estado reactivo compartido centralizado
 - `static/js/composables/useServerLogs.js` - Estado global de logs del servidor (singleton, filteredLogs computed, levelFilter)
 - `static/js/composables/useTodoSidebar.js` - Estado global de todos (singleton, `todos`, `isOpen`, `setTodos`, `toggleSidebar`)
+- `static/js/composables/useTasksSidebar.js` - Estado global de tasks con slim/expanded (singleton, `tasks`, `isOpen`, `expanded`, computed counts/progress)
+- `static/js/composables/useFiletree.js` - Estado global del árbol de archivos (singleton)
 - `static/js/composables/useMessages.js` - Procesamiento de mensajes (assistant, tool_use, tool_result)
 - `static/js/composables/useTabs.js` - Gestión de pestañas. Cada tab tiene `builtinTools`, `toolsReady` (análogo a `mcpServers`, `mcpReady`) que se llenan al recibir `tools_list` del backend y se resetean al deserializar de localStorage.
 
@@ -336,7 +373,7 @@ Dependencia clave: `claude-agent-sdk` - SDK de Python que spawnea un subproceso 
 | `question` | Pregunta del SDK al usuario |
 | `server_log` | Log individual del servidor en tiempo real (`{type, level, timestamp, logger, message}`) |
 | `server_log_history` | Batch de logs históricos al conectar (`{type, entries: [...]}`) |
-| `todo_update` | Lista de tareas del agente (`{type, todos: [{id, content, status}]}`). Backend intercepta `TodoWrite` del SDK y extrae los todos. Frontend muestra widget flotante `TodoSidebar`. |
+| `todo_update` | Lista de tareas del agente (`{type, todos: [{id, content, status}]}`). Backend intercepta `TodoWrite` del SDK y extrae los todos. Frontend muestra `TodoSidebar` (widget flotante) + `TasksSidebar` (panel derecho con slim/expanded). |
 
 ---
 
