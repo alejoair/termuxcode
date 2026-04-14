@@ -31,11 +31,11 @@ const app = createApp({
     template: `
         <div class="flex h-screen overflow-hidden">
             <filetree-sidebar
-                :is-open="filetreeOpen"
                 :tree="filetreeTree"
+                :expanded="filetreeExpanded"
                 :expanded-paths="filetreeExpandedPaths"
                 :file-count="filetreeFileCount"
-                @toggle="filetree.toggleSidebar()"
+                @toggle-expanded="filetree.toggleExpanded()"
                 @toggle-path="filetree.togglePath($event)"
                 @expand-all="filetree.expandAll()"
                 @collapse-all="filetree.collapseAll()"
@@ -56,13 +56,11 @@ const app = createApp({
                     :todo-count="todoSidebarItems.length"
                     :todo-open="todoSidebarOpen"
                     :log-open="logSidebarOpen"
-                    :filetree-open="filetreeOpen"
                     @switch-tab="handleSwitchTab"
                     @close-tab="handleCloseTab"
                     @new-tab="handleNewTab"
                     @toggle-sidebar="serverLogs.toggleSidebar()"
                     @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
-                    @toggle-filetree-sidebar="filetree.toggleSidebar()"
                 />
 
                 <message-list
@@ -166,7 +164,7 @@ const app = createApp({
         const tasksSidebarCompletedCount = computed(() => tasksSidebar.completedCount.value);
 
         // Desenvolver filetree para el template
-        const filetreeOpen = computed(() => filetree.isOpen.value);
+        const filetreeExpanded = computed(() => filetree.expanded.value);
         const filetreeTree = computed(() => filetree.tree.value);
         const filetreeExpandedPaths = computed(() => filetree.expandedPaths.value);
         const filetreeFileCount = computed(() => filetree.fileCount.value);
@@ -490,7 +488,7 @@ const app = createApp({
             tasksSidebarInProgressCount,
             tasksSidebarCompletedCount,
             filetree,
-            filetreeOpen,
+            filetreeExpanded,
             filetreeTree,
             filetreeExpandedPaths,
             filetreeFileCount,
