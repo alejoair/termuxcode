@@ -35,15 +35,6 @@ export default {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </button>
-                    <button
-                        @click="$emit('toggle-tasks-sidebar')"
-                        :title="tasksCount + ' tasks'"
-                        :class="['w-7 h-7 flex items-center justify-center transition-colors rounded', tasksOpen ? 'text-txt bg-surface' : 'text-muted hover:text-txt']"
-                    >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
-                        </svg>
-                    </button>
                     <div class="title-wrapper">
                     <div class="title terminal-title text-txt">
                         <span class="terminal-prompt">&gt;</span> TERMUXCODE<span class="terminal-cursor">_</span>
@@ -113,17 +104,9 @@ export default {
             type: Boolean,
             default: false,
         },
-        tasksOpen: {
-            type: Boolean,
-            default: false,
-        },
-        tasksCount: {
-            type: Number,
-            default: 0,
-        },
     },
 
-    emits: ['switch-tab', 'close-tab', 'new-tab', 'toggle-sidebar', 'toggle-todo-sidebar', 'toggle-filetree-sidebar', 'toggle-tasks-sidebar'],
+    emits: ['switch-tab', 'close-tab', 'new-tab', 'toggle-sidebar', 'toggle-todo-sidebar', 'toggle-filetree-sidebar'],
 
     setup(props, { emit }) {
         const localTabs = computed(() => props.state.tabsArray);

@@ -57,15 +57,12 @@ const app = createApp({
                     :todo-open="todoSidebarOpen"
                     :log-open="logSidebarOpen"
                     :filetree-open="filetreeOpen"
-                    :tasks-open="tasksSidebarOpen"
-                    :tasks-count="tasksSidebarTotalCount"
                     @switch-tab="handleSwitchTab"
                     @close-tab="handleCloseTab"
                     @new-tab="handleNewTab"
                     @toggle-sidebar="serverLogs.toggleSidebar()"
                     @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
                     @toggle-filetree-sidebar="filetree.toggleSidebar()"
-                    @toggle-tasks-sidebar="tasksSidebar.toggleSidebar()"
                 />
 
                 <message-list
@@ -123,9 +120,8 @@ const app = createApp({
                 />
             </div>
 
-            <!-- Tasks sidebar derecha -->
+            <!-- Tasks sidebar derecha (siempre visible) -->
             <tasks-sidebar
-                :is-open="tasksSidebarOpen"
                 :tasks="tasksSidebarItems"
                 :expanded="tasksSidebarExpanded"
                 :total-count="tasksSidebarTotalCount"
@@ -133,7 +129,6 @@ const app = createApp({
                 :pending-count="tasksSidebarPendingCount"
                 :in-progress-count="tasksSidebarInProgressCount"
                 :completed-count="tasksSidebarCompletedCount"
-                @toggle="tasksSidebar.toggleSidebar()"
                 @toggle-expanded="tasksSidebar.toggleExpanded()"
             />
         </div>
@@ -162,7 +157,6 @@ const app = createApp({
         const todoSidebarCompletedCount = computed(() => todoSidebar.completedCount.value);
 
         // Desenvolver tasksSidebar para el template
-        const tasksSidebarOpen = computed(() => tasksSidebar.isOpen.value);
         const tasksSidebarItems = computed(() => tasksSidebar.tasks.value);
         const tasksSidebarExpanded = computed(() => tasksSidebar.expanded.value);
         const tasksSidebarTotalCount = computed(() => tasksSidebar.totalCount.value);
@@ -234,9 +228,6 @@ const app = createApp({
                 todo_update: () => {
                     todoSidebar.setTodos(data.todos || []);
                     tasksSidebar.setTasks(data.todos || []);
-                    if (!tasksSidebar.isOpen.value && data.todos && data.todos.length > 0) {
-                        tasksSidebar.toggleSidebar();
-                    }
                 },
             };
 
@@ -491,7 +482,6 @@ const app = createApp({
             todoSidebarItems,
             todoSidebarCompletedCount,
             tasksSidebar,
-            tasksSidebarOpen,
             tasksSidebarItems,
             tasksSidebarExpanded,
             tasksSidebarTotalCount,

@@ -4,8 +4,7 @@ import { ref, computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
 // Refs singleton — compartidas entre todas las instancias
 const tasks = ref([]);
-const isOpen = ref(false);
-const expanded = ref(true);
+const expanded = ref(false);
 
 export function useTasksSidebar() {
     const pendingCount = computed(() => tasks.value.filter(t => t.status === 'pending').length);
@@ -21,10 +20,6 @@ export function useTasksSidebar() {
         tasks.value = newTasks || [];
     }
 
-    function toggleSidebar() {
-        isOpen.value = !isOpen.value;
-    }
-
     function toggleExpanded() {
         expanded.value = !expanded.value;
     }
@@ -35,7 +30,6 @@ export function useTasksSidebar() {
 
     return {
         tasks,
-        isOpen,
         expanded,
         pendingCount,
         inProgressCount,
@@ -43,7 +37,6 @@ export function useTasksSidebar() {
         totalCount,
         progressPercent,
         setTasks,
-        toggleSidebar,
         toggleExpanded,
         clearTasks,
     };
