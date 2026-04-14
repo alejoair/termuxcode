@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cliente LSP de alto nivel - fachada que combina lifecycle, documentos y features."""
 
+import asyncio
 import os
 
 from termuxcode.connection.lsp.diagnostics import DiagnosticsManager
@@ -41,13 +42,27 @@ class LSPClient:
         self._server_capabilities: dict = {}
         self._initialized = False
         self._features._client = self
+        self._on_diagnostics_callback = None
 
-    def _handle_notification(self, method: str, params: dict) -> None:
+    def set_diagnostics_callback(self, callback):
+        """Establece callback para publishDiagnostics del servidor.
+
+        El callback recibe (uri, diagnostics) cuando el servidor envía
+        textDocument/publishDiagnostics.
+        """
+        self._on_diagnostics_callback = callback
+
+    async def _handle_notification(self, method: str, params: dict) -> None:
         """Despacha notificaciones del servidor LSP."""
         if method == "textDocument/publishDiagnostics":
             uri = params.get("uri", "")
             diagnostics = params.get("diagnostics", [])
             self._diagnostics.handle_notification(uri, diagnostics)
+            if self._on_diagnostics_callback:
+                result = self._on_diagnostics_callback(uri, diagnostics)
+                # Soportar callbacks async y sync
+                if asyncio.iscoroutine(result):
+                    await result
 
     async def start(self) -> None:
         """Inicia el servidor LSP y completa el handshake initialize."""
@@ -279,3 +294,19 @@ class LSPClient:
         normalized = _normalize_path_cwd(file_path, self._transport.cwd)
         uri = file_path_to_uri(normalized)
         return self._diagnostics.get(uri)
+
+    # ── Raw passthrough (para editor sidebar) ──────────────────────────
+
+    async def send_raw_request(self, method: str, params: dict | None = None, timeout: float = 10.0) -> dict | None:
+        """Envía un request JSON-RPC crudo al servidor LSP.
+
+        Usado por el editor sidebar para completions, hover, etc.
+        """
+        return await self._transport.send_request(method, params, timeout)
+
+    async def send_raw_notification(self, method: str, params: dict | None = None) -> None:
+        """Envía una notificación JSON-RPC cruda al servidor LSP.
+
+        Usado por el editor sidebar para didChange, etc.
+        """
+        await self._transport.send_notification(method, params)

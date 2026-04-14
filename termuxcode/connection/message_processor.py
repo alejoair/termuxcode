@@ -186,6 +186,20 @@ class MessageProcessor:
                         await self._sender.send_cwd(self._cwd)
                     result_data = MessageConverter.convert_result_message(msg)
                     await self._sender.send_message(result_data)
+
+                    # Enviar filetree actualizado tras cada query
+                    if self._cwd:
+                        try:
+                            from termuxcode.connection.filetree_watcher import generate_filetree_json
+                            tree = generate_filetree_json(self._cwd)
+                            await self._sender.send_message({
+                                "type": "filetree_snapshot",
+                                "cwd": self._cwd,
+                                "entries": tree,
+                            })
+                        except Exception as e:
+                            logger.debug(f"Error enviando filetree: {e}")
+
                     break
 
                 elif msg_type == "AssistantMessage":

@@ -80,6 +80,7 @@ export default {
                             :depth="0"
                             :expanded-paths="expandedPaths"
                             @toggle="n => $emit('toggle-path', n.path)"
+                            @open-file="p => $emit('open-file', p)"
                         />
                     </template>
                     <div v-if="!tree.length" class="px-3 py-4 text-muted text-center">
@@ -97,7 +98,7 @@ export default {
         fileCount: { type: Number, default: 0 },
     },
 
-    emits: ['toggle-expanded', 'toggle-path', 'expand-all', 'collapse-all'],
+    emits: ['toggle-expanded', 'toggle-path', 'expand-all', 'collapse-all', 'open-file'],
 
     computed: {
         topLevelItems() {
@@ -127,6 +128,7 @@ const FiletreeNode = {
     template: `
         <div>
             <div @click="node.type === 'dir' && $emit('toggle', node)"
+                @dblclick="node.type === 'file' && $emit('open-file', node.path)"
                 :class="[
                     'flex items-center gap-1 cursor-pointer px-2 py-0.5 hover:bg-surface/50 transition-colors select-none',
                     node.type === 'file' ? 'text-txt/80' : 'text-txt'
@@ -158,6 +160,7 @@ const FiletreeNode = {
                     :depth="depth + 1"
                     :expanded-paths="expandedPaths"
                     @toggle="n => $emit('toggle', n)"
+                    @open-file="p => $emit('open-file', p)"
                 />
             </template>
         </div>
@@ -169,7 +172,7 @@ const FiletreeNode = {
         expandedPaths: { type: Set, default: () => new Set() },
     },
 
-    emits: ['toggle'],
+    emits: ['toggle', 'open-file'],
 
     computed: {
         isExpanded() {

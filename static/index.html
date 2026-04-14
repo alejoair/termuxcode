@@ -29,6 +29,26 @@
         }
     </script>
 
+    <!-- CodeMirror 6 importmap -->
+    <script type="importmap">
+    {
+        "imports": {
+            "codemirror": "https://esm.sh/codemirror@6.0.2",
+            "@codemirror/state": "https://esm.sh/@codemirror/state@6",
+            "@codemirror/lang-javascript": "https://esm.sh/@codemirror/lang-javascript@6",
+            "@codemirror/lang-python": "https://esm.sh/@codemirror/lang-python@6",
+            "@codemirror/lang-html": "https://esm.sh/@codemirror/lang-html@6",
+            "@codemirror/lang-css": "https://esm.sh/@codemirror/lang-css@6",
+            "@codemirror/lang-json": "https://esm.sh/@codemirror/lang-json@6",
+            "@codemirror/lang-markdown": "https://esm.sh/@codemirror/lang-markdown@6",
+            "@codemirror/theme-one-dark": "https://esm.sh/@codemirror/theme-one-dark@6",
+            "@codemirror/lint": "https://esm.sh/@codemirror/lint@6",
+            "@codemirror/autocomplete": "https://esm.sh/@codemirror/autocomplete@6",
+            "@codemirror/view": "https://esm.sh/@codemirror/view@6"
+        }
+    }
+    </script>
+
     <!-- Markdown parser (version pinned) -->
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
 
@@ -288,6 +308,96 @@
         .diff-line.context .diff-line-sign {
             color: var(--color-text-muted);
             opacity: 0.5;
+        }
+
+        /* CodeMirror editor in sidebar */
+        .editor-sidebar .cm-editor {
+            height: 100%;
+            font-size: 13px;
+        }
+        .editor-sidebar .cm-scroller {
+            overflow: auto;
+        }
+        .editor-sidebar .cm-content {
+            padding-bottom: 50vh;
+        }
+
+        /* Editor tabs */
+        .editor-tab {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-family: monospace;
+            color: #64748b;
+            background: transparent;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+        }
+        .editor-tab:hover {
+            color: #e2e8f0;
+            background: #1a2332;
+        }
+        .editor-tab.active {
+            color: #e2e8f0;
+            border-bottom-color: #14b8a6;
+            background: #0a0f14;
+        }
+        .editor-tab .close-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            font-size: 10px;
+            color: #64748b;
+            opacity: 0;
+            transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+        }
+        .editor-tab:hover .close-btn {
+            opacity: 1;
+        }
+        .editor-tab .close-btn:hover {
+            color: #f43f5e;
+            background: rgba(244, 63, 94, 0.1);
+        }
+
+        /* LSP diagnostics in editor */
+        .cm-editor .cm-lintRange-error {
+            text-decoration: wavy underline #f43f5e;
+        }
+        .cm-editor .cm-lintRange-warning {
+            text-decoration: wavy underline #f59e0b;
+        }
+        .cm-editor .cm-lintRange-info {
+            text-decoration: wavy underline #64748b;
+        }
+        .cm-editor .cm-lintMarker {
+            font-size: 12px;
+        }
+
+        /* LSP hover tooltip */
+        .cm-lsp-hover {
+            padding: 6px 10px;
+            max-width: 400px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .cm-lsp-hover pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+        .cm-lsp-hover code {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+        .cm-lsp-hover hr {
+            border-color: #243040;
+            margin: 4px 0;
         }
 
         /* Sidebar transition (left) */

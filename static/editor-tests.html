@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Editor Tests</title>
+    <link rel="stylesheet" href="css/editor-tests.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "codemirror": "https://esm.sh/codemirror@6.0.2",
+            "@codemirror/lang-javascript": "https://esm.sh/@codemirror/lang-javascript@6",
+            "@codemirror/lang-python": "https://esm.sh/@codemirror/lang-python@6",
+            "@codemirror/lang-html": "https://esm.sh/@codemirror/lang-html@6",
+            "@codemirror/lang-css": "https://esm.sh/@codemirror/lang-css@6",
+            "@codemirror/lang-json": "https://esm.sh/@codemirror/lang-json@6",
+            "@codemirror/lang-markdown": "https://esm.sh/@codemirror/lang-markdown@6",
+            "@codemirror/lint": "https://esm.sh/@codemirror/lint@6",
+            "@codemirror/theme-one-dark": "https://esm.sh/@codemirror/theme-one-dark@6"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Editor Tests</h1>
+            <div class="sep"></div>
+            <label style="font-size:12px;color:#a6adc8;">Lang:</label>
+            <select id="lang-select">
+                <option value="python">Python</option>
+                <option value="javascript">JavaScript</option>
+                <option value="typescript">TypeScript</option>
+                <option value="html">HTML</option>
+                <option value="css">CSS</option>
+                <option value="json">JSON</option>
+                <option value="markdown">Markdown</option>
+            </select>
+            <label style="font-size:12px;color:#a6adc8;">File:</label>
+            <input id="file-path" class="path-input" value="test_lsp.py" placeholder="test_lsp.py">
+            <label style="font-size:12px;color:#a6adc8;">Root:</label>
+            <input id="cwd-input" class="path-input" value="C:\Users\alejandro.cuartas\Desktop\termuxcode" placeholder="Project root (cwd)">
+            <button id="load-btn">Load File</button>
+            <button id="connect-btn">Connect LSP</button>
+            <span id="lsp-status" class="status disconnected">Disconnected</span>
+        </header>
+        <div id="editor-wrapper"></div>
+    </div>
+
+    <script type="module">
+        import { EditorView, basicSetup } from "codemirror";
+        import { javascript } from "@codemirror/lang-javascript";
+        import { python } from "@codemirror/lang-python";
+        import { html } from "@codemirror/lang-html";
+        import { css } from "@codemirror/lang-css";
+        import { json } from "@codemirror/lang-json";
+        import { markdown } from "@codemirror/lang-markdown";
+        import { oneDark } from "@codemirror/theme-one-dark";
+
+        import { LspClient } from "./js/editor/lsp-client.js";
+        import { lspDiagnostics, lspCompletion, lspHover, lspSync } from "./js/editor/lsp-extensions.js";
+
+        const languages = { javascript, python, html, css, json, markdown, typescript: javascript };
+
+        const samples = {
+            python: `from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class Task:
+    id: int
+    title: str
+    completed: bool = False
+    description: Optional[str] = None
+
+    def complete(self) -> None:
+        self.completed = True
+
+
+tasks: list[Task] = []
+
+
+def add_task(title: str, description: str = "") -> Task:
+    task = Task(id=len(tasks) + 1, title=title, description=description)
+    tasks.append(task)
+    return task
+
+
+def show_pending() -> list[Task]:
+    return [t for t in tasks if not t.completed]
+
+
+add_task("Setup project", "Initialize the repository")
+add_task("Write tests")
+pending = show_pending()
+print(f"Pending: {len(pending)} tasks")
+
+# Error intencional: show_pending no existe con este nombre
+print(f"Pending: {len(show_peding())} tasks")
+`,
+            javascript: `function fibonacci(n) {
+    if (n <= 1) return n;
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+const result = fibonacci(10);
+console.log("Fibonacci(10) =", result);
+`,
+            typescript: `interface User {
+    id: number;
+    name: string;
+    email: string;
+}
+function greet(user: User): string {
+    return \`Hello, \${user.name}!\`;
+}
+const user: User = { id: 1, name: "Alice", email: "alice@example.com" };
+console.log(greet(user));
+`,
+            html: `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Test</title></head>
+<body><h1>Hello</h1><p>A test page.</p></body></html>
+`,
+            css: `:root { --primary: #cba6f7; --bg: #1e1e2e; }
+body { font-family: system-ui; background: var(--bg); color: #cdd6f4; }
+`,
+            json: `{"name": "editor-tests", "version": "1.0.0", "features": ["lsp", "completion", "diagnostics"]}`,
+            markdown: `# Test\n\n- **Bold** and *italic*\n`,
+        };
+
+        // ── App ───────────────────────────────────────────────────
+        const LSP_PORT = 2087;
+        const langSelect = document.getElementById("lang-select");
+        const filePathInput = document.getElementById("file-path");
+        const cwdInput = document.getElementById("cwd-input");
+        const connectBtn = document.getElementById("connect-btn");
+        const loadBtn = document.getElementById("load-btn");
+        const lspStatus = document.getElementById("lsp-status");
+        const wrapper = document.getElementById("editor-wrapper");
+
+        let editor = null;
+        let lspClient = null;
+
+        function setStatus(text, cls) {
+            lspStatus.textContent = text;
+            lspStatus.className = "status " + cls;
+        }
+
+        function pathToFileUri(p) {
+            let n = p.replace(/\\/g, "/");
+            if (!n.startsWith("/")) n = "/" + n;
+            return "file://" + n;
+        }
+
+        function getDocumentUri() {
+            const cwd = cwdInput.value.trim() || ".";
+            const file = filePathInput.value.trim() || "untitled";
+            if (file.startsWith("/") || file.match(/^[A-Za-z]:\\/)) return pathToFileUri(file);
+            const sep = cwd.endsWith("/") || cwd.endsWith("\\") ? "" : "/";
+            return pathToFileUri(cwd + sep + file);
+        }
+
+        async function createEditor(withLSP) {
+            if (editor) { editor.destroy(); editor = null; }
+            if (lspClient) { lspClient.close(); lspClient = null; }
+
+            const lang = langSelect.value;
+            const langExt = languages[lang] ? languages[lang]() : [];
+            const doc = samples[lang] || "";
+            const extensions = [basicSetup, langExt, oneDark];
+
+            if (withLSP) {
+                const cwd = cwdInput.value.trim() || ".";
+                const documentUri = getDocumentUri();
+                const rootUri = pathToFileUri(cwd);
+                const wsUrl = `ws://localhost:${LSP_PORT}/?language=${encodeURIComponent(lang)}&cwd=${encodeURIComponent(cwd)}`;
+
+                console.log("LSP connect:", { wsUrl, rootUri, documentUri, lang });
+                setStatus("Connecting...", "connecting");
+
+                const client = new LspClient(wsUrl);
+                lspClient = client;
+
+                // Wait for WS open, then initialize
+                client.ws.addEventListener("open", async () => {
+                    try {
+                        await client.initialize(rootUri, lang, documentUri, doc);
+                        setStatus("Connected", "connected");
+                        connectBtn.textContent = "Disconnect";
+                        connectBtn.classList.add("connected");
+                    } catch (e) {
+                        console.error("LSP init failed:", e);
+                        setStatus("Init failed: " + e.message, "disconnected");
+                    }
+                });
+
+                client.ws.addEventListener("close", () => {
+                    setStatus("Disconnected", "disconnected");
+                    connectBtn.textContent = "Connect LSP";
+                    connectBtn.classList.remove("connected");
+                });
+
+                // Add LSP extensions
+                extensions.push(lspDiagnostics(client, documentUri));
+                extensions.push(lspSync(client, documentUri));
+                extensions.push(EditorView.baseTheme({}));
+
+                // Completion (lazy import)
+                const { autocompletion } = await import("https://esm.sh/@codemirror/autocomplete@6");
+                extensions.push(autocompletion({ override: [lspCompletion(client, documentUri)] }));
+
+                // Hover (lazy import)
+                const { hoverTooltip } = await import("https://esm.sh/@codemirror/view@6");
+                extensions.push(hoverTooltip(lspHover(client, documentUri)));
+            } else {
+                setStatus("Disconnected", "disconnected");
+                connectBtn.textContent = "Connect LSP";
+                connectBtn.classList.remove("connected");
+            }
+
+            editor = new EditorView({ doc, extensions, parent: wrapper });
+        }
+
+        // Start without LSP
+        createEditor(false);
+
+        connectBtn.addEventListener("click", () => {
+            createEditor(lspClient == null);
+        });
+
+        loadBtn.addEventListener("click", async () => {
+            const file = filePathInput.value.trim();
+            if (!file) return;
+            try {
+                const resp = await fetch(`/${file}`);
+                if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+                const text = await resp.text();
+                if (editor) {
+                    editor.dispatch({
+                        changes: { from: 0, to: editor.state.doc.length, insert: text },
+                    });
+                    if (lspClient) lspClient.sendChange(getDocumentUri(), text);
+                }
+            } catch (e) {
+                alert("Error loading file: " + e.message + "\n\nMake sure the HTTP server is running (port 1988) and the file path is relative to static/.");
+            }
+        });
+
+        langSelect.addEventListener("change", () => {
+            const extMap = {
+                python: "test_lsp.py", javascript: "test.js", typescript: "test.ts",
+                html: "test.html", css: "test.css", json: "test.json", markdown: "test.md",
+            };
+            filePathInput.value = extMap[langSelect.value] || "test.txt";
+            createEditor(lspClient != null);
+        });
+    </script>
+</body>
+</html>

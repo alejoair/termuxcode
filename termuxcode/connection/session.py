@@ -21,6 +21,7 @@ from termuxcode.connection.ask_handler import AskUserQuestionHandler
 from termuxcode.connection.tool_approval_handler import ToolApprovalHandler
 from termuxcode.connection.message_processor import MessageProcessor
 from termuxcode.connection.lsp_manager import LspManager
+from termuxcode.connection.lsp.uri import file_path_to_uri
 from termuxcode.connection import session_registry
 
 
@@ -81,6 +82,7 @@ class Session:
         self._processor: MessageProcessor | None = None
         self._processor_task: asyncio.Task | None = None
         self.message_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self._lsp_editor_path: str | None = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
@@ -104,6 +106,18 @@ class Session:
                 })
         except Exception as e:
             logger.warning(f"Error enviando log history: {e}")
+
+        # Enviar filetree inicial al frontend
+        try:
+            from termuxcode.connection.filetree_watcher import generate_filetree_json
+            tree = generate_filetree_json(self.cwd)
+            await self._sender.send_message({
+                "type": "filetree_snapshot",
+                "cwd": self.cwd,
+                "entries": tree,
+            })
+        except Exception as e:
+            logger.debug(f"Error enviando filetree inicial: {e}")
 
         # 2. LspManager propio (init en background para no bloquear)
         self._lsp_manager = LspManager()
@@ -381,6 +395,14 @@ class Session:
         elif data.get('type') == 'request_mcp_status':
             mcp_status = await self._wait_for_mcp_ready()
             await self._send_mcp_status(mcp_status)
+        elif data.get('type') == 'lsp_document_open':
+            await self._handle_lsp_document_open(data)
+        elif data.get('type') == 'lsp_document_close':
+            await self._handle_lsp_document_close(data)
+        elif data.get('type') == 'lsp_request':
+            await self._handle_lsp_request(data)
+        elif data.get('type') == 'lsp_notification':
+            await self._handle_lsp_notification(data)
         else:
             try:
                 self.message_queue.put_nowait(data)
@@ -400,6 +422,144 @@ class Session:
         await self._sender.send_message(msg)
 
     # ── Internos ───────────────────────────────────────────────────────
+
+    async def _get_lsp_client(self, file_path: str, timeout: float = 5.0) -> LSPClient | None:
+        """Espera a que LspManager esté inicializado y retorna el cliente LSP.
+
+        Args:
+            file_path: Path absoluto del archivo
+            timeout: Tiempo máximo de espera en segundos
+
+        Returns:
+            LSPClient o None si no está disponible
+        """
+        deadline = asyncio.get_event_loop().time() + timeout
+        while True:
+            if self._lsp_manager and self._lsp_manager._initialized:
+                return self._lsp_manager.get_client(file_path)
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                return None
+            await asyncio.sleep(min(0.5, remaining))
+
+    async def _handle_lsp_document_open(self, data: dict) -> None:
+        """Abre un archivo en el LSP para el editor sidebar."""
+        file_path = data.get('file_path', '')
+        content = data.get('content', '')
+        if not file_path:
+            return
+
+        # Resolver path relativo a absoluto
+        import os
+        abs_path = file_path if os.path.isabs(file_path) else os.path.normpath(os.path.join(self.cwd, file_path))
+
+        client = await self._get_lsp_client(abs_path)
+        if not client:
+            await self._sender.send_message({
+                "type": "lsp_open_result",
+                "uri": file_path_to_uri(abs_path),
+                "capabilities": {},
+                "error": "No LSP server available for this file type",
+            })
+            return
+
+        # Registrar callback de diagnostics que envía al frontend
+        async def _on_diagnostics(uri: str, diagnostics: list) -> None:
+            await self._sender.send_message({
+                "type": "lsp_notification",
+                "method": "textDocument/publishDiagnostics",
+                "params": {"uri": uri, "diagnostics": diagnostics},
+            })
+
+        client.set_diagnostics_callback(_on_diagnostics)
+
+        # Abrir o actualizar archivo en el LSP
+        try:
+            # Check si el agente ya tiene este archivo abierto
+            if client._documents._version.get(file_path_to_uri(abs_path), 0) > 0:
+                await client.update_file(abs_path, content)
+            else:
+                await client.open_file(abs_path, content)
+        except Exception as e:
+            logger.warning(f"Error abriendo archivo en LSP: {e}")
+
+        self._lsp_editor_path = abs_path
+
+        await self._sender.send_message({
+            "type": "lsp_open_result",
+            "uri": file_path_to_uri(abs_path),
+            "capabilities": client._server_capabilities,
+        })
+
+    async def _handle_lsp_document_close(self, data: dict) -> None:
+        """Cierra un archivo en el LSP."""
+        file_path = data.get('file_path', '')
+        if not file_path or not self._lsp_editor_path:
+            return
+
+        try:
+            client = await self._get_lsp_client(self._lsp_editor_path, timeout=1.0)
+            if client:
+                client.set_diagnostics_callback(None)
+                await client.close_file(self._lsp_editor_path)
+        except Exception as e:
+            logger.debug(f"Error cerrando archivo en LSP: {e}")
+        finally:
+            self._lsp_editor_path = None
+
+    async def _handle_lsp_request(self, data: dict) -> None:
+        """Forward de un request LSP del editor al servidor."""
+        lsp_id = data.get('lsp_id')
+        method = data.get('method', '')
+        params = data.get('params')
+
+        if not self._lsp_editor_path:
+            await self._sender.send_message({
+                "type": "lsp_response",
+                "lsp_id": lsp_id,
+                "error": {"code": -1, "message": "No document open"},
+            })
+            return
+
+        client = await self._get_lsp_client(self._lsp_editor_path, timeout=2.0)
+        if not client:
+            await self._sender.send_message({
+                "type": "lsp_response",
+                "lsp_id": lsp_id,
+                "error": {"code": -1, "message": "LSP not available"},
+            })
+            return
+
+        try:
+            result = await client.send_raw_request(method, params, timeout=10.0)
+            await self._sender.send_message({
+                "type": "lsp_response",
+                "lsp_id": lsp_id,
+                "result": result,
+            })
+        except Exception as e:
+            await self._sender.send_message({
+                "type": "lsp_response",
+                "lsp_id": lsp_id,
+                "error": {"code": -1, "message": str(e)},
+            })
+
+    async def _handle_lsp_notification(self, data: dict) -> None:
+        """Forward de una notificación LSP del editor al servidor."""
+        method = data.get('method', '')
+        params = data.get('params')
+
+        if not self._lsp_editor_path:
+            return
+
+        client = await self._get_lsp_client(self._lsp_editor_path, timeout=2.0)
+        if not client:
+            return
+
+        try:
+            await client.send_raw_notification(method, params)
+        except Exception as e:
+            logger.debug(f"Error enviando notificación LSP: {e}")
 
     def _needs_rebuild(self, agent_options: dict | None = None, cwd: str | None = None) -> bool:
         """Determina si se necesita reconstruir el SDK al reconectar.
@@ -477,3 +637,4 @@ class Session:
         # Limpiar referencias
         self._processor = None
         self._sender = None
+        self._lsp_editor_path = None

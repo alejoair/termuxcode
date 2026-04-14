@@ -1,0 +1,154 @@
+/* ── Reset & Base ──────────────────────────────────────────── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; background: #1e1e2e; color: #cdd6f4; font-family: system-ui, sans-serif; }
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* ── Header ───────────────────────────────────────────────── */
+header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 8px 16px; background: #181825; border-bottom: 1px solid #313244;
+}
+header h1 { font-size: 14px; font-weight: 600; color: #cba6f7; }
+header .sep { width: 1px; height: 20px; background: #313244; }
+
+header select, header input {
+    background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+    padding: 4px 8px; border-radius: 4px; font-size: 13px;
+}
+header input { width: 200px; }
+header input.path-input { font-family: monospace; font-size: 12px; }
+
+header button {
+    background: #89b4fa; color: #1e1e2e; border: none;
+    padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+}
+header button:hover { background: #74c7ec; }
+header button.connected { background: #a6e3a1; }
+header button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Status ───────────────────────────────────────────────── */
+.status { font-size: 12px; font-family: monospace; }
+.status.disconnected { color: #f38ba8; }
+.status.connecting { color: #f9e2af; }
+.status.connected { color: #a6e3a1; }
+
+/* ── Editor ───────────────────────────────────────────────── */
+#editor-wrapper { flex: 1; overflow: hidden; }
+.cm-editor { height: 100%; }
+.cm-scroller { overflow: auto; }
+
+/* ── Lint: wavy underlines ────────────────────────────────── */
+.cm-lintRange-error { text-decoration: wavy underline #f38ba8; text-decoration-skip-ink: none; }
+.cm-lintRange-warning { text-decoration: wavy underline #f9e2af; text-decoration-skip-ink: none; }
+.cm-lintRange-info { text-decoration: wavy underline #89b4fa; text-decoration-skip-ink: none; }
+.cm-lintRange-hint { text-decoration: wavy underline #a6adc8; text-decoration-skip-ink: none; }
+.cm-lintRange { background-image: none; }
+
+.cm-lintMarker { width: 8px; height: 8px; border-radius: 50%; }
+.cm-lintMarker-error { background: #f38ba8; }
+.cm-lintMarker-warning { background: #f9e2af; }
+.cm-lintMarker-info { background: #89b4fa; }
+
+.cm-tooltip-lint {
+    background: #181825; border: 1px solid #313244; border-radius: 6px;
+    padding: 6px 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.cm-tooltip-lint li { list-style: none; font-size: 13px; padding: 3px 0; }
+.cm-diagnostic-error { color: #f38ba8; }
+.cm-diagnostic-warning { color: #f9e2af; }
+.cm-diagnostic-info { color: #89b4fa; }
+
+/* ── Autocomplete dropdown ────────────────────────────────── */
+.cm-tooltip.cm-tooltip-autocomplete {
+    background: #181825 !important;
+    border: 1px solid #45475a !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+    padding: 4px !important;
+    min-width: 240px;
+}
+
+.cm-tooltip-autocomplete > ul {
+    max-height: 220px;
+    padding: 0 !important;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+}
+
+.cm-tooltip-autocomplete > ul > li {
+    padding: 6px 10px !important;
+    border-radius: 5px !important;
+    color: #cdd6f4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid transparent;
+}
+
+.cm-tooltip-autocomplete > ul > li + li {
+    border-bottom-color: #313244;
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected] {
+    background: #313244 !important;
+    color: #cdd6f4;
+}
+
+.cm-completionLabel { flex: 1; }
+
+.cm-completionDetail {
+    font-size: 11px;
+    color: #6c7086;
+    font-style: normal;
+    margin-left: 12px;
+    white-space: nowrap;
+}
+
+.cm-completionIcon {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.cm-completionIcon-function,
+.cm-completionIcon-method   { background: #89b4fa33; color: #89b4fa; }
+.cm-completionIcon-variable { background: #cba6f733; color: #cba6f7; }
+.cm-completionIcon-class,
+.cm-completionIcon-type     { background: #f9e2af33; color: #f9e2af; }
+.cm-completionIcon-module   { background: #a6e3a133; color: #a6e3a1; }
+.cm-completionIcon-property { background: #f5c2e733; color: #f5c2e7; }
+.cm-completionIcon-keyword  { background: #f38ba833; color: #f38ba8; }
+.cm-completionIcon-constant { background: #94e2d533; color: #94e2d5; }
+.cm-completionIcon-enum     { background: #fab38733; color: #fab387; }
+.cm-completionIcon-interface{ background: #74c7ec33; color: #74c7ec; }
+
+/* ── Completion info tooltip ──────────────────────────────── */
+.cm-completionInfo {
+    background: #11111b !important;
+    border: 1px solid #313244 !important;
+    border-radius: 6px !important;
+    padding: 8px 12px !important;
+    font-size: 13px;
+    color: #cdd6f4;
+    max-width: 320px;
+}
+
+/* ── Hover tooltip ────────────────────────────────────────── */
+.cm-lsp-hover {
+    max-width: 500px; padding: 8px 12px; font-size: 13px; line-height: 1.5;
+    background: #181825; border-radius: 6px;
+}
+.cm-lsp-hover pre {
+    margin: 6px 0; padding: 6px 8px; background: #11111b;
+    border-radius: 4px; overflow-x: auto;
+}
+.cm-lsp-hover code {
+    font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px;
+}

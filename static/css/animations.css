@@ -1,0 +1,57 @@
+/* Loading message animations (retro game style) */
+
+@keyframes loadingCursor {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+@keyframes loadingSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes loadingGlow {
+    0%, 100% { box-shadow: 0 0 4px rgba(13, 148, 136, 0.3); }
+    50% { box-shadow: 0 0 12px rgba(13, 148, 136, 0.6); }
+}
+
+@keyframes loadingShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes loadingSlide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+}
+
+/* Loading message classes */
+.loading-msg .loading-cursor {
+    animation: loadingCursor 1s step-end infinite;
+}
+
+.loading-msg .loading-spinner-icon {
+    animation: loadingSpin 2s linear infinite;
+    display: inline-block;
+}
+
+.loading-msg .loading-bar-fill {
+    animation: loadingGlow 2s ease-in-out infinite;
+}
+
+.loading-msg .loading-bar-shimmer {
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: loadingShimmer 2s ease-in-out infinite;
+}
+
+/* Legacy loading bar (used elsewhere) */
+.loading-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.3), transparent);
+    animation: loadingSlide 1.5s ease-in-out infinite;
+}

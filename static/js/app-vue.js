@@ -13,6 +13,7 @@ import LogSidebar from './components/LogSidebar.js';
 import FiletreeSidebar, { FiletreeNode } from './components/FiletreeSidebar.js';
 import TodoSidebar from './components/TodoSidebar.js';
 import TasksSidebar from './components/TasksSidebar.js';
+import EditorSidebar from './components/EditorSidebar.js';
 import PlanModal from './components/PlanModal.js';
 
 // Importar composables
@@ -25,6 +26,7 @@ import { useServerLogs } from './composables/useServerLogs.js';
 import { useTodoSidebar } from './composables/useTodoSidebar.js';
 import { useTasksSidebar } from './composables/useTasksSidebar.js';
 import { useFiletree } from './composables/useFiletree.js';
+import { useEditorSidebar } from './composables/useEditorSidebar.js';
 
 // ===== Componente Principal =====
 const app = createApp({
@@ -39,6 +41,7 @@ const app = createApp({
                 @toggle-path="filetree.togglePath($event)"
                 @expand-all="filetree.expandAll()"
                 @collapse-all="filetree.collapseAll()"
+                @open-file="handleOpenFile"
             />
             <log-sidebar
                 :is-open="logSidebarOpen"
@@ -118,6 +121,21 @@ const app = createApp({
                 />
             </div>
 
+            <!-- Editor sidebar derecha -->
+            <editor-sidebar
+                ref="editorSidebarRef"
+                :open-files="editorSidebarOpenFiles"
+                :active-file-path="editorSidebarActiveFilePath"
+                :expanded="editorSidebarExpanded"
+                :lsp-client="editorSidebarLspClient"
+                @toggle-expanded="editorSidebar.toggleExpanded()"
+                @close-file="editorSidebar.closeFile($event)"
+                @set-active="editorSidebar.setActiveFile($event)"
+                @file-dirty="handleFileDirty"
+                @save-file="handleSaveFile"
+                @update-content="handleEditorContentUpdate"
+            />
+
             <!-- Tasks sidebar derecha (siempre visible) -->
             <tasks-sidebar
                 :tasks="tasksSidebarItems"
@@ -141,6 +159,7 @@ const app = createApp({
         const todoSidebar = useTodoSidebar();
         const tasksSidebar = useTasksSidebar();
         const filetree = useFiletree();
+        const editorSidebar = useEditorSidebar();
 
         // Desenvolver serverLogs para el template (refs dentro de objetos planos no se auto-desenvuelven)
         const logSidebarOpen = computed(() => serverLogs.isOpen.value);
@@ -168,6 +187,13 @@ const app = createApp({
         const filetreeTree = computed(() => filetree.tree.value);
         const filetreeExpandedPaths = computed(() => filetree.expandedPaths.value);
         const filetreeFileCount = computed(() => filetree.fileCount.value);
+
+        // Desenvolver editorSidebar para el template
+        const editorSidebarOpenFiles = computed(() => editorSidebar.openFiles.value);
+        const editorSidebarActiveFilePath = computed(() => editorSidebar.activeFilePath.value);
+        const editorSidebarExpanded = computed(() => editorSidebar.expanded.value);
+        const editorSidebarLspClient = computed(() => editorSidebar.getLspClient());
+        const editorSidebarRef = ref(null); // template ref para acceder al componente
 
         // Modal state
         const showMcpModal = ref(false);
@@ -227,6 +253,15 @@ const app = createApp({
                     todoSidebar.setTodos(data.todos || []);
                     tasksSidebar.setTasks(data.todos || []);
                 },
+                lsp_open_result: () => {
+                    editorSidebar.handleLspMessage(data);
+                },
+                lsp_response: () => {
+                    editorSidebar.handleLspMessage(data);
+                },
+                lsp_notification: () => {
+                    editorSidebar.handleLspMessage(data);
+                },
             };
 
             handlers[data.type]?.();
@@ -239,10 +274,12 @@ const app = createApp({
             if (tab) {
                 ws.connectTab(tab, handleMessage);
             }
+            updateLspConnection();
         }
 
         function handleSwitchTab(tabId) {
             tabs.switchTab(tabId);
+            updateLspConnection();
         }
 
         function handleCloseTab(tabId) {
@@ -323,6 +360,88 @@ const app = createApp({
             showSettingsModal.value = true;
         }
 
+        // ===== LSP Connection =====
+        function updateLspConnection() {
+            const tab = tabs.activeTab.value;
+            if (tab?.ws?.readyState === WebSocket.OPEN) {
+                editorSidebar.setLspSendFunction((data) => {
+                    if (tab.ws?.readyState === WebSocket.OPEN) {
+                        tab.ws.send(JSON.stringify(data));
+                    }
+                });
+                // Re-open active file in new session's LSP
+                editorSidebar.reconnectLsp();
+            } else {
+                editorSidebar.setLspSendFunction(null);
+            }
+        }
+
+        async function handleOpenFile(path) {
+            const name = path.split('/').pop();
+            const ext = name.split('.').pop().toLowerCase();
+            const langMap = {
+                py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript',
+                tsx: 'typescript', html: 'html', css: 'css', json: 'json',
+                md: 'markdown', txt: 'text',
+            };
+
+            // Si el archivo ya está abierto, solo activarlo (no re-fetch)
+            const existing = editorSidebar.openFiles.value.find(f => f.path === path);
+            if (existing) {
+                editorSidebar.setActiveFile(path);
+                return;
+            }
+
+            // Abrir con placeholder y expandir
+            editorSidebar.openFile(path, name, '// Cargando...', langMap[ext] || 'text');
+
+            // Fetch contenido real
+            try {
+                const res = await fetch('/api/file?path=' + encodeURIComponent(path));
+                if (!res.ok) {
+                    const err = await res.json();
+                    editorSidebar.updateFileContent(path, `// Error: ${err.error}`);
+                    return;
+                }
+                const data = await res.json();
+                editorSidebar.updateFileContent(path, data.content);
+            } catch (e) {
+                editorSidebar.updateFileContent(path, `// Error de conexión: ${e.message}`);
+            }
+        }
+
+        function handleFileDirty({ path }) {
+            editorSidebar.markDirty(path);
+        }
+
+        async function handleSaveFile({ path, content }) {
+            try {
+                const res = await fetch('/api/file', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path, content }),
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    console.error('[handleSaveFile] error:', err.error);
+                    return;
+                }
+                editorSidebar.markClean(path);
+                editorSidebar.updateFileContent(path, content);
+                if (editorSidebarRef.value?.showSaveStatus) {
+                    editorSidebarRef.value.showSaveStatus('Saved \u2713');
+                }
+            } catch (e) {
+                console.error('[handleSaveFile] fetch failed:', e);
+            }
+        }
+
+        function handleEditorContentUpdate({ path, content }) {
+            const files = editorSidebar.openFiles.value;
+            const file = files.find(f => f.path === path);
+            if (file) file.content = content;
+        }
+
         function handleApplyMcp(disabledServers) {
             const tab = tabs.activeTab.value;
             if (!tab) return;
@@ -386,6 +505,7 @@ const app = createApp({
             window.addEventListener('tab-connected', (event) => {
                 const tab = tabs.getTab(event.detail.tabId);
                 if (tab) tab.reconnectFailed = false;
+                updateLspConnection();
             });
 
             // Conexion: marcar tab como fallido
@@ -492,6 +612,12 @@ const app = createApp({
             filetreeTree,
             filetreeExpandedPaths,
             filetreeFileCount,
+            editorSidebar,
+            editorSidebarRef,
+            editorSidebarOpenFiles,
+            editorSidebarActiveFilePath,
+            editorSidebarExpanded,
+            editorSidebarLspClient,
             logSidebarFilteredLogs,
             logSidebarErrorCount,
             logSidebarWarnCount,
@@ -508,6 +634,10 @@ const app = createApp({
             handleOpenSettings,
             handleApplyMcp,
             handleSaveSettings,
+            handleOpenFile,
+            handleFileDirty,
+            handleSaveFile,
+            handleEditorContentUpdate,
         };
     },
 });
@@ -523,6 +653,7 @@ app.component('FiletreeSidebar', FiletreeSidebar);
 app.component('filetree-node', FiletreeNode);
 app.component('TodoSidebar', TodoSidebar);
 app.component('TasksSidebar', TasksSidebar);
+app.component('EditorSidebar', EditorSidebar);
 app.component('PlanModal', PlanModal);
 
 app.mount('#app');

@@ -105,6 +105,12 @@ export function useWebSocket() {
                         return;
                     }
 
+                    // Intercept filetree snapshot — dispatch via CustomEvent (no per-tab)
+                    if (data.type === 'filetree_snapshot') {
+                        window.dispatchEvent(new CustomEvent('filetree-snapshot', { detail: data }));
+                        return;
+                    }
+
                     // Callback al componente padre — usar tab.id (se actualiza tras re-key)
                     if (onMessage) {
                         onMessage(data, tab.id);

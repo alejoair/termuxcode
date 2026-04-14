@@ -191,4 +191,7 @@ class StdioTransport:
             method = msg["method"]
             params = msg.get("params", {})
             if self._on_notification:
-                self._on_notification(method, params)
+                result = self._on_notification(method, params)
+                # Si el handler es async, programarlo en el event loop
+                if asyncio.iscoroutine(result):
+                    asyncio.ensure_future(result)
