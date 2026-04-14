@@ -10,7 +10,9 @@ import ActionToolbar from './components/ActionToolbar.js';
 import McpModal from './components/McpModal.js';
 import SettingsModal from './components/SettingsModal.js';
 import LogSidebar from './components/LogSidebar.js';
+import TodoSidebar from './components/TodoSidebar.js';
 import TypingIndicator from './components/TypingIndicator.js';
+import PlanModal from './components/PlanModal.js';
 
 // Importar composables
 import { useTabs } from './composables/useTabs.js';
@@ -19,6 +21,7 @@ import { useStorage } from './composables/useStorage.js';
 import { useMessages } from './composables/useMessages.js';
 import { useSharedState } from './composables/useSharedState.js';
 import { useServerLogs } from './composables/useServerLogs.js';
+import { useTodoSidebar } from './composables/useTodoSidebar.js';
 
 // ===== Componente Principal =====
 const app = createApp({
@@ -91,7 +94,21 @@ const app = createApp({
                     @close="showSettingsModal = false"
                     @save="handleSaveSettings"
                 />
+
+                <plan-modal
+                    v-if="showPlanModal"
+                    :plan="planContent"
+                    @close="showPlanModal = false"
+                />
             </div>
+
+            <!-- Todo widget flotante (fuera del flex, siempre visible) -->
+            <todo-sidebar
+                v-if="todoSidebarItems.length > 0"
+                :todos="todoSidebarItems"
+                :completed-count="todoSidebarCompletedCount"
+                @clear="todoSidebar.clearTodos()"
+            />
         </div>
     `,
     setup() {
@@ -101,6 +118,7 @@ const app = createApp({
         const msg = useMessages();
         const { state: sharedState, inputMessage } = useSharedState(tabs);
         const serverLogs = useServerLogs();
+        const todoSidebar = useTodoSidebar();
 
         // Desenvolver serverLogs para el template (refs dentro de objetos planos no se auto-desenvuelven)
         const logSidebarOpen = computed(() => serverLogs.isOpen.value);
@@ -109,9 +127,15 @@ const app = createApp({
         const logSidebarWarnCount = computed(() => serverLogs.warnCount.value);
         const logSidebarFilter = computed(() => serverLogs.levelFilter.value);
 
+        // Desenvolver todoSidebar para el template
+        const todoSidebarItems = computed(() => todoSidebar.todos.value);
+        const todoSidebarCompletedCount = computed(() => todoSidebar.completedCount.value);
+
         // Modal state
         const showMcpModal = ref(false);
         const showSettingsModal = ref(false);
+        const showPlanModal = ref(false);
+        const planContent = ref('');
 
         // ===== WebSocket Message Handler =====
         function handleMessage(data, tabId) {
@@ -156,6 +180,16 @@ const app = createApp({
                 },
                 system: () => {
                     msg.addMessageToTab(tab, { type: 'system', message: data.message });
+                },
+                file_view: () => {
+                    planContent.value = data.content || '';
+                    showPlanModal.value = true;
+                },
+                todo_update: () => {
+                    todoSidebar.setTodos(data.todos || []);
+                    if (!todoSidebar.isOpen.value) {
+                        todoSidebar.toggleSidebar();
+                    }
                 },
             };
 
@@ -384,14 +418,25 @@ const app = createApp({
 
             // Configurar auto-save
             storage.setupAutoSave(() => tabs.serializeTabs());
+
+            // Guardar estado síncrono antes de recargar/cerrar
+            // Previene que el auto-save asíncrono de Vue no llegue a ejecutarse
+            window.addEventListener('beforeunload', () => {
+                storage.saveTabs(tabs.serializeTabs());
+            });
         });
 
         return {
             sharedState,
             showMcpModal,
             showSettingsModal,
+            showPlanModal,
+            planContent,
             serverLogs,
             logSidebarOpen,
+            todoSidebar,
+            todoSidebarItems,
+            todoSidebarCompletedCount,
             logSidebarFilteredLogs,
             logSidebarErrorCount,
             logSidebarWarnCount,
@@ -419,6 +464,8 @@ app.component('ActionToolbar', ActionToolbar);
 app.component('McpModal', McpModal);
 app.component('SettingsModal', SettingsModal);
 app.component('LogSidebar', LogSidebar);
+app.component('TodoSidebar', TodoSidebar);
 app.component('TypingIndicator', TypingIndicator);
+app.component('PlanModal', PlanModal);
 
 app.mount('#app');

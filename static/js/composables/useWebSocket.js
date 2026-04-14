@@ -212,23 +212,6 @@ export function useWebSocket() {
     }
 
     /**
-     * Maneja la actualización de session_id (re-key del tab)
-     */
-    function handleSessionIdUpdate(tab, newSessionId) {
-        const oldId = tab.id;
-        const newId = newSessionId;
-
-        if (oldId === newId) return;
-
-        console.log(`[WebSocket] Re-keying tab: ${oldId} -> ${newId}`);
-
-        // Notificar al componente padre para que actualice el Map de tabs
-        window.dispatchEvent(new CustomEvent('tab-session-id-update', {
-            detail: { oldId, newId }
-        }));
-    }
-
-    /**
      * Envía un mensaje de usuario
      */
     function sendUserMessage(tab, content, attachments = []) {
@@ -262,6 +245,23 @@ export function useWebSocket() {
             approved,
             input,
         });
+    }
+
+    /**
+     * Maneja la actualización de session_id (re-key del tab)
+     */
+    function handleSessionIdUpdate(tab, newSessionId) {
+        const oldId = tab.id;
+        const newId = newSessionId;
+
+        if (oldId === newId) return;
+
+        console.log(`[WebSocket] Re-keying tab: ${oldId} -> ${newId}`);
+
+        // Notificar al componente padre para que actualice el Map de tabs
+        window.dispatchEvent(new CustomEvent('tab-session-id-update', {
+            detail: { oldId, newId }
+        }));
     }
 
     return {
