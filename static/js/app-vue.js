@@ -10,8 +10,9 @@ import ActionToolbar from './components/ActionToolbar.js';
 import McpModal from './components/McpModal.js';
 import SettingsModal from './components/SettingsModal.js';
 import LogSidebar from './components/LogSidebar.js';
+import FiletreeSidebar, { FiletreeNode } from './components/FiletreeSidebar.js';
 import TodoSidebar from './components/TodoSidebar.js';
-import TypingIndicator from './components/TypingIndicator.js';
+import TasksSidebar from './components/TasksSidebar.js';
 import PlanModal from './components/PlanModal.js';
 
 // Importar composables
@@ -22,11 +23,23 @@ import { useMessages } from './composables/useMessages.js';
 import { useSharedState } from './composables/useSharedState.js';
 import { useServerLogs } from './composables/useServerLogs.js';
 import { useTodoSidebar } from './composables/useTodoSidebar.js';
+import { useTasksSidebar } from './composables/useTasksSidebar.js';
+import { useFiletree } from './composables/useFiletree.js';
 
 // ===== Componente Principal =====
 const app = createApp({
     template: `
         <div class="flex h-screen overflow-hidden">
+            <filetree-sidebar
+                :is-open="filetreeOpen"
+                :tree="filetreeTree"
+                :expanded-paths="filetreeExpandedPaths"
+                :file-count="filetreeFileCount"
+                @toggle="filetree.toggleSidebar()"
+                @toggle-path="filetree.togglePath($event)"
+                @expand-all="filetree.expandAll()"
+                @collapse-all="filetree.collapseAll()"
+            />
             <log-sidebar
                 :is-open="logSidebarOpen"
                 :logs="logSidebarFilteredLogs"
@@ -42,15 +55,22 @@ const app = createApp({
                     :state="sharedState"
                     :todo-count="todoSidebarItems.length"
                     :todo-open="todoSidebarOpen"
+                    :log-open="logSidebarOpen"
+                    :filetree-open="filetreeOpen"
+                    :tasks-open="tasksSidebarOpen"
+                    :tasks-count="tasksSidebarTotalCount"
                     @switch-tab="handleSwitchTab"
                     @close-tab="handleCloseTab"
                     @new-tab="handleNewTab"
                     @toggle-sidebar="serverLogs.toggleSidebar()"
                     @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
+                    @toggle-filetree-sidebar="filetree.toggleSidebar()"
+                    @toggle-tasks-sidebar="tasksSidebar.toggleSidebar()"
                 />
 
                 <message-list
                     :messages="sharedState.activeMessages"
+                    :is-processing="sharedState.isProcessing"
                     class="flex-1 overflow-y-auto min-h-0"
                 />
 
@@ -76,8 +96,6 @@ const app = createApp({
                     @update:message="sharedState.inputMessage = $event"
                     @send="handleSend"
                 />
-
-                <typing-indicator :visible="sharedState.isProcessing" />
 
                 <!-- Modals -->
                 <mcp-modal
@@ -105,12 +123,18 @@ const app = createApp({
                 />
             </div>
 
-            <!-- Todo widget flotante (fuera del flex, siempre visible) -->
-            <todo-sidebar
-                v-if="todoSidebarOpen && todoSidebarItems.length > 0"
-                :todos="todoSidebarItems"
-                :completed-count="todoSidebarCompletedCount"
-                @toggle="todoSidebar.toggleSidebar()"
+            <!-- Tasks sidebar derecha -->
+            <tasks-sidebar
+                :is-open="tasksSidebarOpen"
+                :tasks="tasksSidebarItems"
+                :expanded="tasksSidebarExpanded"
+                :total-count="tasksSidebarTotalCount"
+                :progress-percent="tasksSidebarProgressPercent"
+                :pending-count="tasksSidebarPendingCount"
+                :in-progress-count="tasksSidebarInProgressCount"
+                :completed-count="tasksSidebarCompletedCount"
+                @toggle="tasksSidebar.toggleSidebar()"
+                @toggle-expanded="tasksSidebar.toggleExpanded()"
             />
         </div>
     `,
@@ -122,6 +146,8 @@ const app = createApp({
         const { state: sharedState, inputMessage } = useSharedState(tabs);
         const serverLogs = useServerLogs();
         const todoSidebar = useTodoSidebar();
+        const tasksSidebar = useTasksSidebar();
+        const filetree = useFiletree();
 
         // Desenvolver serverLogs para el template (refs dentro de objetos planos no se auto-desenvuelven)
         const logSidebarOpen = computed(() => serverLogs.isOpen.value);
@@ -134,6 +160,22 @@ const app = createApp({
         const todoSidebarOpen = computed(() => todoSidebar.isOpen.value);
         const todoSidebarItems = computed(() => todoSidebar.todos.value);
         const todoSidebarCompletedCount = computed(() => todoSidebar.completedCount.value);
+
+        // Desenvolver tasksSidebar para el template
+        const tasksSidebarOpen = computed(() => tasksSidebar.isOpen.value);
+        const tasksSidebarItems = computed(() => tasksSidebar.tasks.value);
+        const tasksSidebarExpanded = computed(() => tasksSidebar.expanded.value);
+        const tasksSidebarTotalCount = computed(() => tasksSidebar.totalCount.value);
+        const tasksSidebarProgressPercent = computed(() => tasksSidebar.progressPercent.value);
+        const tasksSidebarPendingCount = computed(() => tasksSidebar.pendingCount.value);
+        const tasksSidebarInProgressCount = computed(() => tasksSidebar.inProgressCount.value);
+        const tasksSidebarCompletedCount = computed(() => tasksSidebar.completedCount.value);
+
+        // Desenvolver filetree para el template
+        const filetreeOpen = computed(() => filetree.isOpen.value);
+        const filetreeTree = computed(() => filetree.tree.value);
+        const filetreeExpandedPaths = computed(() => filetree.expandedPaths.value);
+        const filetreeFileCount = computed(() => filetree.fileCount.value);
 
         // Modal state
         const showMcpModal = ref(false);
@@ -191,8 +233,9 @@ const app = createApp({
                 },
                 todo_update: () => {
                     todoSidebar.setTodos(data.todos || []);
-                    if (!todoSidebar.isOpen.value) {
-                        todoSidebar.toggleSidebar();
+                    tasksSidebar.setTasks(data.todos || []);
+                    if (!tasksSidebar.isOpen.value && data.todos && data.todos.length > 0) {
+                        tasksSidebar.toggleSidebar();
                     }
                 },
             };
@@ -337,6 +380,11 @@ const app = createApp({
                 serverLogs.addLogBatch(event.detail.entries);
             });
 
+            // Escuchar filetree snapshots
+            window.addEventListener('filetree-snapshot', (event) => {
+                filetree.setTree(event.detail.entries, event.detail.cwd);
+            });
+
             // Escuchar cambios de session_id del WebSocket
             window.addEventListener('tab-session-id-update', (event) => {
                 const { oldId, newId } = event.detail;
@@ -442,6 +490,20 @@ const app = createApp({
             todoSidebarOpen,
             todoSidebarItems,
             todoSidebarCompletedCount,
+            tasksSidebar,
+            tasksSidebarOpen,
+            tasksSidebarItems,
+            tasksSidebarExpanded,
+            tasksSidebarTotalCount,
+            tasksSidebarProgressPercent,
+            tasksSidebarPendingCount,
+            tasksSidebarInProgressCount,
+            tasksSidebarCompletedCount,
+            filetree,
+            filetreeOpen,
+            filetreeTree,
+            filetreeExpandedPaths,
+            filetreeFileCount,
             logSidebarFilteredLogs,
             logSidebarErrorCount,
             logSidebarWarnCount,
@@ -469,8 +531,10 @@ app.component('ActionToolbar', ActionToolbar);
 app.component('McpModal', McpModal);
 app.component('SettingsModal', SettingsModal);
 app.component('LogSidebar', LogSidebar);
+app.component('FiletreeSidebar', FiletreeSidebar);
+app.component('filetree-node', FiletreeNode);
 app.component('TodoSidebar', TodoSidebar);
-app.component('TypingIndicator', TypingIndicator);
+app.component('TasksSidebar', TasksSidebar);
 app.component('PlanModal', PlanModal);
 
 app.mount('#app');

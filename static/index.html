@@ -290,7 +290,7 @@
             opacity: 0.5;
         }
 
-        /* Sidebar transition */
+        /* Sidebar transition (left) */
         .sidebar-enter-active,
         .sidebar-leave-active {
             transition: margin-left 0.25s ease, opacity 0.2s ease;
@@ -301,22 +301,20 @@
             opacity: 0;
         }
 
-        /* Loading bar animation */
-        @keyframes loadingSlide {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(200%); }
+        /* Sidebar transition (right) */
+        .sidebar-right-enter-active,
+        .sidebar-right-leave-active {
+            transition: margin-right 0.25s ease, opacity 0.2s ease;
         }
-
-        .loading-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 50%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.3), transparent);
-            animation: loadingSlide 1.5s ease-in-out infinite;
+        .sidebar-right-enter-from,
+        .sidebar-right-leave-to {
+            margin-right: -20rem;
+            opacity: 0;
         }
     </style>
+
+    <!-- Animations -->
+    <link rel="stylesheet" href="css/animations.css">
 </head>
 <body class="bg-base text-txt">
     <div id="app"></div>
