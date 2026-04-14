@@ -18,7 +18,7 @@ BLOCK_TYPES = {
 }
 
 # Tools que se manejan de forma especial (no se envían como tool_use normal)
-SPECIAL_TOOLS = {"AskUserQuestion"}
+SPECIAL_TOOLS = {"AskUserQuestion", "TodoWrite"}
 
 
 class MessageConverter:
@@ -107,6 +107,18 @@ class MessageConverter:
             "type": "user",
             "blocks": blocks,
         }
+
+    @staticmethod
+    def extract_todo_write(msg: AssistantMessage) -> list[dict[str, Any]] | None:
+        """Extrae los todos de un TodoWrite ToolUseBlock.
+
+        Returns:
+            Lista de todos o None si no hay TodoWrite en el mensaje.
+        """
+        for block in msg.content:
+            if block.__class__.__name__ == "ToolUseBlock" and block.name == "TodoWrite":
+                return block.input.get("todos")
+        return None
 
     @staticmethod
     def extract_ask_user_question(msg: AssistantMessage) -> list[tuple[str, list]]:

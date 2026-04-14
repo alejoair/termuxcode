@@ -6,8 +6,9 @@
 - **HTML**: `static/index.html` - Solo mount point (`<div id="app"></div>`), scripts y estilos CSS
 - **App Principal**: `static/js/app-vue.js` - Template string del root component, coordina composables, registra componentes globalmente
 - **Componentes montados**:
-  - `AppHeader.js` - Header con pestañas, recibe `state` prop, botón toggle sidebar logs
+  - `AppHeader.js` - Header con pestañas, recibe `state` + `todoCount` + `todoOpen` props, botones toggle sidebar logs y todo
   - `LogSidebar.js` - Panel colapsable de logs del servidor con filtro por nivel
+  - `TodoSidebar.js` - Widget flotante de tareas del agente (progress bar, estados pending/in_progress/completed)
   - `MessageList.js` - Lista de mensajes con markdown y accordions
   - `InputBar.js` - Barra de input con botón enviar
 - **Composables**:
@@ -17,6 +18,7 @@
   - `useMessages.js` - Procesamiento de mensajes (assistant, tool_use, tool_result)
   - `useSharedState.js` - Estado reactivo compartido centralizado
   - `useServerLogs.js` - Estado global de logs del servidor (no per-tab, singleton)
+  - `useTodoSidebar.js` - Estado global de todos del agente (singleton, setTodos, toggleSidebar)
 
 ### Funcionalidades Implementadas
 
@@ -47,6 +49,8 @@
 - `tools_list` - Filtra solo tools con `source === "builtin"`, las guarda en `tab.builtinTools` y pone `tab.toolsReady = true`. Las tools MCP no se muestran en la modal de configuración (van en la modal MCP).
 - `mcp_status` - Guarda servidores en `tab.mcpServers`, pone `tab.mcpReady = true`
 - `assistant`, `user`, `result`, `system` - Mensajes de chat
+- `todo_update` - Lista de tareas del agente (`data.todos`), auto-abre el widget si estaba cerrado
+- `file_view` - Contenido para el modal de Plan (planContent, showPlanModal)
 
 ### Arquitectura Frontend
 - **Desacoplada**: Composables independientes coordinados por app-vue.js
@@ -212,17 +216,18 @@ Si la sidebar consume datos del backend:
 | Unwrapping | `app-vue.js` lineas ~98-103 (`logSidebarOpen`, `logSidebarFilteredLogs`, etc.) |
 
 ### Pendientes
-- Conectar handlers faltantes: `question`, `tool_approval_request`, `file_view`
-- Montar `FloatingActionButton`, `TypingIndicator`
+- Conectar handlers faltantes: `question`, `tool_approval_request`
+- Montar `FloatingActionButton`
 - Importar `useTypewriter`, `useHaptics`
-- Implementar modales faltantes: `question`, `approval`, `fileView`, `plan`
+- Implementar modales faltantes: `question`, `approval`
 - `handleSaveSettings` solo actualiza estado local — no reconecta WebSocket para aplicar cambios en backend (model, tools, permission_mode). Comparar con `handleApplyMcp` que sí hace disconnect/reconnect.
 
 ### Archivos Modificados
 - `static/index.html` - Solo mount point + CSS + scripts
 - `static/js/app-vue.js` - Template string del root, componentes globales, coordina composables y handlers de mensajes
-- `static/js/components/AppHeader.js` - Header con tabs, recibe `state` prop, botón toggle sidebar logs
+- `static/js/components/AppHeader.js` - Header con tabs, recibe `state` + `todoCount` + `todoOpen` props, botones toggle sidebar logs y todo
 - `static/js/components/LogSidebar.js` - Panel colapsable de logs del servidor (filtro por nivel, auto-scroll, badges de errores/warnings)
+- `static/js/components/TodoSidebar.js` - Widget flotante de tareas (emits: `toggle`, no `clear`). Se muestra solo si `isOpen && todos.length > 0`
 - `static/js/components/MessageList.js` - Lista de mensajes con markdown y accordions
 - `static/js/components/InputBar.js` - Barra de input con botón enviar
 - `static/js/components/ActionToolbar.js` - Toolbar con botones de acción (stop, clear, reconnect, config, MCP). Botones Config y MCP tienen estado loading con spinner hasta que llega `toolsReady`/`mcpReady` del backend.
@@ -230,6 +235,7 @@ Si la sidebar consume datos del backend:
 - `static/js/components/McpModal.js` - Modal de servidores MCP con toggles enable/disable
 - `static/js/composables/useSharedState.js` - Estado reactivo compartido centralizado
 - `static/js/composables/useServerLogs.js` - Estado global de logs del servidor (singleton, filteredLogs computed, levelFilter)
+- `static/js/composables/useTodoSidebar.js` - Estado global de todos (singleton, `todos`, `isOpen`, `setTodos`, `toggleSidebar`)
 - `static/js/composables/useMessages.js` - Procesamiento de mensajes (assistant, tool_use, tool_result)
 - `static/js/composables/useTabs.js` - Gestión de pestañas. Cada tab tiene `builtinTools`, `toolsReady` (análogo a `mcpServers`, `mcpReady`) que se llenan al recibir `tools_list` del backend y se resetean al deserializar de localStorage.
 
@@ -269,7 +275,7 @@ Dependencia clave: `claude-agent-sdk` - SDK de Python que spawnea un subproceso 
 | `termuxcode/connection/history_manager.py` | Truncado de historial JSONL (rolling window) |
 | `termuxcode/connection/log_handler.py` | `WebSocketLogHandler` - captura logs, ring buffer, broadcast via WebSocket |
 | `termuxcode/connection/lsp_manager.py` | Lifecycle de servidores LSP, registry, facade de análisis |
-| `termuxcode/message_converter.py` | Convierte mensajes del SDK (AssistantMessage, ResultMessage, etc.) a JSON |
+| `termuxcode/message_converter.py` | Convierte mensajes del SDK (AssistantMessage, ResultMessage, etc.) a JSON. `SPECIAL_TOOLS = {"AskUserQuestion", "TodoWrite"}` excluye estas tools del flujo normal y las procesa por separado. |
 | `termuxcode/custom_tools/` | Tools custom in-process servidas vía MCP |
 | `termuxcode/custom_tools/registry.py` | Registry de auto-registro para tools LSP (evita imports circulares) |
 | `termuxcode/custom_tools/server.py` | MCP server que agrupa custom tools + inyecta LspManager |
@@ -330,6 +336,7 @@ Dependencia clave: `claude-agent-sdk` - SDK de Python que spawnea un subproceso 
 | `question` | Pregunta del SDK al usuario |
 | `server_log` | Log individual del servidor en tiempo real (`{type, level, timestamp, logger, message}`) |
 | `server_log_history` | Batch de logs históricos al conectar (`{type, entries: [...]}`) |
+| `todo_update` | Lista de tareas del agente (`{type, todos: [{id, content, status}]}`). Backend intercepta `TodoWrite` del SDK y extrae los todos. Frontend muestra widget flotante `TodoSidebar`. |
 
 ---
 

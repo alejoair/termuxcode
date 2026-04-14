@@ -16,6 +16,16 @@ export default {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                         </svg>
                     </button>
+                    <button
+                        v-if="todoCount > 0"
+                        @click="$emit('toggle-todo-sidebar')"
+                        :title="todoCount + ' tareas'"
+                        :class="['w-7 h-7 flex items-center justify-center transition-colors rounded', todoOpen ? 'text-txt bg-surface' : 'text-muted hover:text-txt']"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </button>
                     <div class="title-wrapper">
                     <div class="title terminal-title text-txt">
                         <span class="terminal-prompt">&gt;</span> TERMUXCODE<span class="terminal-cursor">_</span>
@@ -69,9 +79,17 @@ export default {
             type: Object,
             required: true,
         },
+        todoCount: {
+            type: Number,
+            default: 0,
+        },
+        todoOpen: {
+            type: Boolean,
+            default: false,
+        },
     },
 
-    emits: ['switch-tab', 'close-tab', 'new-tab', 'toggle-sidebar'],
+    emits: ['switch-tab', 'close-tab', 'new-tab', 'toggle-sidebar', 'toggle-todo-sidebar'],
 
     setup(props, { emit }) {
         const localTabs = computed(() => props.state.tabsArray);

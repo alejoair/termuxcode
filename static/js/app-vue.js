@@ -40,10 +40,13 @@ const app = createApp({
             <div class="flex flex-col flex-1 min-w-0 p-4 safe-areas overflow-hidden">
                 <app-header
                     :state="sharedState"
+                    :todo-count="todoSidebarItems.length"
+                    :todo-open="todoSidebarOpen"
                     @switch-tab="handleSwitchTab"
                     @close-tab="handleCloseTab"
                     @new-tab="handleNewTab"
                     @toggle-sidebar="serverLogs.toggleSidebar()"
+                    @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
                 />
 
                 <message-list
@@ -104,10 +107,10 @@ const app = createApp({
 
             <!-- Todo widget flotante (fuera del flex, siempre visible) -->
             <todo-sidebar
-                v-if="todoSidebarItems.length > 0"
+                v-if="todoSidebarOpen && todoSidebarItems.length > 0"
                 :todos="todoSidebarItems"
                 :completed-count="todoSidebarCompletedCount"
-                @clear="todoSidebar.clearTodos()"
+                @toggle="todoSidebar.toggleSidebar()"
             />
         </div>
     `,
@@ -128,6 +131,7 @@ const app = createApp({
         const logSidebarFilter = computed(() => serverLogs.levelFilter.value);
 
         // Desenvolver todoSidebar para el template
+        const todoSidebarOpen = computed(() => todoSidebar.isOpen.value);
         const todoSidebarItems = computed(() => todoSidebar.todos.value);
         const todoSidebarCompletedCount = computed(() => todoSidebar.completedCount.value);
 
@@ -435,6 +439,7 @@ const app = createApp({
             serverLogs,
             logSidebarOpen,
             todoSidebar,
+            todoSidebarOpen,
             todoSidebarItems,
             todoSidebarCompletedCount,
             logSidebarFilteredLogs,

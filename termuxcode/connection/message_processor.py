@@ -195,6 +195,14 @@ class MessageProcessor:
                     if assistant_data["blocks"]:
                         await self._sender.send_message(assistant_data)
 
+                    # Extraer todos de TodoWrite y enviar al frontend
+                    todos = MessageConverter.extract_todo_write(msg)
+                    if todos is not None:
+                        await self._sender.send_message({
+                            "type": "todo_update",
+                            "todos": todos,
+                        })
+
                 elif msg_type == "UserMessage":
                     user_data = MessageConverter.convert_user_message(msg)
                     if user_data["blocks"]:

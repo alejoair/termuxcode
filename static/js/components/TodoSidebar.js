@@ -15,7 +15,7 @@ export default {
                     <span class="text-xs text-zinc-500">
                         <span class="text-green-400 font-medium">{{ completedCount }}</span>/{{ todos.length }}
                     </span>
-                    <button @click="$emit('clear')" title="Limpiar"
+                    <button @click="$emit('toggle')" title="Cerrar"
                         class="text-zinc-600 hover:text-zinc-400 transition-colors p-0.5 rounded">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -65,5 +65,5 @@ export default {
         completedCount: { type: Number, default: 0 },
     },
 
-    emits: ['clear'],
+    emits: ['toggle'],
 };
