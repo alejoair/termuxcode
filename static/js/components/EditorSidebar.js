@@ -43,12 +43,14 @@ export default {
     template: `
         <div
             :class="[
-                'flex flex-col h-full bg-base border-l border-border flex-shrink-0 select-text overflow-hidden transition-[width] duration-200 editor-sidebar',
-                expanded ? 'w-[500px]' : 'w-12'
+                'flex flex-col h-full bg-base select-text overflow-hidden editor-sidebar',
+                isMobile
+                    ? ''
+                    : 'border-l border-border flex-shrink-0 transition-[width] duration-200 ' + (expanded ? 'w-[500px]' : 'w-12')
             ]"
         >
-            <!-- ===== Slim mode ===== -->
-            <template v-if="!expanded">
+            <!-- ===== Slim mode (solo desktop) ===== -->
+            <template v-if="!isMobile && !expanded">
                 <div
                     @click="$emit('toggle-expanded')"
                     class="flex flex-col items-center py-2 h-full cursor-pointer"
@@ -77,8 +79,8 @@ export default {
                 </div>
             </template>
 
-            <!-- ===== Expanded mode ===== -->
-            <template v-else>
+            <!-- ===== Expanded mode (siempre en mobile) ===== -->
+            <template v-if="isMobile || expanded">
                 <!-- Header -->
                 <div class="flex items-center justify-between px-3 py-1.5 border-b border-border flex-shrink-0">
                     <div class="flex items-center gap-2">
@@ -102,7 +104,7 @@ export default {
                         </button>
                         <!-- Save status -->
                         <span v-if="saveStatus" class="text-[10px] text-green-400 mr-1">{{ saveStatus }}</span>
-                        <button @click="$emit('toggle-expanded')" title="Colapsar"
+                        <button v-if="!isMobile" @click="$emit('toggle-expanded')" title="Colapsar"
                             class="w-6 h-6 flex items-center justify-center text-muted hover:text-txt transition-colors rounded">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
@@ -135,6 +137,14 @@ export default {
                 <div v-if="openFiles.length === 0" class="flex-1 flex items-center justify-center text-muted text-xs">
                     No hay archivos abiertos
                 </div>
+
+                <!-- Mobile: close button at bottom -->
+                <div v-if="isMobile" class="flex-shrink-0 border-t border-border p-2">
+                    <button @click="$emit('toggle-expanded')"
+                        class="w-full py-2 rounded bg-surface text-txt text-xs hover:bg-raised transition-colors">
+                        Cerrar
+                    </button>
+                </div>
             </template>
         </div>
     `,
@@ -144,6 +154,7 @@ export default {
         activeFilePath: { type: String, default: null },
         expanded: { type: Boolean, default: false },
         lspClient: { type: Object, default: null },
+        isMobile: { type: Boolean, default: false },
     },
 
     emits: ['toggle-expanded', 'close-file', 'set-active', 'file-dirty', 'save-file', 'update-content'],

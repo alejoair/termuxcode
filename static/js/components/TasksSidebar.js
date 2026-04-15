@@ -1,14 +1,18 @@
+import { computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+
 // Componente: Tasks Sidebar (panel derecho siempre visible, slim/expanded modes)
 export default {
     template: `
         <div
             :class="[
-                'flex flex-col h-full bg-base border-l border-border flex-shrink-0 select-text overflow-hidden transition-[width] duration-200',
-                expanded ? 'w-80' : 'w-12'
+                'flex flex-col h-full bg-base select-text overflow-hidden',
+                isMobile
+                    ? ''
+                    : 'border-l border-border flex-shrink-0 transition-[width] duration-200 ' + (expanded ? 'w-80' : 'w-12')
             ]"
         >
-            <!-- ===== Slim mode ===== -->
-            <template v-if="!expanded">
+            <!-- ===== Slim mode (solo desktop) ===== -->
+            <template v-if="!isMobile && !expanded">
                 <div
                     @click="$emit('toggle-expanded')"
                     class="flex flex-col items-center py-2 h-full cursor-pointer"
@@ -46,15 +50,15 @@ export default {
                 </div>
             </template>
 
-            <!-- ===== Expanded mode ===== -->
-            <template v-else>
+            <!-- ===== Expanded mode (siempre en mobile) ===== -->
+            <template v-if="isMobile || expanded">
                 <!-- Header -->
                 <div class="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
                     <div class="flex items-center gap-2">
                         <span class="text-sm font-bold text-txt">Tasks</span>
                         <span class="text-xs text-muted font-mono">{{ completedCount }}/{{ totalCount }}</span>
                     </div>
-                    <button @click="$emit('toggle-expanded')" title="Colapsar"
+                    <button v-if="!isMobile" @click="$emit('toggle-expanded')" title="Colapsar"
                         class="w-6 h-6 flex items-center justify-center text-muted hover:text-txt transition-colors rounded">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
@@ -133,6 +137,78 @@ export default {
                         </div>
                     </div>
                 </div>
+
+                <!-- Stats section -->
+                <div v-if="stats" class="border-t border-border flex-shrink-0">
+                    <div class="px-3 py-1.5 space-y-0.5 text-[10px]">
+                        <!-- Totals -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-muted">Input tokens:</span>
+                            <span class="text-txt font-mono">{{ formatNumber(stats.totalInputTokens) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-muted">Output tokens:</span>
+                            <span class="text-txt font-mono">{{ formatNumber(stats.totalOutputTokens) }}</span>
+                        </div>
+                        <div v-if="stats.totalCacheReadTokens > 0" class="flex items-center justify-between">
+                            <span class="text-muted">Cache read:</span>
+                            <span class="text-ok font-mono">{{ formatNumber(stats.totalCacheReadTokens) }}</span>
+                        </div>
+                        <div v-if="stats.totalCacheCreationTokens > 0" class="flex items-center justify-between">
+                            <span class="text-muted">Cache creation:</span>
+                            <span class="text-txt font-mono">{{ formatNumber(stats.totalCacheCreationTokens) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between font-semibold">
+                            <span class="text-muted">Cost:</span>
+                            <span class="text-txt font-mono">\${{ stats.totalCostUsd.toFixed(4) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-muted">Duration:</span>
+                            <span class="text-txt font-mono">{{ formatDuration(stats.totalDurationMs) }}</span>
+                        </div>
+                        <div v-if="stats.totalApiDurationMs > 0" class="flex items-center justify-between">
+                            <span class="text-muted">API time:</span>
+                            <span class="text-txt font-mono">{{ formatDuration(stats.totalApiDurationMs) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-muted">Queries:</span>
+                            <span class="text-txt font-mono">{{ stats.queryCount }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Per query breakdown -->
+                    <div v-if="stats.perQuery && stats.perQuery.length > 0" class="border-t border-border/50 px-3 py-1.5">
+                        <div class="flex items-center justify-between text-[10px] mb-1">
+                            <span class="text-muted font-semibold">Per query</span>
+                            <button
+                                @click="showPerQuery = !showPerQuery"
+                                class="text-muted hover:text-txt transition-colors"
+                            >
+                                {{ showPerQuery ? '−' : '+' }}
+                            </button>
+                        </div>
+                        <div v-if="showPerQuery" class="space-y-0.5 max-h-32 overflow-y-auto text-[10px]">
+                            <div
+                                v-for="q in reversedPerQuery"
+                                :key="q.queryNumber"
+                                class="flex items-center justify-between bg-zinc-800/50 rounded px-1.5 py-0.5"
+                            >
+                                <span class="text-muted">Q{{ q.queryNumber }}</span>
+                                <span class="text-txt font-mono">{{ formatNumber(q.inputTokens) }} / {{ formatNumber(q.outputTokens) }}</span>
+                                <span class="text-muted font-mono">\${{ q.costUsd.toFixed(4) }}</span>
+                                <span class="text-muted">{{ formatDuration(q.durationMs) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mobile: close button at bottom -->
+                <div v-if="isMobile" class="flex-shrink-0 border-t border-border p-2">
+                    <button @click="$emit('toggle-expanded')"
+                        class="w-full py-2 rounded bg-surface text-txt text-xs hover:bg-raised transition-colors">
+                        Cerrar
+                    </button>
+                </div>
             </template>
         </div>
     `,
@@ -145,7 +221,33 @@ export default {
         pendingCount: { type: Number, default: 0 },
         inProgressCount: { type: Number, default: 0 },
         completedCount: { type: Number, default: 0 },
+        stats: { type: Object, default: null },
+        isMobile: { type: Boolean, default: false },
     },
 
     emits: ['toggle-expanded'],
+
+    setup(props) {
+        const reversedPerQuery = computed(() => {
+            if (!props.stats?.perQuery) return [];
+            return [...props.stats.perQuery].reverse();
+        });
+
+        function formatNumber(num) {
+            return num.toLocaleString();
+        }
+
+        function formatDuration(ms) {
+            if (!ms) return '0ms';
+            if (ms < 1000) return `${ms}ms`;
+            return `${(ms / 1000).toFixed(1)}s`;
+        }
+
+        return {
+            reversedPerQuery,
+            showPerQuery: false,
+            formatNumber,
+            formatDuration,
+        };
+    },
 };

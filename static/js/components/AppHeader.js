@@ -5,9 +5,11 @@ export default {
     template: `
         <div class="app-header border-b border-border">
             <!-- Header: titulo + status -->
-            <div class="app-header-inner flex items-center justify-between px-4 py-3">
+            <div :class="['app-header-inner flex items-center justify-between', isMobile ? 'px-2 py-2' : 'px-4 py-3']">
                 <div class="flex items-center gap-3">
+                    <!-- Log toggle (desktop) -->
                     <button
+                        v-if="!isMobile"
                         @click="$emit('toggle-sidebar')"
                         title="Server Logs"
                         :class="['w-7 h-7 flex items-center justify-center transition-colors rounded', logOpen ? 'text-txt bg-surface' : 'text-muted hover:text-txt']"
@@ -16,8 +18,9 @@ export default {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                         </svg>
                     </button>
+                    <!-- Todo toggle (desktop) -->
                     <button
-                        v-if="todoCount > 0"
+                        v-if="!isMobile && todoCount > 0"
                         @click="$emit('toggle-todo-sidebar')"
                         :title="todoCount + ' tareas'"
                         :class="['w-7 h-7 flex items-center justify-center transition-colors rounded', todoOpen ? 'text-txt bg-surface' : 'text-muted hover:text-txt']"
@@ -26,31 +29,33 @@ export default {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </button>
-                    <div class="title-wrapper">
-                    <div class="title terminal-title text-txt">
-                        <span class="terminal-prompt">&gt;</span> TERMUXCODE<span class="terminal-cursor">_</span>
+
+                    <div v-if="!isMobile" class="title-wrapper">
+                        <div class="title terminal-title text-txt">
+                            <span class="terminal-prompt">&gt;</span> TERMUXCODE<span class="terminal-cursor">_</span>
+                        </div>
                     </div>
                 </div>
-                </div>
                 <div class="right flex items-center gap-4">
-                    <span v-if="cwd" class="text-sm text-txt font-mono truncate max-w-[400px] bg-surface px-2 py-0.5 rounded border border-border" :title="cwd">{{ cwd }}</span>
+                    <span v-if="!isMobile && cwd" class="text-sm text-txt font-mono truncate max-w-[400px] bg-surface px-2 py-0.5 rounded border border-border" :title="cwd">{{ cwd }}</span>
                     <div class="status flex items-center gap-2">
                         <div :class="['w-2 h-2 rounded-full', localStatusColor]"></div>
-                        <span class="text-sm text-muted">{{ localStatusText }}</span>
+                        <span v-if="!isMobile" class="text-sm text-muted">{{ localStatusText }}</span>
                     </div>
                 </div>
             </div>
 
             <!-- Tabs -->
-            <div class="app-tabs px-4 pb-2">
-                <div class="app-tabs-inner flex items-center gap-2">
-                    <div class="tabs-header flex gap-1 flex-1">
+            <div :class="['app-tabs', isMobile ? 'px-2 pb-1' : 'px-4 pb-2']">
+                <div :class="['app-tabs-inner flex items-center gap-2', isMobile ? 'mobile-tabs-scroll' : '']">
+                    <div class="tabs-header flex gap-1 flex-1" :class="isMobile ? 'mobile-tabs-scroll' : ''">
                         <button
                             v-for="tab in localTabs"
                             :key="tab.id"
                             @click="handleSwitchTab(tab.id)"
                             :class="[
-                                'flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors border-2',
+                                'flex items-center gap-2 rounded transition-colors border-2 flex-shrink-0',
+                                isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm',
                                 state.activeTabId === tab.id
                                     ? 'bg-surface text-txt border-border-focus'
                                     : 'bg-base/50 text-muted border-transparent hover:bg-raised/50'
@@ -58,8 +63,8 @@ export default {
                         >
                             <span :class="['w-1.5 h-1.5 rounded-full', tab.isConnected ? 'bg-ok' : 'bg-err']"></span>
                             <span>{{ tab.name }}</span>
-                            <!-- Badge de costo -->
-                            <span v-if="tab.stats && tab.stats.totalCostUsd > 0" class="text-xs text-muted font-mono ml-1">
+                            <!-- Badge de costo (solo desktop) -->
+                            <span v-if="!isMobile && tab.stats && tab.stats.totalCostUsd > 0" class="text-xs text-muted font-mono ml-1">
                                 \${{ tab.stats.totalCostUsd.toFixed(3) }}
                             </span>
                             <span
@@ -71,7 +76,7 @@ export default {
                     <button
                         @click="handleNewTab"
                         title="Nueva pestaña"
-                        class="bg-surface hover:bg-raised text-txt w-8 h-8 rounded flex items-center justify-center text-xl transition-colors flex-shrink-0"
+                        :class="['bg-surface hover:bg-raised text-txt rounded flex items-center justify-center text-xl transition-colors flex-shrink-0', isMobile ? 'w-7 h-7' : 'w-8 h-8']"
                     >+</button>
                 </div>
             </div>
@@ -82,6 +87,10 @@ export default {
         state: {
             type: Object,
             required: true,
+        },
+        isMobile: {
+            type: Boolean,
+            default: false,
         },
         todoCount: {
             type: Number,
@@ -97,7 +106,7 @@ export default {
         },
     },
 
-    emits: ['switch-tab', 'close-tab', 'new-tab', 'toggle-sidebar', 'toggle-todo-sidebar'],
+    emits: ['switch-tab', 'close-tab', 'new-tab', 'toggle-sidebar', 'toggle-todo-sidebar', 'toggle-filetree', 'toggle-editor', 'toggle-tasks'],
 
     setup(props, { emit }) {
         const localTabs = computed(() => props.state.tabsArray);

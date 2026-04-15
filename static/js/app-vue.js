@@ -15,7 +15,7 @@ import TodoSidebar from './components/TodoSidebar.js';
 import TasksSidebar from './components/TasksSidebar.js';
 import EditorSidebar from './components/EditorSidebar.js';
 import PlanModal from './components/PlanModal.js';
-import StatsDisplay from './components/StatsDisplay.js';
+
 
 // Importar composables
 import { useTabs } from './composables/useTabs.js';
@@ -28,135 +28,315 @@ import { useTodoSidebar } from './composables/useTodoSidebar.js';
 import { useTasksSidebar } from './composables/useTasksSidebar.js';
 import { useFiletree } from './composables/useFiletree.js';
 import { useEditorSidebar } from './composables/useEditorSidebar.js';
+import { useIsMobile } from './composables/useIsMobile.js';
 
 // ===== Componente Principal =====
 const app = createApp({
     template: `
         <div class="flex h-screen overflow-hidden">
-            <filetree-sidebar
-                :tree="filetreeTree"
-                :expanded="filetreeExpanded"
-                :expanded-paths="filetreeExpandedPaths"
-                :file-count="filetreeFileCount"
-                @toggle-expanded="filetree.toggleExpanded()"
-                @toggle-path="filetree.togglePath($event)"
-                @expand-all="filetree.expandAll()"
-                @collapse-all="filetree.collapseAll()"
-                @open-file="handleOpenFile"
-            />
-            <log-sidebar
-                :is-open="logSidebarOpen"
-                :logs="logSidebarFilteredLogs"
-                :error-count="logSidebarErrorCount"
-                :warn-count="logSidebarWarnCount"
-                :current-filter="logSidebarFilter"
-                @toggle="serverLogs.toggleSidebar()"
-                @clear="serverLogs.clearLogs()"
-                @set-filter="serverLogs.setLevelFilter($event)"
-            />
-            <div class="flex flex-col flex-1 min-w-0 p-4 safe-areas overflow-hidden">
-                <app-header
-                    :state="sharedState"
-                    :todo-count="todoSidebarItems.length"
-                    :todo-open="todoSidebarOpen"
-                    :log-open="logSidebarOpen"
-                    @switch-tab="handleSwitchTab"
-                    @close-tab="handleCloseTab"
-                    @new-tab="handleNewTab"
-                    @toggle-sidebar="serverLogs.toggleSidebar()"
-                    @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
+            <!-- ===== DESKTOP LAYOUT ===== -->
+            <template v-if="!isMobileValue">
+                <filetree-sidebar
+                    :tree="filetreeTree"
+                    :expanded="filetreeExpanded"
+                    :expanded-paths="filetreeExpandedPaths"
+                    :file-count="filetreeFileCount"
+                    @toggle-expanded="filetree.toggleExpanded()"
+                    @toggle-path="filetree.togglePath($event)"
+                    @expand-all="filetree.expandAll()"
+                    @collapse-all="filetree.collapseAll()"
+                    @open-file="handleOpenFile"
+                />
+                <log-sidebar
+                    :is-open="logSidebarOpen"
+                    :logs="logSidebarFilteredLogs"
+                    :error-count="logSidebarErrorCount"
+                    :warn-count="logSidebarWarnCount"
+                    :current-filter="logSidebarFilter"
+                    @toggle="serverLogs.toggleSidebar()"
+                    @clear="serverLogs.clearLogs()"
+                    @set-filter="serverLogs.setLevelFilter($event)"
+                />
+                <div class="flex flex-col flex-1 min-w-0 p-4 safe-areas overflow-hidden">
+                    <app-header
+                        :state="sharedState"
+                        :todo-count="todoSidebarItems.length"
+                        :todo-open="todoSidebarOpen"
+                        :log-open="logSidebarOpen"
+                        @switch-tab="handleSwitchTab"
+                        @close-tab="handleCloseTab"
+                        @new-tab="handleNewTab"
+                        @toggle-sidebar="serverLogs.toggleSidebar()"
+                        @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
+                    />
+
+                    <message-list
+                        :messages="sharedState.activeMessages"
+                        :is-processing="sharedState.isProcessing"
+                        class="flex-1 overflow-y-auto min-h-0"
+                    />
+
+                    <action-toolbar
+                        :selected-model="sharedState.selectedModel"
+                        :mcp-ready="sharedState.mcpReady"
+                        :tools-ready="sharedState.toolsReady"
+                        @change-model="handleChangeModel"
+                        @stop="handleStop"
+                        @clear="handleClear"
+                        @disconnect="handleDisconnect"
+                        @open-mcp="handleOpenMcp"
+                        @open-settings="handleOpenSettings"
+                        class="pb-2"
+                    />
+
+                    <input-bar
+                        :message="sharedState.inputMessage"
+                        :no-tab="!sharedState.hasActiveTab"
+                        :disabled="!sharedState.toolsReady || !sharedState.isConnected"
+                        :failed="sharedState.reconnectFailed"
+                        loading-text="Reconectando..."
+                        @update:message="sharedState.inputMessage = $event"
+                        @send="handleSend"
+                    />
+
+                    <!-- Modals -->
+                    <mcp-modal
+                        v-if="showMcpModal"
+                        :tab-id="sharedState.activeTabId"
+                        :servers="sharedState.activeMcpServers"
+                        :disabled-mcp-servers="sharedState.activeSettings.disabledMcpServers || []"
+                        @close="showMcpModal = false"
+                        @apply="handleApplyMcp"
+                    />
+
+                    <settings-modal
+                        v-if="showSettingsModal"
+                        :tab-id="sharedState.activeTabId"
+                        :settings="sharedState.activeSettings"
+                        :available-tools="sharedState.availableTools"
+                        @close="showSettingsModal = false"
+                        @save="handleSaveSettings"
+                    />
+
+                    <plan-modal
+                        v-if="showPlanModal"
+                        :plan="planContent"
+                        @close="showPlanModal = false"
+                    />
+                </div>
+
+                <!-- Editor sidebar derecha -->
+                <editor-sidebar
+                    ref="editorSidebarRef"
+                    :open-files="editorSidebarOpenFiles"
+                    :active-file-path="editorSidebarActiveFilePath"
+                    :expanded="editorSidebarExpanded"
+                    :lsp-client="editorSidebarLspClient"
+                    @toggle-expanded="editorSidebar.toggleExpanded()"
+                    @close-file="editorSidebar.closeFile($event)"
+                    @set-active="editorSidebar.setActiveFile($event)"
+                    @file-dirty="handleFileDirty"
+                    @save-file="handleSaveFile"
+                    @update-content="handleEditorContentUpdate"
                 />
 
-                <message-list
-                    :messages="sharedState.activeMessages"
-                    :is-processing="sharedState.isProcessing"
-                    class="flex-1 overflow-y-auto min-h-0"
-                />
-
-                <action-toolbar
-                    :selected-model="sharedState.selectedModel"
-                    :mcp-ready="sharedState.mcpReady"
-                    :tools-ready="sharedState.toolsReady"
-                    @change-model="handleChangeModel"
-                    @stop="handleStop"
-                    @clear="handleClear"
-                    @disconnect="handleDisconnect"
-                    @open-mcp="handleOpenMcp"
-                    @open-settings="handleOpenSettings"
-                    class="pb-2"
-                />
-
-                <!-- Stats Display -->
-                <stats-display
-                    v-if="sharedState.activeStats"
+                <!-- Tasks sidebar derecha (siempre visible) -->
+                <tasks-sidebar
+                    :tasks="tasksSidebarItems"
+                    :expanded="tasksSidebarExpanded"
+                    :total-count="tasksSidebarTotalCount"
+                    :progress-percent="tasksSidebarProgressPercent"
+                    :pending-count="tasksSidebarPendingCount"
+                    :in-progress-count="tasksSidebarInProgressCount"
+                    :completed-count="tasksSidebarCompletedCount"
                     :stats="sharedState.activeStats"
-                    :expanded="statsExpanded"
-                    @toggle-expanded="statsExpanded = !statsExpanded"
-                    class="pb-2"
+                    @toggle-expanded="tasksSidebar.toggleExpanded()"
                 />
+            </template>
 
-                <input-bar
-                    :message="sharedState.inputMessage"
-                    :no-tab="!sharedState.hasActiveTab"
-                    :disabled="!sharedState.toolsReady || !sharedState.isConnected"
-                    :failed="sharedState.reconnectFailed"
-                    loading-text="Reconectando..."
-                    @update:message="sharedState.inputMessage = $event"
-                    @send="handleSend"
-                />
+            <!-- ===== MOBILE LAYOUT ===== -->
+            <template v-else>
+                <div class="flex flex-col w-full h-full safe-areas overflow-hidden">
+                    <app-header
+                        :state="sharedState"
+                        :is-mobile="true"
+                        :todo-count="todoSidebarItems.length"
+                        :todo-open="todoSidebarOpen"
+                        :log-open="logSidebarOpen"
+                        @switch-tab="handleSwitchTab"
+                        @close-tab="handleCloseTab"
+                        @new-tab="handleNewTab"
+                        @toggle-sidebar="toggleMobileDrawer('logs')"
+                        @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
+                        @toggle-filetree="toggleMobileDrawer('filetree')"
+                        @toggle-editor="toggleMobileDrawer('editor')"
+                        @toggle-tasks="toggleMobileDrawer('tasks')"
+                    />
 
-                <!-- Modals -->
-                <mcp-modal
-                    v-if="showMcpModal"
-                    :tab-id="sharedState.activeTabId"
-                    :servers="sharedState.activeMcpServers"
-                    :disabled-mcp-servers="sharedState.activeSettings.disabledMcpServers || []"
-                    @close="showMcpModal = false"
-                    @apply="handleApplyMcp"
-                />
+                    <message-list
+                        :messages="sharedState.activeMessages"
+                        :is-processing="sharedState.isProcessing"
+                        class="flex-1 overflow-y-auto min-h-0 px-2"
+                    />
 
-                <settings-modal
-                    v-if="showSettingsModal"
-                    :tab-id="sharedState.activeTabId"
-                    :settings="sharedState.activeSettings"
-                    :available-tools="sharedState.availableTools"
-                    @close="showSettingsModal = false"
-                    @save="handleSaveSettings"
-                />
+                    <!-- InputBar -->
+                    <input-bar
+                        :message="sharedState.inputMessage"
+                        :no-tab="!sharedState.hasActiveTab"
+                        :disabled="!sharedState.toolsReady || !sharedState.isConnected"
+                        :failed="sharedState.reconnectFailed"
+                        :is-mobile="true"
+                        loading-text="Reconectando..."
+                        @update:message="sharedState.inputMessage = $event"
+                        @send="handleSend"
+                    />
 
-                <plan-modal
-                    v-if="showPlanModal"
-                    :plan="planContent"
-                    @close="showPlanModal = false"
-                />
-            </div>
+                    <!-- Mobile: bottom bar — drawer toggles + action icons -->
+                    <div class="mobile-bottom-bar">
+                        <!-- Drawer toggles -->
+                        <button @click="toggleMobileDrawer('filetree')" title="Archivos"
+                            class="mobile-action-icon"
+                            :class="{ active: mobileDrawer === 'filetree' }">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                            </svg>
+                        </button>
+                        <button @click="toggleMobileDrawer('logs')" title="Logs"
+                            class="mobile-action-icon"
+                            :class="{ active: mobileDrawer === 'logs' }">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+                            </svg>
+                        </button>
+                        <button @click="toggleMobileDrawer('editor')" title="Editor"
+                            class="mobile-action-icon"
+                            :class="{ active: mobileDrawer === 'editor' }">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            </svg>
+                        </button>
+                        <button @click="toggleMobileDrawer('tasks')" title="Tasks"
+                            class="mobile-action-icon"
+                            :class="{ active: mobileDrawer === 'tasks' }">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </button>
 
-            <!-- Editor sidebar derecha -->
-            <editor-sidebar
-                ref="editorSidebarRef"
-                :open-files="editorSidebarOpenFiles"
-                :active-file-path="editorSidebarActiveFilePath"
-                :expanded="editorSidebarExpanded"
-                :lsp-client="editorSidebarLspClient"
-                @toggle-expanded="editorSidebar.toggleExpanded()"
-                @close-file="editorSidebar.closeFile($event)"
-                @set-active="editorSidebar.setActiveFile($event)"
-                @file-dirty="handleFileDirty"
-                @save-file="handleSaveFile"
-                @update-content="handleEditorContentUpdate"
-            />
+                        <div class="mobile-bottom-sep"></div>
 
-            <!-- Tasks sidebar derecha (siempre visible) -->
-            <tasks-sidebar
-                :tasks="tasksSidebarItems"
-                :expanded="tasksSidebarExpanded"
-                :total-count="tasksSidebarTotalCount"
-                :progress-percent="tasksSidebarProgressPercent"
-                :pending-count="tasksSidebarPendingCount"
-                :in-progress-count="tasksSidebarInProgressCount"
-                :completed-count="tasksSidebarCompletedCount"
-                @toggle-expanded="tasksSidebar.toggleExpanded()"
-            />
+                        <!-- Action toolbar inline -->
+                        <action-toolbar
+                            :selected-model="sharedState.selectedModel"
+                            :mcp-ready="sharedState.mcpReady"
+                            :tools-ready="sharedState.toolsReady"
+                            :is-mobile="true"
+                            @change-model="handleChangeModel"
+                            @stop="handleStop"
+                            @clear="handleClear"
+                            @disconnect="handleDisconnect"
+                            @open-mcp="handleOpenMcp"
+                            @open-settings="handleOpenSettings"
+                        />
+                    </div>
+
+                    <!-- Modals (fixed overlays, funcionan igual) -->
+                    <mcp-modal
+                        v-if="showMcpModal"
+                        :tab-id="sharedState.activeTabId"
+                        :servers="sharedState.activeMcpServers"
+                        :disabled-mcp-servers="sharedState.activeSettings.disabledMcpServers || []"
+                        @close="showMcpModal = false"
+                        @apply="handleApplyMcp"
+                    />
+
+                    <settings-modal
+                        v-if="showSettingsModal"
+                        :tab-id="sharedState.activeTabId"
+                        :settings="sharedState.activeSettings"
+                        :available-tools="sharedState.availableTools"
+                        @close="showSettingsModal = false"
+                        @save="handleSaveSettings"
+                    />
+
+                    <plan-modal
+                        v-if="showPlanModal"
+                        :plan="planContent"
+                        @close="showPlanModal = false"
+                    />
+                </div>
+
+                <!-- ===== Mobile Drawers (position: fixed) ===== -->
+
+                <!-- Filetree Drawer (izquierda) -->
+                <div v-if="mobileDrawer === 'filetree'" class="drawer-overlay" @click="closeMobileDrawer"></div>
+                <div v-if="mobileDrawer === 'filetree'" class="drawer-left drawer-open bg-base border-r border-border">
+                    <filetree-sidebar
+                        :tree="filetreeTree"
+                        :expanded="true"
+                        :is-mobile="true"
+                        :expanded-paths="filetreeExpandedPaths"
+                        :file-count="filetreeFileCount"
+                        @toggle-expanded="closeMobileDrawer"
+                        @toggle-path="filetree.togglePath($event)"
+                        @expand-all="filetree.expandAll()"
+                        @collapse-all="filetree.collapseAll()"
+                        @open-file="handleOpenFile"
+                    />
+                </div>
+
+                <!-- Logs Drawer (izquierda) -->
+                <div v-if="mobileDrawer === 'logs'" class="drawer-overlay" @click="closeMobileDrawer"></div>
+                <div v-if="mobileDrawer === 'logs'" class="drawer-left drawer-open bg-base border-r border-border">
+                    <log-sidebar
+                        :is-open="true"
+                        :is-mobile="true"
+                        :logs="logSidebarFilteredLogs"
+                        :error-count="logSidebarErrorCount"
+                        :warn-count="logSidebarWarnCount"
+                        :current-filter="logSidebarFilter"
+                        @toggle="closeMobileDrawer"
+                        @clear="serverLogs.clearLogs()"
+                        @set-filter="serverLogs.setLevelFilter($event)"
+                    />
+                </div>
+
+                <!-- Editor Drawer (derecha) -->
+                <div v-if="mobileDrawer === 'editor'" class="drawer-overlay" @click="closeMobileDrawer"></div>
+                <div v-if="mobileDrawer === 'editor'" class="drawer-right drawer-open bg-base border-l border-border">
+                    <editor-sidebar
+                        ref="editorSidebarRef"
+                        :open-files="editorSidebarOpenFiles"
+                        :active-file-path="editorSidebarActiveFilePath"
+                        :expanded="true"
+                        :is-mobile="true"
+                        :lsp-client="editorSidebarLspClient"
+                        @toggle-expanded="closeMobileDrawer"
+                        @close-file="editorSidebar.closeFile($event)"
+                        @set-active="editorSidebar.setActiveFile($event)"
+                        @file-dirty="handleFileDirty"
+                        @save-file="handleSaveFile"
+                        @update-content="handleEditorContentUpdate"
+                    />
+                </div>
+
+                <!-- Tasks Drawer (derecha) -->
+                <div v-if="mobileDrawer === 'tasks'" class="drawer-overlay" @click="closeMobileDrawer"></div>
+                <div v-if="mobileDrawer === 'tasks'" class="drawer-right drawer-open bg-base border-l border-border">
+                    <tasks-sidebar
+                        :tasks="tasksSidebarItems"
+                        :expanded="true"
+                        :is-mobile="true"
+                        :total-count="tasksSidebarTotalCount"
+                        :progress-percent="tasksSidebarProgressPercent"
+                        :pending-count="tasksSidebarPendingCount"
+                        :in-progress-count="tasksSidebarInProgressCount"
+                        :completed-count="tasksSidebarCompletedCount"
+                        :stats="sharedState.activeStats"
+                        @toggle-expanded="closeMobileDrawer"
+                    />
+                </div>
+            </template>
         </div>
     `,
     setup() {
@@ -170,6 +350,17 @@ const app = createApp({
         const tasksSidebar = useTasksSidebar();
         const filetree = useFiletree();
         const editorSidebar = useEditorSidebar();
+        const { isMobile } = useIsMobile();
+        const isMobileValue = computed(() => isMobile.value);
+
+        // Mobile drawer state
+        const mobileDrawer = ref(null); // 'filetree' | 'logs' | 'editor' | 'tasks' | null
+        function toggleMobileDrawer(name) {
+            mobileDrawer.value = mobileDrawer.value === name ? null : name;
+        }
+        function closeMobileDrawer() {
+            mobileDrawer.value = null;
+        }
 
         // Desenvolver serverLogs para el template (refs dentro de objetos planos no se auto-desenvuelven)
         const logSidebarOpen = computed(() => serverLogs.isOpen.value);
@@ -210,9 +401,6 @@ const app = createApp({
         const showSettingsModal = ref(false);
         const showPlanModal = ref(false);
         const planContent = ref('');
-
-        // Stats state
-        const statsExpanded = ref(false);
 
         // ===== WebSocket Message Handler =====
         function handleMessage(data, tabId) {
@@ -629,7 +817,6 @@ const app = createApp({
             showSettingsModal,
             showPlanModal,
             planContent,
-            statsExpanded,
             serverLogs,
             logSidebarOpen,
             todoSidebar,
@@ -675,6 +862,10 @@ const app = createApp({
             handleFileDirty,
             handleSaveFile,
             handleEditorContentUpdate,
+            isMobileValue,
+            mobileDrawer,
+            toggleMobileDrawer,
+            closeMobileDrawer,
         };
     },
 });
@@ -692,6 +883,5 @@ app.component('TodoSidebar', TodoSidebar);
 app.component('TasksSidebar', TasksSidebar);
 app.component('EditorSidebar', EditorSidebar);
 app.component('PlanModal', PlanModal);
-app.component('StatsDisplay', StatsDisplay);
 
 app.mount('#app');

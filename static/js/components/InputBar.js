@@ -1,4 +1,6 @@
 // Componente: Input Bar
+import { ref, nextTick } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+
 export default {
     template: `
         <div class="input-bar">
@@ -16,9 +18,9 @@ export default {
                     <div class="loading-bar"></div>
                     <span class="absolute inset-0 flex items-center justify-center text-sm text-muted">{{ loadingText }}</span>
                 </div>
-                <!-- Input normal -->
+                <!-- Input normal (desktop: input, mobile: textarea) -->
                 <input
-                    v-else
+                    v-else-if="!isMobile"
                     :value="message"
                     @input="$emit('update:message', $event.target.value)"
                     @keypress.enter.prevent="$emit('send')"
@@ -26,11 +28,21 @@ export default {
                     placeholder="Escribe tu mensaje..."
                     class="flex-1 bg-base border border-border rounded px-3 py-2 text-txt placeholder-muted focus:outline-none focus:border-border-focus"
                 >
+                <textarea
+                    v-else
+                    ref="mobileInput"
+                    :value="message"
+                    @input="handleMobileInput($event)"
+                    rows="1"
+                    placeholder="Escribe tu mensaje..."
+                    class="flex-1 bg-base border border-border rounded px-3 py-2 text-txt placeholder-muted focus:outline-none focus:border-border-focus resize-none max-h-32 overflow-y-auto"
+                    style="min-height: 38px;"
+                ></textarea>
                 <button
                     @click="!disabled && $emit('send')"
                     :disabled="disabled"
                     :class="[
-                        'p-2 rounded transition-colors',
+                        'p-2 rounded transition-colors flex-shrink-0',
                         disabled
                             ? 'bg-base text-muted cursor-not-allowed'
                             : 'bg-surface hover:bg-raised text-txt'
@@ -65,11 +77,29 @@ export default {
             type: String,
             default: 'Reconectando...',
         },
+        isMobile: {
+            type: Boolean,
+            default: false,
+        },
     },
 
     emits: ['update:message', 'send'],
 
-    setup() {
-        return {};
+    setup(props, { emit }) {
+        const mobileInput = ref(null);
+
+        function handleMobileInput(event) {
+            emit('update:message', event.target.value);
+            // Auto-resize textarea
+            nextTick(() => {
+                const el = event.target;
+                if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+                }
+            });
+        }
+
+        return { mobileInput, handleMobileInput };
     },
 };

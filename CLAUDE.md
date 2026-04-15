@@ -12,8 +12,8 @@
   - `TodoSidebar.js` - Widget flotante de tareas del agente (progress bar, estados pending/in_progress/completed)
   - `TasksSidebar.js` - Panel colapsable derecho con slim/expanded modes para tasks del agente (reutiliza datos de `todo_update`)
   - `MessageList.js` - Lista de mensajes con markdown y accordions
-  - `InputBar.js` - Barra de input con botón enviar
-  - `ActionToolbar.js` - Toolbar con botones de acción (stop, clear, reconnect, config, MCP)
+  - `InputBar.js` - Barra de input con botón enviar. En mobile: textarea auto-resize
+  - `ActionToolbar.js` - Toolbar con botones de acción (stop, clear, reconnect, config, MCP). En mobile: FAB vertical flotante draggable con snap-to-edge
   - `SettingsModal.js` - Modal de configuración con tools del backend
   - `McpModal.js` - Modal de servidores MCP con toggles
   - `PlanModal.js` - Modal para vista de contenido (file_view)
@@ -29,6 +29,7 @@
   - `useTasksSidebar.js` - Estado global de tasks con slim/expanded modes (singleton, reutiliza datos de `todo_update`)
   - `useFiletree.js` - Estado global del árbol de archivos del proyecto (singleton)
   - `useEditorSidebar.js` - Estado global del editor (singleton, openFiles con dirty, markDirty/markClean)
+  - `useIsMobile.js` - Singleton reactivo, detecta viewport < 768px via matchMedia
 
 ### Funcionalidades Implementadas
 
@@ -61,6 +62,20 @@
 - `assistant`, `user`, `result`, `system` - Mensajes de chat
 - `todo_update` - Lista de tareas del agente (`data.todos`), alimenta `TodoSidebar` + `TasksSidebar`, auto-abre TasksSidebar si estaba cerrado
 - `file_view` - Contenido para el modal de Plan (planContent, showPlanModal)
+
+#### 5. Layout Responsive Mobile
+
+Bifurcación desktop/mobile con breakpoint 768px:
+
+- **`useIsMobile.js`** — Composable singleton reactivo. Usa `window.matchMedia('(max-width: 767px)')` para reactividad sin polling.
+- **Desktop (>=768px)**: Layout idéntico al original. Sidebars en el flex-row, ActionToolbar inline horizontal.
+- **Mobile (<768px)**:
+  - Sidebars se convierten en **drawers** (`position: fixed`, `transform: translateX`) con backdrop overlay oscuro. Se abren desde 4 botones toggle en el header (folder, logs, editor, tasks). Click en backdrop cierra. Solo un drawer abierto a la vez (estado `mobileDrawer` en app-vue.js).
+  - **ActionToolbar** es una **FAB vertical flotante draggable**: `position: fixed`, botones apilados en columna con drag handle. Touch drag para reposicionar, snap automático al borde izquierdo/derecho al soltar. Posición persistida en `localStorage('fab-toolbar-pos')`.
+  - **InputBar** usa `<textarea rows="1">` con auto-resize (`scrollHeight`) en vez de `<input>`. Enter inserta nueva línea, envío solo con botón.
+  - **Tabs** scrolleables horizontalmente (`.mobile-tabs-scroll`), sin badge de costo, tamaño reducido.
+  - **AppHeader**: oculta título, cwd, status text. Solo muestra dot de color + botones toggle.
+  - Cada sidebar recibe `isMobile` prop: sin slim mode, sin `flex-shrink-0`, sin clases de ancho fijo, siempre expanded. Botón cierre más grande.
 
 ### Arquitectura Frontend
 - **Desacoplada**: Composables independientes coordinados por app-vue.js

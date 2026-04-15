@@ -3,12 +3,14 @@ export default {
     template: `
         <div
             :class="[
-                'flex flex-col h-full bg-base border-r border-border flex-shrink-0 select-text overflow-hidden transition-[width] duration-200',
-                expanded ? 'w-80' : 'w-12'
+                'flex flex-col h-full bg-base select-text overflow-hidden',
+                isMobile
+                    ? ''
+                    : 'border-r border-border flex-shrink-0 transition-[width] duration-200 ' + (expanded ? 'w-80' : 'w-12')
             ]"
         >
-            <!-- ===== Slim mode ===== -->
-            <template v-if="!expanded">
+            <!-- ===== Slim mode (solo desktop) ===== -->
+            <template v-if="!isMobile && !expanded">
                 <div
                     @click="$emit('toggle-expanded')"
                     class="flex flex-col items-center py-2 h-full cursor-pointer"
@@ -36,8 +38,8 @@ export default {
                 </div>
             </template>
 
-            <!-- ===== Expanded mode ===== -->
-            <template v-else>
+            <!-- ===== Expanded mode (siempre en mobile) ===== -->
+            <template v-if="isMobile || expanded">
                 <!-- Header -->
                 <div class="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
                     <div class="flex items-center gap-2">
@@ -63,7 +65,7 @@ export default {
                                     d="M9 9V4H4m0 0l5 5M9 20v-5H4m0 0l5-5m11-5h-5v5m0-5l-5 5m5 10v-5h5m0 0l-5-5" />
                             </svg>
                         </button>
-                        <button @click="$emit('toggle-expanded')" title="Colapsar"
+                        <button v-if="!isMobile" @click="$emit('toggle-expanded')" title="Colapsar"
                             class="text-muted hover:text-txt transition-colors p-0.5 rounded">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -87,6 +89,14 @@ export default {
                         Sin archivos
                     </div>
                 </div>
+
+                <!-- Mobile: close button at bottom -->
+                <div v-if="isMobile" class="flex-shrink-0 border-t border-border p-2">
+                    <button @click="$emit('toggle-expanded')"
+                        class="w-full py-2 rounded bg-surface text-txt text-xs hover:bg-raised transition-colors">
+                        Cerrar
+                    </button>
+                </div>
             </template>
         </div>
     `,
@@ -96,6 +106,7 @@ export default {
         expanded: { type: Boolean, default: false },
         expandedPaths: { type: Set, default: () => new Set() },
         fileCount: { type: Number, default: 0 },
+        isMobile: { type: Boolean, default: false },
     },
 
     emits: ['toggle-expanded', 'toggle-path', 'expand-all', 'collapse-all', 'open-file'],
