@@ -87,6 +87,7 @@ export function useTabs() {
                 totalDurationMs: 0,
                 totalApiDurationMs: 0,
                 queryCount: 0,
+                perQuery: [],
             },
         });
 
@@ -252,6 +253,18 @@ export function useTabs() {
 
         tab.stats.queryCount++;
 
+        // Guardar stats de este turno individual
+        tab.stats.perQuery.push({
+            queryNumber: tab.stats.queryCount,
+            inputTokens: usage.input_tokens || 0,
+            outputTokens: usage.output_tokens || 0,
+            cacheCreationTokens: usage.cache_creation_input_tokens || 0,
+            cacheReadTokens: usage.cache_read_input_tokens || 0,
+            costUsd: costUsd || 0,
+            durationMs: durationMs || 0,
+            apiDurationMs: apiDurationMs || 0,
+        });
+
         return true;
     }
 
@@ -268,6 +281,7 @@ export function useTabs() {
             totalDurationMs: 0,
             totalApiDurationMs: 0,
             queryCount: 0,
+            perQuery: [],
         };
 
         return true;
@@ -316,6 +330,7 @@ export function useTabs() {
                     totalDurationMs: 0,
                     totalApiDurationMs: 0,
                     queryCount: 0,
+                    perQuery: [],
                 },
             });
 

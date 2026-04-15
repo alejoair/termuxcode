@@ -55,6 +55,35 @@ export default {
                     <span class="text-muted">Queries:</span>
                     <span class="text-txt font-mono">{{ stats.queryCount }}</span>
                 </div>
+
+                <!-- Per-query breakdown -->
+                <div v-if="stats.perQuery && stats.perQuery.length > 0" class="border-t border-border pt-1.5 mt-1.5 space-y-1">
+                    <div class="flex items-center justify-between">
+                        <span class="text-muted font-semibold">Per query:</span>
+                        <button
+                            @click="showPerQuery = !showPerQuery"
+                            class="text-muted hover:text-txt transition-colors"
+                        >
+                            {{ showPerQuery ? '−' : '+' }}
+                        </button>
+                    </div>
+                    <div v-if="showPerQuery" class="space-y-1 max-h-48 overflow-y-auto">
+                        <div
+                            v-for="q in reversedPerQuery"
+                            :key="q.queryNumber"
+                            class="bg-zinc-800/50 rounded px-2 py-1 space-y-0.5"
+                        >
+                            <div class="flex items-center justify-between">
+                                <span class="text-muted">Q{{ q.queryNumber }}</span>
+                                <span class="text-txt font-mono">\${{ q.costUsd.toFixed(4) }}</span>
+                            </div>
+                            <div class="flex items-center justify-between text-[10px]">
+                                <span class="text-muted">{{ formatNumber(q.inputTokens) }} in / {{ formatNumber(q.outputTokens) }} out</span>
+                                <span class="text-muted">{{ formatDuration(q.durationMs) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Compact view -->
@@ -84,6 +113,11 @@ export default {
             return props.stats.totalInputTokens + props.stats.totalOutputTokens;
         });
 
+        const reversedPerQuery = computed(() => {
+            if (!props.stats?.perQuery) return [];
+            return [...props.stats.perQuery].reverse();
+        });
+
         function formatNumber(num) {
             return num.toLocaleString();
         }
@@ -96,6 +130,8 @@ export default {
 
         return {
             totalTokens,
+            reversedPerQuery,
+            showPerQuery: false,
             formatNumber,
             formatDuration,
         };
