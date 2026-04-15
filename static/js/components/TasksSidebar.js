@@ -203,7 +203,7 @@ export default {
                 </div>
 
                 <!-- Mobile: close button at bottom -->
-                <div v-if="isMobile" class="flex-shrink-0 border-t border-border p-2">
+                <div v-if="isMobile" class="flex-shrink-0 border-t border-border p-2" style="padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px))">
                     <button @click="$emit('toggle-expanded')"
                         class="w-full py-2 rounded bg-surface text-txt text-xs hover:bg-raised transition-colors">
                         Cerrar
