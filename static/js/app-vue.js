@@ -15,6 +15,7 @@ import TodoSidebar from './components/TodoSidebar.js';
 import TasksSidebar from './components/TasksSidebar.js';
 import EditorSidebar from './components/EditorSidebar.js';
 import PlanModal from './components/PlanModal.js';
+import StatsDisplay from './components/StatsDisplay.js';
 
 // Importar composables
 import { useTabs } from './composables/useTabs.js';
@@ -82,6 +83,15 @@ const app = createApp({
                     @disconnect="handleDisconnect"
                     @open-mcp="handleOpenMcp"
                     @open-settings="handleOpenSettings"
+                    class="pb-2"
+                />
+
+                <!-- Stats Display -->
+                <stats-display
+                    v-if="sharedState.activeStats"
+                    :stats="sharedState.activeStats"
+                    :expanded="statsExpanded"
+                    @toggle-expanded="statsExpanded = !statsExpanded"
                     class="pb-2"
                 />
 
@@ -201,6 +211,9 @@ const app = createApp({
         const showPlanModal = ref(false);
         const planContent = ref('');
 
+        // Stats state
+        const statsExpanded = ref(false);
+
         // ===== WebSocket Message Handler =====
         function handleMessage(data, tabId) {
             console.log('[WebSocket] Mensaje recibido:', data.type, 'para tab:', tabId);
@@ -239,7 +252,27 @@ const app = createApp({
                         const results = msg.processToolResultBlocks(data.blocks);
                         results.forEach(r => msg.addMessageToTab(tab, r));
                     }
-                    msg.addMessageToTab(tab, { type: 'result', subtype: data.subtype, cost: data.cost });
+                    msg.addMessageToTab(tab, {
+                        type: 'result',
+                        subtype: data.subtype,
+                        cost: data.cost,
+                        usage: data.usage,
+                        totalCostUsd: data.total_cost_usd,
+                        durationMs: data.duration_ms,
+                        durationApiMs: data.duration_api_ms,
+                    });
+
+                    // Actualizar stats acumuladas del tab
+                    if (data.usage) {
+                        tabs.updateTabStats(
+                            tabId,
+                            data.usage,
+                            data.total_cost_usd,
+                            data.duration_ms,
+                            data.duration_api_ms
+                        );
+                    }
+
                     tab.isProcessing = false;
                 },
                 system: () => {
@@ -341,7 +374,10 @@ const app = createApp({
 
         function handleClear() {
             const tabId = tabs.activeTabId.value;
-            if (tabId) tabs.clearTabMessages(tabId);
+            if (tabId) {
+                tabs.clearTabMessages(tabId);
+                tabs.resetTabStats(tabId);
+            }
         }
 
         function handleDisconnect() {
@@ -593,6 +629,7 @@ const app = createApp({
             showSettingsModal,
             showPlanModal,
             planContent,
+            statsExpanded,
             serverLogs,
             logSidebarOpen,
             todoSidebar,
@@ -655,5 +692,6 @@ app.component('TodoSidebar', TodoSidebar);
 app.component('TasksSidebar', TasksSidebar);
 app.component('EditorSidebar', EditorSidebar);
 app.component('PlanModal', PlanModal);
+app.component('StatsDisplay', StatsDisplay);
 
 app.mount('#app');

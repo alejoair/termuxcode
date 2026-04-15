@@ -77,6 +77,17 @@ export function useTabs() {
             isProcessing: false,
             // Plan
             plan: null,
+            // Stats tracking
+            stats: {
+                totalInputTokens: 0,
+                totalOutputTokens: 0,
+                totalCacheCreationTokens: 0,
+                totalCacheReadTokens: 0,
+                totalCostUsd: 0,
+                totalDurationMs: 0,
+                totalApiDurationMs: 0,
+                queryCount: 0,
+            },
         });
 
         tabs.set(tabId, newTab);
@@ -218,6 +229,50 @@ export function useTabs() {
         return true;
     }
 
+    function updateTabStats(tabId, usage, costUsd, durationMs, apiDurationMs) {
+        const tab = tabs.get(tabId);
+        if (!tab || !usage) return false;
+
+        tab.stats.totalInputTokens += usage.input_tokens || 0;
+        tab.stats.totalOutputTokens += usage.output_tokens || 0;
+        tab.stats.totalCacheCreationTokens += usage.cache_creation_input_tokens || 0;
+        tab.stats.totalCacheReadTokens += usage.cache_read_input_tokens || 0;
+
+        if (costUsd) {
+            tab.stats.totalCostUsd += costUsd;
+        }
+
+        if (durationMs) {
+            tab.stats.totalDurationMs += durationMs;
+        }
+
+        if (apiDurationMs) {
+            tab.stats.totalApiDurationMs += apiDurationMs;
+        }
+
+        tab.stats.queryCount++;
+
+        return true;
+    }
+
+    function resetTabStats(tabId) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+
+        tab.stats = {
+            totalInputTokens: 0,
+            totalOutputTokens: 0,
+            totalCacheCreationTokens: 0,
+            totalCacheReadTokens: 0,
+            totalCostUsd: 0,
+            totalDurationMs: 0,
+            totalApiDurationMs: 0,
+            queryCount: 0,
+        };
+
+        return true;
+    }
+
     // Serialización para localStorage
     function serializeTabs() {
         return Array.from(tabs.entries()).map(([id, tab]) => ({
@@ -229,6 +284,7 @@ export function useTabs() {
             settings: tab.settings,
             plan: tab.plan,
             mcpServers: tab.mcpServers,
+            stats: tab.stats,
         }));
     }
 
@@ -251,6 +307,16 @@ export function useTabs() {
                 reconnectAttempts: 0,
                 reconnectFailed: false,
                 isProcessing: false,
+                stats: tabData.stats || {
+                    totalInputTokens: 0,
+                    totalOutputTokens: 0,
+                    totalCacheCreationTokens: 0,
+                    totalCacheReadTokens: 0,
+                    totalCostUsd: 0,
+                    totalDurationMs: 0,
+                    totalApiDurationMs: 0,
+                    queryCount: 0,
+                },
             });
 
             tabs.set(tabData.id, tab);
@@ -292,6 +358,8 @@ export function useTabs() {
         updateTabBuiltinTools,
         updateTabPlan,
         resetTabReadyFlags,
+        updateTabStats,
+        resetTabStats,
 
         // Serialización
         serializeTabs,

@@ -58,6 +58,10 @@ export default {
                         >
                             <span :class="['w-1.5 h-1.5 rounded-full', tab.isConnected ? 'bg-ok' : 'bg-err']"></span>
                             <span>{{ tab.name }}</span>
+                            <!-- Badge de costo -->
+                            <span v-if="tab.stats && tab.stats.totalCostUsd > 0" class="text-xs text-muted font-mono ml-1">
+                                \${{ tab.stats.totalCostUsd.toFixed(3) }}
+                            </span>
                             <span
                                 @click.stop="handleCloseTab(tab.id)"
                                 class="ml-1 hover:text-err transition-colors"

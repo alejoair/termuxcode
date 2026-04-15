@@ -59,6 +59,10 @@ export function useSharedState(tabs) {
             const tab = tabs.activeTab.value;
             return tab?.cwd || '';
         },
+        get activeStats() {
+            const tab = tabs.activeTab.value;
+            return tab?.stats || null;
+        },
         get inputMessage() { return inputMessage.value; },
         set inputMessage(v) { inputMessage.value = v; },
     });

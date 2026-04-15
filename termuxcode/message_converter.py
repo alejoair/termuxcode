@@ -45,6 +45,7 @@ class MessageConverter:
             "type": "assistant",
             "model": getattr(msg, "model", "unknown"),
             "blocks": blocks,
+            "usage": msg.usage,
         }
 
     @staticmethod
@@ -86,6 +87,10 @@ class MessageConverter:
             "num_turns": msg.num_turns,
             "is_error": msg.is_error,
             "errors": getattr(msg, "errors", None),
+            "usage": msg.usage,
+            "total_cost_usd": msg.total_cost_usd,
+            "duration_ms": msg.duration_ms,
+            "duration_api_ms": msg.duration_api_ms,
         }
 
     @staticmethod
