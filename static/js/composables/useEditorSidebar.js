@@ -113,10 +113,12 @@ export function useEditorSidebar() {
     function updateFileContent(path, content) {
         const idx = openFiles.value.findIndex(f => f.path === path);
         if (idx === -1) return;
-        // Replace the entry to guarantee reactivity triggers
-        openFiles.value = openFiles.value.map(f =>
-            f.path === path ? { ...f, content } : f
-        );
+        // Mutate in-place first so the editor watcher can compare correctly,
+        // then trigger reactivity by replacing the array
+        const updated = { ...openFiles.value[idx], content };
+        const newFiles = [...openFiles.value];
+        newFiles[idx] = updated;
+        openFiles.value = newFiles;
     }
 
     function markDirty(path) {

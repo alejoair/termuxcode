@@ -153,7 +153,6 @@ export default {
             editorView: null,
             saveStatus: '',
             _saveStatusTimeout: null,
-            _skipContentWatch: false,
         };
     },
 
@@ -181,7 +180,6 @@ export default {
             // Before switching, preserve current editor content
             if (oldPath && this.editorView) {
                 const content = this.editorView.state.doc.toString();
-                this._skipContentWatch = true;
                 this.$emit('update-content', { path: oldPath, content });
             }
             if (this.expanded) {
@@ -189,10 +187,6 @@ export default {
             }
         },
         activeContent(newVal) {
-            if (this._skipContentWatch) {
-                this._skipContentWatch = false;
-                return;
-            }
             if (this.expanded) {
                 // Skip if editor already shows this content (e.g. after save)
                 if (this.editorView && this.editorView.state.doc.toString() === newVal) return;

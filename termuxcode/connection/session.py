@@ -325,6 +325,18 @@ class Session:
             self._sender.set_websocket(websocket)
             await self._sender.replay_buffer()
             asyncio.create_task(self._send_tools_list(wait_for_mcp=False))
+
+            # Reenviar filetree al frontend reconectado
+            try:
+                from termuxcode.connection.filetree_watcher import generate_filetree_json
+                tree = generate_filetree_json(self.cwd)
+                await self._sender.send_message({
+                    "type": "filetree_snapshot",
+                    "cwd": self.cwd,
+                    "entries": tree,
+                })
+            except Exception as e:
+                logger.debug(f"Error enviando filetree en resume: {e}")
             logger.info(
                 f"Session re-attached (no rebuild): session_id={self.session_id}"
             )

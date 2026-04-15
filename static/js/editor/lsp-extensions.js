@@ -23,6 +23,8 @@ export function posToOffset(doc, pos) {
 export function lspDiagnostics(client, documentUri) {
     const severityMap = { 1: "error", 2: "warning", 3: "info", 4: "info" };
     client.onNotification("textDocument/publishDiagnostics", (params) => {
+        // Ignore diagnostics for documents that are no longer active
+        if (client._documentUri !== documentUri) return;
         console.log("[LSP] publishDiagnostics:", params.uri, params.diagnostics.length, "diagnostics");
         if (params.uri !== documentUri) {
             console.log("[LSP] URI mismatch, expected:", documentUri);
@@ -157,6 +159,8 @@ export function lspHover(client, documentUri) {
 export function lspSync(client, documentUri) {
     return EditorView.updateListener.of((update) => {
         if (!update.docChanged || !client.ready) return;
+        // Only send changes if this is the currently open document
+        if (client._documentUri !== documentUri) return;
         client.sendChange(documentUri, update.state.doc.toString());
     });
 }
