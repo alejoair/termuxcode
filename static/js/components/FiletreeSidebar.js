@@ -1,4 +1,7 @@
 // Componente: Filetree Sidebar (panel izquierdo siempre visible, slim/expanded modes)
+import { computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+import { useResizable } from '../composables/useResizable.js';
+
 export default {
     template: `
         <div
@@ -6,9 +9,16 @@ export default {
                 'flex flex-col h-full bg-base select-text overflow-hidden',
                 isMobile
                     ? ''
-                    : 'border-r border-border flex-shrink-0 transition-[width] duration-200 ' + (expanded ? 'w-80' : 'w-12')
+                    : 'border-r border-border flex-shrink-0 relative' + (expanded ? '' : ' w-12')
             ]"
+            :style="isMobile || !expanded ? {} : { width: effectiveWidth + 'px', transition: isResizing ? 'none' : 'width 0.2s' }"
         >
+            <!-- Resize handle (derecha, es sidebar izquierda) -->
+            <div
+                v-if="!isMobile && expanded"
+                v-bind="resizeHandleProps"
+                :class="{ active: isResizing }"
+            ></div>
             <!-- ===== Slim mode (solo desktop) ===== -->
             <template v-if="!isMobile && !expanded">
                 <div
@@ -107,9 +117,24 @@ export default {
         expandedPaths: { type: Set, default: () => new Set() },
         fileCount: { type: Number, default: 0 },
         isMobile: { type: Boolean, default: false },
+        expandedWidth: { type: Number, default: 320 },
     },
 
     emits: ['toggle-expanded', 'toggle-path', 'expand-all', 'collapse-all', 'open-file'],
+
+    setup(props) {
+        const { width: resizedWidth, isResizing, resizeHandleProps } = useResizable({
+            storageKey: 'filetree_sidebar_width',
+            defaultWidth: props.expandedWidth,
+            minWidth: 200,
+            maxWidth: 600,
+            side: 'left',
+        });
+
+        const effectiveWidth = computed(() => resizedWidth.value);
+
+        return { isResizing, resizeHandleProps, effectiveWidth };
+    },
 
     computed: {
         topLevelItems() {

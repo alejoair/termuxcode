@@ -29,6 +29,7 @@ import { useTasksSidebar } from './composables/useTasksSidebar.js';
 import { useFiletree } from './composables/useFiletree.js';
 import { useEditorSidebar } from './composables/useEditorSidebar.js';
 import { useIsMobile } from './composables/useIsMobile.js';
+import { useUiState } from './composables/useUiState.js';
 
 // ===== Componente Principal =====
 const app = createApp({
@@ -41,6 +42,7 @@ const app = createApp({
                     :expanded="filetreeExpanded"
                     :expanded-paths="filetreeExpandedPaths"
                     :file-count="filetreeFileCount"
+                    :expanded-width="filetreeWidthValue"
                     @toggle-expanded="filetree.toggleExpanded()"
                     @toggle-path="filetree.togglePath($event)"
                     @expand-all="filetree.expandAll()"
@@ -53,6 +55,7 @@ const app = createApp({
                     :error-count="logSidebarErrorCount"
                     :warn-count="logSidebarWarnCount"
                     :current-filter="logSidebarFilter"
+                    :sidebar-width="logWidthValue"
                     @toggle="serverLogs.toggleSidebar()"
                     @clear="serverLogs.clearLogs()"
                     @set-filter="serverLogs.setLevelFilter($event)"
@@ -73,7 +76,9 @@ const app = createApp({
                     <message-list
                         :messages="sharedState.activeMessages"
                         :is-processing="sharedState.isProcessing"
+                        :scroll-ratio="activeScrollRatio"
                         class="flex-1 overflow-y-auto min-h-0"
+                        @scroll-change="handleScrollChange"
                     />
 
                     <action-toolbar
@@ -132,6 +137,7 @@ const app = createApp({
                     :active-file-path="editorSidebarActiveFilePath"
                     :expanded="editorSidebarExpanded"
                     :lsp-client="editorSidebarLspClient"
+                    :expanded-width="editorWidthValue"
                     @toggle-expanded="editorSidebar.toggleExpanded()"
                     @close-file="editorSidebar.closeFile($event)"
                     @set-active="editorSidebar.setActiveFile($event)"
@@ -150,6 +156,7 @@ const app = createApp({
                     :in-progress-count="tasksSidebarInProgressCount"
                     :completed-count="tasksSidebarCompletedCount"
                     :stats="sharedState.activeStats"
+                    :expanded-width="tasksWidthValue"
                     @toggle-expanded="tasksSidebar.toggleExpanded()"
                 />
             </template>
@@ -176,7 +183,9 @@ const app = createApp({
                     <message-list
                         :messages="sharedState.activeMessages"
                         :is-processing="sharedState.isProcessing"
+                        :scroll-ratio="activeScrollRatio"
                         class="flex-1 overflow-y-auto min-h-0 px-2"
+                        @scroll-change="handleScrollChange"
                     />
 
                     <!-- InputBar -->
@@ -352,6 +361,27 @@ const app = createApp({
         const editorSidebar = useEditorSidebar();
         const { isMobile } = useIsMobile();
         const isMobileValue = computed(() => isMobile.value);
+
+        // UI State persistence
+        const uiState = useUiState();
+
+        // Computed wrappers de width defaults para pasar como props a componentes
+        // Los componentes usan useResizable internamente para manejar sus propios anchos
+        const logWidthValue = computed(() => 384);
+        const filetreeWidthValue = computed(() => 320);
+        const editorWidthValue = computed(() => 500);
+        const tasksWidthValue = computed(() => 320);
+
+        // Scroll ratio por tab
+        const activeScrollRatio = computed(() => {
+            const tabId = tabs.activeTabId.value;
+            return tabId ? uiState.getScrollRatio(tabId) : null;
+        });
+
+        function handleScrollChange(ratio) {
+            const tabId = tabs.activeTabId.value;
+            if (tabId) uiState.setScrollRatio(tabId, ratio);
+        }
 
         // Mobile drawer state
         const mobileDrawer = ref(null); // 'filetree' | 'logs' | 'editor' | 'tasks' | null
@@ -701,7 +731,7 @@ const app = createApp({
         }
 
         // ===== Lifecycle =====
-        onMounted(() => {
+        onMounted(async () => {
             console.log('[Vue] App montada');
 
             // Escuchar logs del servidor
@@ -737,6 +767,19 @@ const app = createApp({
                 const tab = tabs.getTab(event.detail.tabId);
                 if (tab) tab.reconnectFailed = true;
             });
+
+            // Restaurar estado de UI ANTES de restaurar tabs
+            const uiDeps = {
+                serverLogs,
+                todoSidebar,
+                tasksSidebar,
+                filetree,
+                editorSidebar,
+            };
+            await uiState.restore(uiDeps);
+
+            // Setup auto-save para UI state
+            uiState.setupAutoSave(uiDeps);
 
             // Reconexion inmediata al volver a la pestaña del navegador
             document.addEventListener('visibilitychange', () => {
@@ -808,6 +851,7 @@ const app = createApp({
             // Previene que el auto-save asíncrono de Vue no llegue a ejecutarse
             window.addEventListener('beforeunload', () => {
                 storage.saveTabs(tabs.serializeTabs());
+                uiState.saveNow(uiDeps);
             });
         });
 
@@ -866,6 +910,12 @@ const app = createApp({
             mobileDrawer,
             toggleMobileDrawer,
             closeMobileDrawer,
+            logWidthValue,
+            filetreeWidthValue,
+            editorWidthValue,
+            tasksWidthValue,
+            activeScrollRatio,
+            handleScrollChange,
         };
     },
 });

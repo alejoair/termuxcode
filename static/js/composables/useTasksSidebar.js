@@ -24,6 +24,10 @@ export function useTasksSidebar() {
         expanded.value = !expanded.value;
     }
 
+    function setExpanded(val) {
+        expanded.value = val;
+    }
+
     function clearTasks() {
         tasks.value = [];
     }
@@ -38,6 +42,7 @@ export function useTasksSidebar() {
         progressPercent,
         setTasks,
         toggleExpanded,
+        setExpanded,
         clearTasks,
     };
 }

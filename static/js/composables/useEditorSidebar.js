@@ -11,6 +11,9 @@ const expanded = ref(false);
 // Singleton LSP client
 const lspClient = new WsLspClient();
 
+// Flag para inicialización desde estado persistido
+let _initialized = false;
+
 // Supported languages for LSP
 const LSP_LANGUAGES = new Set(['python', 'javascript', 'typescript', 'html', 'css', 'json']);
 
@@ -46,9 +49,18 @@ const DEFAULT_FILE = {
     dirty: false,
 };
 
-// Pre-load default file
-openFiles.value = [DEFAULT_FILE];
-activeFilePath.value = DEFAULT_FILE.path;
+// Pre-load default file (solo si no se restaura desde estado persistido)
+// initializeFromState() se llama desde useUiState.restore() antes del primer render.
+// Si no se llama, se carga el default en la primera invocación.
+let _defaultLoaded = false;
+function _ensureDefault() {
+    if (_defaultLoaded) return;
+    _defaultLoaded = true;
+    if (openFiles.value.length === 0) {
+        openFiles.value = [DEFAULT_FILE];
+        activeFilePath.value = DEFAULT_FILE.path;
+    }
+}
 
 export function useEditorSidebar() {
     const activeFile = computed(() =>
@@ -110,6 +122,10 @@ export function useEditorSidebar() {
         expanded.value = !expanded.value;
     }
 
+    function setExpanded(val) {
+        expanded.value = val;
+    }
+
     function updateFileContent(path, content) {
         const idx = openFiles.value.findIndex(f => f.path === path);
         if (idx === -1) return;
@@ -164,6 +180,59 @@ export function useEditorSidebar() {
         _lspOpenFile(file.path, file.content, file.language);
     }
 
+    /**
+     * Inicializa el estado del editor desde datos persistidos.
+     * Se llama una vez desde useUiState.restore() antes del primer render.
+     * @param {{ expanded: boolean, width: number, openFiles: Array, activeFilePath: string|null }} state
+     */
+    async function initializeFromState(state) {
+        if (_initialized) return;
+        _initialized = true;
+        _defaultLoaded = true; // Prevenir carga del default
+
+        if (!state) {
+            openFiles.value = [DEFAULT_FILE];
+            activeFilePath.value = DEFAULT_FILE.path;
+            return;
+        }
+
+        // Restaurar estado expandido
+        if (state.expanded !== undefined) expanded.value = state.expanded;
+
+        // Restaurar archivos abiertos (sin contenido — se fetch vía /api/file)
+        if (state.openFiles && state.openFiles.length > 0) {
+            const files = state.openFiles.map(f => ({
+                path: f.path,
+                name: f.name,
+                content: '// Cargando...',
+                language: f.language || 'text',
+                dirty: false,
+            }));
+            openFiles.value = files;
+            activeFilePath.value = state.activeFilePath || files[0].path;
+
+            // Fetch contenido real de cada archivo en paralelo
+            await Promise.allSettled(
+                files.map(async (f) => {
+                    try {
+                        const res = await fetch('/api/file?path=' + encodeURIComponent(f.path));
+                        if (res.ok) {
+                            const data = await res.json();
+                            updateFileContent(f.path, data.content);
+                        } else {
+                            updateFileContent(f.path, `// Error: archivo no encontrado`);
+                        }
+                    } catch {
+                        updateFileContent(f.path, `// Error de conexión`);
+                    }
+                })
+            );
+        } else {
+            openFiles.value = [DEFAULT_FILE];
+            activeFilePath.value = DEFAULT_FILE.path;
+        }
+    }
+
     return {
         openFiles,
         activeFilePath,
@@ -174,6 +243,8 @@ export function useEditorSidebar() {
         closeFile,
         setActiveFile,
         toggleExpanded,
+        setExpanded,
+        initializeFromState,
         updateFileContent,
         markDirty,
         markClean,

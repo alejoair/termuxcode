@@ -1,5 +1,6 @@
 // Componente: Editor Sidebar (panel derecho con CodeMirror 6 + LSP)
 
+import { computed, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -12,6 +13,7 @@ import { markdown as mdLang } from '@codemirror/lang-markdown';
 import { lspDiagnostics, lspCompletion, lspHover, lspSync } from '../editor/lsp-extensions.js';
 import { autocompletion } from '@codemirror/autocomplete';
 import { hoverTooltip } from '@codemirror/view';
+import { useResizable } from '../composables/useResizable.js';
 
 function getLang(filename) {
     const ext = filename.split('.').pop().toLowerCase();
@@ -46,9 +48,16 @@ export default {
                 'flex flex-col h-full bg-base select-text overflow-hidden editor-sidebar',
                 isMobile
                     ? ''
-                    : 'border-l border-border flex-shrink-0 transition-[width] duration-200 ' + (expanded ? 'w-[500px]' : 'w-12')
+                    : 'border-l border-border flex-shrink-0 relative' + (expanded ? '' : ' w-12')
             ]"
+            :style="isMobile || !expanded ? {} : { width: effectiveWidth + 'px', transition: isResizing ? 'none' : 'width 0.2s' }"
         >
+            <!-- Resize handle (izquierda, es sidebar derecha) -->
+            <div
+                v-if="!isMobile && expanded"
+                v-bind="resizeHandleProps"
+                :class="{ active: isResizing }"
+            ></div>
             <!-- ===== Slim mode (solo desktop) ===== -->
             <template v-if="!isMobile && !expanded">
                 <div
@@ -155,9 +164,36 @@ export default {
         expanded: { type: Boolean, default: false },
         lspClient: { type: Object, default: null },
         isMobile: { type: Boolean, default: false },
+        expandedWidth: { type: Number, default: 500 },
     },
 
     emits: ['toggle-expanded', 'close-file', 'set-active', 'file-dirty', 'save-file', 'update-content'],
+
+    setup(props) {
+        const { width: resizedWidth, isResizing, resizeHandleProps } = useResizable({
+            storageKey: 'editor_sidebar_width',
+            defaultWidth: props.expandedWidth,
+            minWidth: 300,
+            maxWidth: 900,
+            side: 'right',
+        });
+
+        const effectiveWidth = computed(() => resizedWidth.value);
+
+        // When width changes, tell CodeMirror to recalculate layout
+        watch(effectiveWidth, () => {
+            // editorView is in data(), accessible via this in methods
+            // but in setup we can't access it. Use requestAnimationFrame instead.
+            requestAnimationFrame(() => {
+                const editorEl = document.querySelector('.editor-sidebar .cm-editor');
+                if (editorEl && editorEl.cmView) {
+                    editorEl.cmView.view.requestMeasure();
+                }
+            });
+        });
+
+        return { isResizing, resizeHandleProps, effectiveWidth };
+    },
 
     data() {
         return {
@@ -286,13 +322,22 @@ export default {
             if (!file) return;
 
             try {
-                this.editorView.setState(EditorState.create({
+                const newState = EditorState.create({
                     doc: file.content,
                     extensions: this._getExtensions(file),
-                }));
+                });
+                this.editorView.setState(newState);
             } catch (e) {
                 console.error('[EditorSidebar] Error updating editor:', e);
             }
+            // Force CodeMirror to recalculate viewport after setState.
+            // Without this, syntax highlighting breaks when switching editor tabs.
+            requestAnimationFrame(() => {
+                if (this.editorView) {
+                    this.editorView.requestMeasure();
+                    this.editorView.update([]);
+                }
+            });
         },
 
         destroyEditor() {

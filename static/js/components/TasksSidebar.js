@@ -1,4 +1,5 @@
 import { computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+import { useResizable } from '../composables/useResizable.js';
 
 // Componente: Tasks Sidebar (panel derecho siempre visible, slim/expanded modes)
 export default {
@@ -8,9 +9,16 @@ export default {
                 'flex flex-col h-full bg-base select-text overflow-hidden',
                 isMobile
                     ? ''
-                    : 'border-l border-border flex-shrink-0 transition-[width] duration-200 ' + (expanded ? 'w-80' : 'w-12')
+                    : 'border-l border-border flex-shrink-0 relative' + (expanded ? '' : ' w-12')
             ]"
+            :style="isMobile || !expanded ? {} : { width: effectiveWidth + 'px', transition: isResizing ? 'none' : 'width 0.2s' }"
         >
+            <!-- Resize handle (izquierda, es sidebar derecha) -->
+            <div
+                v-if="!isMobile && expanded"
+                v-bind="resizeHandleProps"
+                :class="{ active: isResizing }"
+            ></div>
             <!-- ===== Slim mode (solo desktop) ===== -->
             <template v-if="!isMobile && !expanded">
                 <div
@@ -223,11 +231,22 @@ export default {
         completedCount: { type: Number, default: 0 },
         stats: { type: Object, default: null },
         isMobile: { type: Boolean, default: false },
+        expandedWidth: { type: Number, default: 320 },
     },
 
     emits: ['toggle-expanded'],
 
     setup(props) {
+        const { width: resizedWidth, isResizing, resizeHandleProps } = useResizable({
+            storageKey: 'tasks_sidebar_width',
+            defaultWidth: props.expandedWidth,
+            minWidth: 200,
+            maxWidth: 600,
+            side: 'right',
+        });
+
+        const effectiveWidth = computed(() => resizedWidth.value);
+
         const reversedPerQuery = computed(() => {
             if (!props.stats?.perQuery) return [];
             return [...props.stats.perQuery].reverse();
@@ -248,6 +267,9 @@ export default {
             showPerQuery: false,
             formatNumber,
             formatDuration,
+            isResizing,
+            resizeHandleProps,
+            effectiveWidth,
         };
     },
 };

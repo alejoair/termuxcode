@@ -41,6 +41,10 @@ export function useServerLogs() {
         isOpen.value = !isOpen.value;
     }
 
+    function setOpen(val) {
+        isOpen.value = val;
+    }
+
     function setLevelFilter(level) {
         levelFilter.value = level;
     }
@@ -56,6 +60,7 @@ export function useServerLogs() {
         addLogBatch,
         clearLogs,
         toggleSidebar,
+        setOpen,
         setLevelFilter,
     };
 }

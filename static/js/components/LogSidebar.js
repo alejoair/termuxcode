@@ -1,13 +1,21 @@
 // Componente: Log Sidebar (panel colapsable de logs del servidor)
 import { ref, watch, nextTick, computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+import { useResizable } from '../composables/useResizable.js';
 
 export default {
     template: `
         <transition v-if="!isMobile" name="sidebar">
             <div
                 v-if="isOpen"
-                class="flex flex-col h-full bg-base border-r border-border w-96 flex-shrink-0 select-text"
+                class="flex flex-col h-full bg-base border-r border-border flex-shrink-0 select-text relative"
+                :class="{ 'transition-[width] duration-200': !isResizing }"
+                :style="{ width: effectiveWidth + 'px' }"
             >
+                <!-- Resize handle (derecha, es sidebar izquierda) -->
+                <div
+                    v-bind="resizeHandleProps"
+                    :class="{ active: isResizing }"
+                ></div>
                 <!-- Header -->
                 <div class="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
                     <div class="flex items-center gap-2">
@@ -123,12 +131,24 @@ export default {
         warnCount: { type: Number, default: 0 },
         currentFilter: { type: String, default: 'ALL' },
         isMobile: { type: Boolean, default: false },
+        sidebarWidth: { type: Number, default: 384 },
     },
 
     emits: ['toggle', 'clear', 'set-filter'],
 
     setup(props) {
         const logContainer = ref(null);
+
+        // Resize handle
+        const { width: resizedWidth, isResizing, resizeHandleProps } = useResizable({
+            storageKey: 'log_sidebar_width',
+            defaultWidth: props.sidebarWidth,
+            minWidth: 250,
+            maxWidth: 600,
+            side: 'left',
+        });
+
+        const effectiveWidth = computed(() => resizedWidth.value);
 
         function levelClass(level) {
             switch (level) {
@@ -148,6 +168,6 @@ export default {
             }
         });
 
-        return { logContainer, levelClass };
+        return { logContainer, levelClass, isResizing, resizeHandleProps, effectiveWidth };
     },
 };

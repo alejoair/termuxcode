@@ -14,6 +14,10 @@ export function useTodoSidebar() {
         isOpen.value = !isOpen.value;
     }
 
+    function setOpen(val) {
+        isOpen.value = val;
+    }
+
     function setTodos(newTodos) {
         todos.value = newTodos || [];
     }
@@ -28,6 +32,7 @@ export function useTodoSidebar() {
         pendingCount,
         completedCount,
         toggleSidebar,
+        setOpen,
         setTodos,
         clearTodos,
     };

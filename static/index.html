@@ -461,6 +461,56 @@
             transform: translateX(0);
         }
 
+        /* Resize handle for sidebars */
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            cursor: col-resize;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: width 0.2s;
+        }
+        /* Icono grip (6 puntitos) centrado verticalmente */
+        .resize-handle::after {
+            content: '\2807\2807';
+            font-size: 7px;
+            letter-spacing: 1px;
+            line-height: 1;
+            color: rgba(100, 116, 139, 0.4);
+            writing-mode: vertical-lr;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: color 0.2s, background-color 0.2s;
+            padding: 6px 1px;
+            border-radius: 3px;
+        }
+        .resize-handle:hover {
+            width: 10px;
+        }
+        .resize-handle:hover::after {
+            color: rgba(56, 189, 248, 0.8);
+            background-color: rgba(56, 189, 248, 0.1);
+        }
+        .resize-handle.active {
+            width: 10px;
+        }
+        .resize-handle.active::after {
+            color: rgba(56, 189, 248, 1);
+            background-color: rgba(56, 189, 248, 0.15);
+        }
+        body.is-resizing {
+            cursor: col-resize !important;
+            user-select: none !important;
+        }
+        body.is-resizing * {
+            cursor: col-resize !important;
+        }
+
         /* Safe areas for notch / home indicator */
         .safe-areas {
             padding-top: env(safe-area-inset-top, 0px);

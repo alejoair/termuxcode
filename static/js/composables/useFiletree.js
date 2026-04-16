@@ -51,6 +51,14 @@ export function useFiletree() {
         expanded.value = !expanded.value;
     }
 
+    function setExpanded(val) {
+        expanded.value = val;
+    }
+
+    function setExpandedPaths(pathsArray) {
+        expandedPaths.value = new Set(pathsArray);
+    }
+
     function collapseAll() {
         expandedPaths.value = new Set();
     }
@@ -79,6 +87,8 @@ export function useFiletree() {
         setTree,
         togglePath,
         toggleExpanded,
+        setExpanded,
+        setExpandedPaths,
         collapseAll,
         expandAll,
     };

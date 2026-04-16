@@ -199,12 +199,18 @@ export default {
             type: Boolean,
             default: false,
         },
+        scrollRatio: {
+            type: Number,
+            default: null,
+        },
     },
 
-    emits: ['mounted'],
+    emits: ['mounted', 'scroll-change'],
 
     setup(props, { emit }) {
         const container = ref(null);
+        let _hasRestoredScroll = false;
+        let _scrollTimeout = null;
 
         // Loading state
         const loadingProgress = ref(0);
@@ -265,7 +271,9 @@ export default {
             () => props.messages,
             async () => {
                 await nextTick();
-                scrollToBottom();
+                if (!_hasRestoredScroll) {
+                    scrollToBottom();
+                }
             },
             { deep: true }
         );
@@ -317,6 +325,30 @@ export default {
         // Manejar accordion toggle
         onMounted(() => {
             if (!container.value) return;
+
+            // Restaurar posición de scroll si hay ratio guardado
+            if (props.scrollRatio != null && props.scrollRatio > 0) {
+                nextTick(() => {
+                    if (container.value) {
+                        const targetTop = props.scrollRatio * container.value.scrollHeight;
+                        container.value.scrollTop = targetTop;
+                        _hasRestoredScroll = true;
+                    }
+                });
+            }
+
+            // Emitir scroll-change con debounce al hacer scroll manual
+            container.value.addEventListener('scroll', () => {
+                if (_scrollTimeout) clearTimeout(_scrollTimeout);
+                _scrollTimeout = setTimeout(() => {
+                    if (container.value) {
+                        const ratio = container.value.scrollHeight > 0
+                            ? container.value.scrollTop / container.value.scrollHeight
+                            : 0;
+                        emit('scroll-change', ratio);
+                    }
+                }, 200);
+            }, { passive: true });
 
             container.value.addEventListener('click', (e) => {
                 const toggle = e.target.closest('.accordion-item-toggle');
