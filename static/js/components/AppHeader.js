@@ -7,11 +7,11 @@ export default {
             <!-- Header: titulo + status -->
             <div :class="['app-header-inner flex items-center justify-between', isMobile ? 'px-2 py-2' : 'px-4 py-3']">
                 <div class="flex items-center gap-3">
-                    <!-- Log toggle (desktop) -->
+                    <!-- Terminal toggle (desktop) -->
                     <button
                         v-if="!isMobile"
                         @click="$emit('toggle-sidebar')"
-                        title="Server Logs"
+                        title="Terminal"
                         :class="['w-7 h-7 flex items-center justify-center transition-colors rounded', logOpen ? 'text-txt bg-surface' : 'text-muted hover:text-txt']"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">

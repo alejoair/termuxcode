@@ -9,7 +9,7 @@ import InputBar from './components/InputBar.js';
 import ActionToolbar from './components/ActionToolbar.js';
 import McpModal from './components/McpModal.js';
 import SettingsModal from './components/SettingsModal.js';
-import LogSidebar from './components/LogSidebar.js';
+import TerminalSidebar from './components/TerminalSidebar.js';
 import FiletreeSidebar, { FiletreeNode } from './components/FiletreeSidebar.js';
 import TodoSidebar from './components/TodoSidebar.js';
 import TasksSidebar from './components/TasksSidebar.js';
@@ -24,6 +24,7 @@ import { useStorage } from './composables/useStorage.js';
 import { useMessages, computeLineDiff } from './composables/useMessages.js';
 import { useSharedState } from './composables/useSharedState.js';
 import { useServerLogs } from './composables/useServerLogs.js';
+import { useTerminal } from './composables/useTerminal.js';
 import { useTodoSidebar } from './composables/useTodoSidebar.js';
 import { useTasksSidebar } from './composables/useTasksSidebar.js';
 import { useFiletree } from './composables/useFiletree.js';
@@ -34,7 +35,7 @@ import { useUiState } from './composables/useUiState.js';
 // ===== Componente Principal =====
 const app = createApp({
     template: `
-        <div class="flex h-screen overflow-hidden">
+        <div class="flex overflow-hidden" style="height: 100dvh">
             <!-- ===== DESKTOP LAYOUT ===== -->
             <template v-if="!isMobileValue">
                 <filetree-sidebar
@@ -49,29 +50,24 @@ const app = createApp({
                     @collapse-all="filetree.collapseAll()"
                     @open-file="handleOpenFile"
                 />
-                <log-sidebar
-                    :is-open="logSidebarOpen"
-                    :logs="logSidebarFilteredLogs"
-                    :error-count="logSidebarErrorCount"
-                    :warn-count="logSidebarWarnCount"
-                    :current-filter="logSidebarFilter"
-                    :sidebar-width="logWidthValue"
-                    @toggle="serverLogs.toggleSidebar()"
-                    @clear="serverLogs.clearLogs()"
-                    @set-filter="serverLogs.setLevelFilter($event)"
+                <terminal-sidebar
+                    :is-open="terminalOpen"
+                    :is-mobile="false"
+                    :sidebar-width="500"
+                    @toggle="terminal.toggleSidebar()"
                 />
                 <div class="flex flex-col flex-1 min-w-0 p-4 safe-areas overflow-hidden">
                     <app-header
                         :state="sharedState"
                         :todo-count="todoSidebarItems.length"
                         :todo-open="todoSidebarOpen"
-                        :log-open="logSidebarOpen"
+                        :log-open="terminalOpen"
                         @switch-tab="handleSwitchTab"
                         @close-tab="handleCloseTab"
                         @new-tab="handleNewTab"
                         @rename-tab="handleRenameTab"
                         @set-tab-color="handleSetTabColor"
-                        @toggle-sidebar="serverLogs.toggleSidebar()"
+                        @toggle-sidebar="terminal.toggleSidebar()"
                         @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
                     />
 
@@ -174,13 +170,13 @@ const app = createApp({
                         :is-mobile="true"
                         :todo-count="todoSidebarItems.length"
                         :todo-open="todoSidebarOpen"
-                        :log-open="logSidebarOpen"
+                        :log-open="terminalOpen"
                         @switch-tab="handleSwitchTab"
                         @close-tab="handleCloseTab"
                         @new-tab="handleNewTab"
                         @rename-tab="handleRenameTab"
                         @set-tab-color="handleSetTabColor"
-                        @toggle-sidebar="toggleMobileDrawer('logs')"
+                        @toggle-sidebar="toggleMobileDrawer('terminal')"
                         @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
                         @toggle-filetree="toggleMobileDrawer('filetree')"
                         @toggle-editor="toggleMobileDrawer('editor')"
@@ -217,9 +213,9 @@ const app = createApp({
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                             </svg>
                         </button>
-                        <button @click="toggleMobileDrawer('logs')" title="Logs"
+                        <button @click="toggleMobileDrawer('terminal')" title="Terminal"
                             class="mobile-action-icon"
-                            :class="{ active: mobileDrawer === 'logs' }">
+                            :class="{ active: mobileDrawer === 'terminal' }">
                             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                             </svg>
@@ -302,19 +298,13 @@ const app = createApp({
                     />
                 </div>
 
-                <!-- Logs Drawer (izquierda) -->
-                <div v-if="mobileDrawer === 'logs'" class="drawer-overlay" @click="closeMobileDrawer"></div>
-                <div v-if="mobileDrawer === 'logs'" class="drawer-left drawer-open bg-base border-r border-border">
-                    <log-sidebar
+                <!-- Terminal Drawer (izquierda) -->
+                <div v-if="mobileDrawer === 'terminal'" class="drawer-overlay" @click="closeMobileDrawer"></div>
+                <div v-if="mobileDrawer === 'terminal'" class="drawer-left drawer-open bg-base border-r border-border">
+                    <terminal-sidebar
                         :is-open="true"
                         :is-mobile="true"
-                        :logs="logSidebarFilteredLogs"
-                        :error-count="logSidebarErrorCount"
-                        :warn-count="logSidebarWarnCount"
-                        :current-filter="logSidebarFilter"
                         @toggle="closeMobileDrawer"
-                        @clear="serverLogs.clearLogs()"
-                        @set-filter="serverLogs.setLevelFilter($event)"
                     />
                 </div>
 
@@ -377,7 +367,6 @@ const app = createApp({
 
         // Computed wrappers de width defaults para pasar como props a componentes
         // Los componentes usan useResizable internamente para manejar sus propios anchos
-        const logWidthValue = computed(() => 384);
         const filetreeWidthValue = computed(() => 320);
         const editorWidthValue = computed(() => 500);
         const tasksWidthValue = computed(() => 320);
@@ -405,12 +394,9 @@ const app = createApp({
             mobileDrawer.value = null;
         }
 
-        // Desenvolver serverLogs para el template (refs dentro de objetos planos no se auto-desenvuelven)
-        const logSidebarOpen = computed(() => serverLogs.isOpen.value);
-        const logSidebarFilteredLogs = computed(() => serverLogs.filteredLogs.value);
-        const logSidebarErrorCount = computed(() => serverLogs.errorCount.value);
-        const logSidebarWarnCount = computed(() => serverLogs.warnCount.value);
-        const logSidebarFilter = computed(() => serverLogs.levelFilter.value);
+        // Terminal (reemplaza log sidebar)
+        const terminal = useTerminal();
+        const terminalOpen = computed(() => terminal.isOpen.value);
 
         // Desenvolver todoSidebar para el template
         const todoSidebarOpen = computed(() => todoSidebar.isOpen.value);
@@ -962,6 +948,7 @@ const app = createApp({
             // Restaurar estado de UI ANTES de restaurar tabs
             const uiDeps = {
                 serverLogs,
+                terminal,
                 todoSidebar,
                 tasksSidebar,
                 filetree,
@@ -1040,7 +1027,8 @@ const app = createApp({
             handlePlanApprove,
             handlePlanReject,
             serverLogs,
-            logSidebarOpen,
+            terminal,
+            terminalOpen,
             todoSidebar,
             todoSidebarOpen,
             todoSidebarItems,
@@ -1065,10 +1053,6 @@ const app = createApp({
             editorSidebarExpanded,
             editorSidebarLspClient,
             editorSidebarDiffRanges,
-            logSidebarFilteredLogs,
-            logSidebarErrorCount,
-            logSidebarWarnCount,
-            logSidebarFilter,
             handleNewTab,
             handleSwitchTab,
             handleCloseTab,
@@ -1092,7 +1076,6 @@ const app = createApp({
             mobileDrawer,
             toggleMobileDrawer,
             closeMobileDrawer,
-            logWidthValue,
             filetreeWidthValue,
             editorWidthValue,
             tasksWidthValue,
@@ -1108,7 +1091,7 @@ app.component('InputBar', InputBar);
 app.component('ActionToolbar', ActionToolbar);
 app.component('McpModal', McpModal);
 app.component('SettingsModal', SettingsModal);
-app.component('LogSidebar', LogSidebar);
+app.component('TerminalSidebar', TerminalSidebar);
 app.component('FiletreeSidebar', FiletreeSidebar);
 app.component('filetree-node', FiletreeNode);
 app.component('TodoSidebar', TodoSidebar);
