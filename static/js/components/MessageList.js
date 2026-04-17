@@ -303,6 +303,7 @@ export default {
             switch (type) {
                 case 'user': return 'Tu';
                 case 'text': return 'Claude';
+                case 'system': return 'Sistema';
                 default: return '';
             }
         }

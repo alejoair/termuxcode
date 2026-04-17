@@ -2,7 +2,7 @@
 <html lang="es" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>TERMUXCODE</title>
 
     <!-- Tailwind CSS -->
@@ -44,10 +44,16 @@
             "@codemirror/theme-one-dark": "https://esm.sh/@codemirror/theme-one-dark@6",
             "@codemirror/lint": "https://esm.sh/@codemirror/lint@6",
             "@codemirror/autocomplete": "https://esm.sh/@codemirror/autocomplete@6",
-            "@codemirror/view": "https://esm.sh/@codemirror/view@6"
+            "@codemirror/view": "https://esm.sh/@codemirror/view@6",
+            "@xterm/xterm": "https://esm.sh/@xterm/xterm@5",
+            "@xterm/addon-fit": "https://esm.sh/@xterm/addon-fit@0.10",
+            "@xterm/addon-web-links": "https://esm.sh/@xterm/addon-web-links@0.11"
         }
     }
     </script>
+
+    <!-- xterm.js CSS -->
+    <link rel="stylesheet" href="https://esm.sh/@xterm/xterm@5/css/xterm.css">
 
     <!-- Markdown parser (version pinned) -->
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
@@ -135,10 +141,9 @@
         }
 
         .message.system .bubble {
-            background-color: transparent;
+            background-color: var(--color-bg-raised);
+            border-left: 3px solid var(--color-text-muted);
             color: var(--color-text-muted);
-            text-align: center;
-            font-style: italic;
         }
 
         .message.tool-call,
@@ -622,6 +627,67 @@
         }
         .mobile-action-select:focus {
             border-color: #0d9488;
+        }
+
+        /* Terminal sidebar xterm overrides */
+        .terminal-sidebar .xterm {
+            height: 100%;
+            padding: 2px;
+        }
+        .terminal-sidebar .xterm-viewport {
+            overflow-y: auto !important;
+        }
+        .terminal-sidebar .xterm-screen {
+            height: 100% !important;
+        }
+
+        /* Terminal mobile special keys bar */
+        .term-keys-bar {
+            flex-shrink: 0;
+            border-top: 1px solid var(--color-border);
+            background: var(--color-bg-raised);
+            padding: 4px 6px;
+            padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .term-keys-row {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+        }
+        .term-key {
+            min-width: 0;
+            flex: 1 1 0;
+            max-width: 60px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--color-bg-surface);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            transition: background 0.1s, border-color 0.1s;
+            padding: 0 2px;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .term-key:active {
+            background: var(--color-border);
+        }
+        .term-key-active {
+            background: var(--color-accent) !important;
+            color: #000 !important;
+            border-color: var(--color-accent) !important;
+            font-weight: 600;
         }
     </style>
 

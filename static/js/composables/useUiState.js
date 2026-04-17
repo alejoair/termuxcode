@@ -1,6 +1,6 @@
 // ===== Composable: useUiState — Persistencia centralizada del estado de UI =====
 // NOTA: Los anchos de sidebars se persisten individualmente via useResizable (ccm_settings_*).
-// Este composable persiste: isOpen/expanded, expandedPaths, openFiles, levelFilter, scrollRatio.
+// Este composable persiste: isOpen/expanded, expandedPaths, openFiles, scrollRatio.
 
 import { ref, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
@@ -9,13 +9,12 @@ const STORAGE_KEY = 'ccm_ui_state';
 const DEFAULT_STATE = {
     version: '1',
     sidebars: {
-        log: { isOpen: false },
+        terminal: { isOpen: false },
         filetree: { expanded: false, expandedPaths: [] },
         editor: { expanded: false, openFiles: [], activeFilePath: null },
         tasks: { expanded: false },
         todo: { isOpen: false },
     },
-    logs: { levelFilter: 'ALL' },
     messages: { scrollRatio: {} },
 };
 
@@ -34,7 +33,6 @@ export function useUiState() {
             return {
                 version: parsed.version || DEFAULT_STATE.version,
                 sidebars: { ...DEFAULT_STATE.sidebars, ...(parsed.sidebars || {}) },
-                logs: { ...DEFAULT_STATE.logs, ...(parsed.logs || {}) },
                 messages: { ...DEFAULT_STATE.messages, ...(parsed.messages || {}) },
             };
         } catch {
@@ -51,7 +49,7 @@ export function useUiState() {
     /**
      * Restaura el estado de UI en todos los composables de sidebars.
      * Debe llamarse antes de restaurar tabs.
-     * @param {object} deps - { serverLogs, todoSidebar, tasksSidebar, filetree, editorSidebar }
+     * @param {object} deps - { serverLogs, terminal, todoSidebar, tasksSidebar, filetree, editorSidebar }
      */
     async function restore(deps) {
         const state = load();
@@ -61,15 +59,10 @@ export function useUiState() {
             scrollRatioMap.value = state.messages.scrollRatio;
         }
 
-        // Restaurar log sidebar
-        const logState = state.sidebars?.log;
-        if (logState) {
-            deps.serverLogs.setOpen(logState.isOpen ?? false);
-        }
-
-        // Restaurar filtro de logs
-        if (state.logs?.levelFilter) {
-            deps.serverLogs.setLevelFilter(state.logs.levelFilter);
+        // Restaurar terminal sidebar
+        const termState = state.sidebars?.terminal;
+        if (termState) {
+            deps.terminal.setOpen(termState.isOpen ?? false);
         }
 
         // Restaurar filetree sidebar
@@ -109,7 +102,7 @@ export function useUiState() {
         const state = {
             version: '1',
             sidebars: {
-                log: { isOpen: deps.serverLogs.isOpen.value },
+                terminal: { isOpen: deps.terminal.isOpen.value },
                 filetree: {
                     expanded: deps.filetree.expanded.value,
                     expandedPaths: [...deps.filetree.expandedPaths.value],
@@ -127,7 +120,6 @@ export function useUiState() {
                 tasks: { expanded: deps.tasksSidebar.expanded.value },
                 todo: { isOpen: deps.todoSidebar.isOpen.value },
             },
-            logs: { levelFilter: deps.serverLogs.levelFilter.value },
             messages: { scrollRatio: scrollRatioMap.value },
         };
         save(state);
@@ -146,8 +138,7 @@ export function useUiState() {
         }
 
         watch([
-            deps.serverLogs.isOpen,
-            deps.serverLogs.levelFilter,
+            deps.terminal.isOpen,
             deps.todoSidebar.isOpen,
             deps.tasksSidebar.expanded,
             deps.filetree.expanded,

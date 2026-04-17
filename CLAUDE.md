@@ -566,3 +566,292 @@ Todas las dependencias se cargan desde esm.sh sin bundler:
    - Diagnostics: línea ondulada roja en `show_peding` (error intencional)
    - Completion: escribir `tasks[0].` → dropdown con propiedades
    - Hover: posicionar cursor sobre `add_task` → tooltip con firma
+
+## Project Context (Auto-generated)
+
+> **Nota**: Esta sección se genera automáticamente antes de cada query.
+> No la edites manualmente ya que se sobrescribirá.
+>
+> Providers activos: generate_system_context, generate_extended_system_context, generate_filetree_context, generate_stats_context, generate_git_context, generate_git_status_context
+
+### System Info
+
+- **OS**: 🐧 Linux 6.1.115-android14-11-ga2521ca27699-ab13294383 (aarch64)
+- **User**: `u0_a399@localhost`
+- **Home**: `/data/data/com.termux/files/home`
+- **Shell**: `/data/data/com.termux/files/usr/bin/bash`
+- **Python**: `3.12.12` → `/data/data/com.termux/files/usr/bin/python3.12`
+- **Date/Time**: 2026-04-16 16:36:11 (-05)
+- **Unix Timestamp**: `1776375371`
+
+
+
+### Extended System Info
+
+- **LANG**: `en_US.UTF-8`
+- **TERM**: `xterm-256color`
+- **PATH**:
+  ```
+  /data/data/com.termux/files/home/.pyenv/shims:/data/data/com.termux/files/home/.pyenv/bin:/data/data/com.termux/files/home/.pyenv/plugins/pyenv-virtualenv/shims:/data/data/com.termux/files/home/.pyenv/bin:/data/data/com.termux/files/home/.local/bin:
+  ... /data/data/com.termux/files/home/android-sdk/platform-tools:/data/data/com.termux/files/home/android-sdk/cmdline-tools/latest/bin:/data/data/com.termux/files/home/android-sdk/platform-tools
+  ```
+
+
+
+### File Tree
+
+```
+termuxcode-backup/
+├── .github/
+│   └── workflows/
+│       ├── build-dev.yml
+│       ├── build-release.yml
+│       └── pypi.yaml
+├── android-project/
+│   ├── app/
+│   │   └── src/
+│   │       └── main/
+│   └── android.keystore
+├── docs/
+│   ├── ARQUITECTURA_VUE3.md
+│   ├── LSP_CAPABILITIES_TY.md
+│   ├── LSP_TOOLS_RECOMMENDATIONS.md
+│   ├── LSP_USAGE_ANALYSIS.md
+│   ├── RESUMEN_MIGRACION_VUE3.md
+│   └── ui-specs.md
+├── src-tauri/
+│   ├── capabilities/
+│   │   └── default.json
+│   ├── icons/
+│   │   ├── android/
+│   │   │   ├── mipmap-anydpi-v26/
+│   │   │   ├── mipmap-hdpi/
+│   │   │   ├── mipmap-mdpi/
+│   │   │   ├── mipmap-xhdpi/
+│   │   │   ├── mipmap-xxhdpi/
+│   │   │   ├── mipmap-xxxhdpi/
+│   │   │   └── values/
+│   │   ├── ios/
+│   │   │   ├── AppIcon-20x20@1x.png
+│   │   │   ├── AppIcon-20x20@2x-1.png
+│   │   │   ├── AppIcon-20x20@2x.png
+│   │   │   ├── AppIcon-20x20@3x.png
+│   │   │   ├── AppIcon-29x29@1x.png
+│   │   │   ├── AppIcon-29x29@2x-1.png
+│   │   │   ├── AppIcon-29x29@2x.png
+│   │   │   ├── AppIcon-29x29@3x.png
+│   │   │   ├── AppIcon-40x40@1x.png
+│   │   │   ├── AppIcon-40x40@2x-1.png
+│   │   │   ├── AppIcon-40x40@2x.png
+│   │   │   ├── AppIcon-40x40@3x.png
+│   │   │   ├── AppIcon-512@2x.png
+│   │   │   ├── AppIcon-60x60@1x.png
+│   │   │   ├── AppIcon-60x60@2x-1.png
+│   │   │   ├── AppIcon-60x60@2x.png
+│   │   │   ├── AppIcon-60x60@3x.png
+│   │   │   ├── AppIcon-76x76@1x.png
+│   │   │   ├── AppIcon-76x76@2x.png
+│   │   │   └── AppIcon-83.5x83.5@2x.png
+│   │   ├── 128x128.png
+│   │   ├── 128x128@2x.png
+│   │   ├── 32x32.png
+│   │   ├── 64x64.png
+│   │   ├── icon.icns
+│   │   ├── icon.ico
+│   │   ├── icon.png
+│   │   ├── Square107x107Logo.png
+│   │   ├── Square142x142Logo.png
+│   │   ├── Square150x150Logo.png
+│   │   ├── Square284x284Logo.png
+│   │   ├── Square30x30Logo.png
+│   │   ├── Square310x310Logo.png
+│   │   ├── Square44x44Logo.png
+│   │   ├── Square71x71Logo.png
+│   │   ├── Square89x89Logo.png
+│   │   └── StoreLogo.png
+│   ├── src/
+│   │   ├── lib.rs
+│   │   └── main.rs
+│   ├── build.rs
+│   ├── Cargo.lock
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   ├── tauri.linux.conf.json
+│   ├── tauri.macos.conf.json
+│   └── tauri.windows.conf.json
+├── static/
+│   ├── css/
+│   │   ├── animations.css
+│   │   └── editor-tests.css
+│   ├── js/
+│   │   ├── components/
+│   │   │   ├── ActionToolbar.js
+│   │   │   ├── AppHeader.js
+│   │   │   ├── ApprovalModal.js
+│   │   │   ├── EditorSidebar.js
+│   │   │   ├── FiletreeSidebar.js
+│   │   │   ├── FileViewModal.js
+│   │   │   ├── FloatingActionButton.js
+│   │   │   ├── InputBar.js
+│   │   │   ├── LogSidebar.js
+│   │   │   ├── McpModal.js
+│   │   │   ├── MessageList.js
+│   │   │   ├── PlanModal.js
+│   │   │   ├── QuestionModal.js
+│   │   │   ├── SettingsModal.js
+│   │   │   ├── StatsDisplay.js
+│   │   │   ├── TasksSidebar.js
+│   │   │   ├── TodoSidebar.js
+│   │   │   └── TypingIndicator.js
+│   │   ├── composables/
+│   │   │   ├── useEditorSidebar.js
+│   │   │   ├── useFiletree.js
+│   │   │   ├── useHaptics.js
+│   │   │   ├── useIsMobile.js
+│   │   │   ├── useMessages.js
+│   │   │   ├── useModals.js
+│   │   │   ├── useServerLogs.js
+│   │   │   ├── useSharedState.js
+│   │   │   ├── useStorage.js
+│   │   │   ├── useTabs.js
+│   │   │   ├── useTasksSidebar.js
+│   │   │   ├── useTodoSidebar.js
+│   │   │   ├── useTypewriter.js
+│   │   │   ├── useWebSocket.js
+│   │   │   └── WsLspClient.js
+│   │   ├── editor/
+│   │   │   ├── lsp-client.js
+│   │   │   └── lsp-extensions.js
+│   │   ├── app-vue.js
+│   │   ├── legacy-app.js
+│   │   ├── legacy-connection.js
+│   │   ├── legacy-haptics.js
+│   │   ├── legacy-input-feedback.js
+│   │   ├── legacy-modal-approval.js
+│   │   ├── legacy-modal-fileview.js
+│   │   ├── legacy-modal-mcp.js
+│   │   ├── legacy-modal-question.js
+│   │   ├── legacy-modal-utils.js
+│   │   ├── legacy-modals.js
+│   │   ├── legacy-notifications.js
+│   │   ├── legacy-pipeline.js
+│   │   ├── legacy-scroll-feedback.js
+│   │   ├── legacy-state.js
+│   │   ├── legacy-storage.js
+│   │   ├── legacy-tabs.js
+│   │   └── legacy-ui.js
+│   ├── editor-tests.html
+│   ├── favicon.ico
+│   ├── icon-192.png
+│   ├── icon-512.png
+│   ├── index.html
+│   └── manifest.json
+├── termuxcode/
+│   ├── connection/
+│   │   ├── context/
+│   │   │   ├── __init__.py
+│   │   │   ├── example_custom_provider.py
+│   │   │   ├── filetree_provider.py
+│   │   │   ├── git_provider.py
+│   │   │   ├── README.md
+│   │   │   └── system_provider.py
+│   │   ├── lsp/
+│   │   │   ├── __init__.py
+│   │   │   ├── client.py
+│   │   │   ├── diagnostics.py
+│   │   │   ├── document.py
+│   │   │   ├── features.py
+│   │   │   ├── protocol.py
+│   │   │   ├── transport.py
+│   │   │   └── uri.py
+│   │   ├── lsp_analyzer/
+│   │   │   ├── __init__.py
+│   │   │   ├── analyzer.py
+│   │   │   ├── config.py
+│   │   │   ├── formatters.py
+│   │   │   └── symbols.py
+│   │   ├── __init__.py
+│   │   ├── ask_handler.py
+│   │   ├── base.py
+│   │   ├── claude_md_manager.py
+│   │   ├── filetree_watcher.py
+│   │   ├── history_manager.py
+│   │   ├── hooks.py
+│   │   ├── log_handler.py
+│   │   ├── lsp_manager.py
+│   │   ├── message_processor.py
+│   │   ├── sdk_client.py
+│   │   ├── sender.py
+│   │   ├── session.py
+│   │   ├── session_registry.py
+│   │   └── tool_approval_handler.py
+│   ├── custom_tools/
+│   │   ├── tools/
+│   │   │   ├── __init__.py
+│   │   │   ├── find_definition.py
+│   │   │   ├── quick_fix.py
+│   │   │   ├── rename_symbol.py
+│   │   │   └── type_check.py
+│   │   ├── __init__.py
+│   │   ├── registry.py
+│   │   └── server.py
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── desktop_server.py
+│   ├── lsp_proxy.py
+│   ├── message_converter.py
+│   ├── serve.py
+│   ├── serve_https.py
+│   ├── websocket_server.log
+│   ├── ws_config.py
+│   └── ws_server.py
+├── termuxcode.egg-info/
+│   ├── dependency_links.txt
+│   ├── entry_points.txt
+│   ├── PKG-INFO
+│   ├── requires.txt
+│   ├── SOURCES.txt
+│   └── top_level.txt
+├── tests/
+│   ├── __init__.py
+│   └── test_basic.py
+├── .gitignore
+├── CLAUDE.md
+├── icon.png
+├── launch_webview.py
+├── package.json
+├── PLAN.md
+├── PLAN_USAGE_STATS.md
+├── pyinstaller.spec
+├── pyproject.toml
+├── README.md
+└── REFACTOR_PLAN.md
+```
+
+### Project Stats
+
+- **Python files**: 55
+- **JS/TS files**: 53
+- **Total tracked files**: 108
+
+### Git Info
+
+- **Branch**: `main`
+  - 98d69f6 fix: mobile drawers respetan safe-area y no se expanden hacia abajo
+  - 35a8208 feat: per-query stats breakdown en StatsDisplay y useTabs
+  - e8e8616 feat: layout responsive mobile con drawers, bottom bar y sidebars fullscreen
+
+### Git Status
+
+```
+  M CLAUDE.md
+  ?? .certs/
+  ?? PLAN.md
+  ?? PLAN_USAGE_STATS.md
+  ?? REFACTOR_PLAN.md
+  ?? launch_webview.py
+  ?? termuxcode/serve_https.py
+  ?? tests/
+```
+
+---

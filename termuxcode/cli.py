@@ -14,8 +14,10 @@ from pathlib import Path
 PACKAGE_DIR = Path(__file__).parent.parent
 WS_SERVER = PACKAGE_DIR / "termuxcode" / "ws_server.py"
 HTTP_SERVER = PACKAGE_DIR / "termuxcode" / "serve.py"
+TERMINAL_SERVER = PACKAGE_DIR / "termuxcode" / "terminal_server.py"
 HTTP_PORT = 1988
 WS_PORT = 2025
+TERMINAL_PORT = 2088
 
 
 def port_in_use(port: int) -> bool:
@@ -101,7 +103,7 @@ def _kill_termuxcode_processes() -> list[int]:
     killed: list[int] = []
 
     # Primero matar los servidores hijos (son los que realmente ocupan los puertos)
-    for script in ['ws_server.py', 'serve.py']:
+    for script in ['ws_server.py', 'serve.py', 'terminal_server.py']:
         try:
             result = subprocess.run(['ps', '-ef'], capture_output=True, text=True)
             for line in result.stdout.splitlines():
@@ -184,6 +186,8 @@ def check_ports(mode: str, force: bool = False) -> None:
         ports.append(("WebSocket", WS_PORT))
     if mode in ("both", "http"):
         ports.append(("HTTP", HTTP_PORT))
+    if mode in ("both", "terminal"):
+        ports.append(("Terminal", TERMINAL_PORT))
 
     occupied = [(name, port) for name, port in ports if port_in_use(port)]
     if not occupied:
@@ -226,6 +230,7 @@ def print_banner() -> None:
     print("=" * 50)
     print(f"  HTTP: http://localhost:{HTTP_PORT}")
     print(f"  WebSocket: ws://localhost:{WS_PORT}")
+    print(f"  Terminal: ws://localhost:{TERMINAL_PORT}")
     print("=" * 50 + "\n")
 
 
@@ -298,6 +303,15 @@ def run_servers(mode: str = "both", force: bool = False) -> None:
                 env=env
             )
             processes.append(("HTTP", http_proc))
+
+        if mode in ("both", "terminal"):
+            print(f"[*] Iniciando servidor de terminal (puerto {TERMINAL_PORT})...")
+            terminal_proc = subprocess.Popen(
+                [sys.executable, str(TERMINAL_SERVER)],
+                cwd=original_cwd,
+                env=env
+            )
+            processes.append(("Terminal", terminal_proc))
 
         print("\n[OK] Servidor(es) iniciado(s)")
         print("\nAbre en tu navegador:")
