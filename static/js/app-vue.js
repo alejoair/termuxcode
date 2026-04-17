@@ -1,6 +1,6 @@
 // ===== TERMUXCODE - Vue 3 App =====
 
-import { createApp, ref, computed, onMounted } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+import { createApp, ref, computed, onMounted, nextTick } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
 // Importar componentes
 import AppHeader from './components/AppHeader.js';
@@ -21,7 +21,7 @@ import PlanModal from './components/PlanModal.js';
 import { useTabs } from './composables/useTabs.js';
 import { useWebSocket } from './composables/useWebSocket.js';
 import { useStorage } from './composables/useStorage.js';
-import { useMessages } from './composables/useMessages.js';
+import { useMessages, computeLineDiff } from './composables/useMessages.js';
 import { useSharedState } from './composables/useSharedState.js';
 import { useServerLogs } from './composables/useServerLogs.js';
 import { useTodoSidebar } from './composables/useTodoSidebar.js';
@@ -69,6 +69,8 @@ const app = createApp({
                         @switch-tab="handleSwitchTab"
                         @close-tab="handleCloseTab"
                         @new-tab="handleNewTab"
+                        @rename-tab="handleRenameTab"
+                        @set-tab-color="handleSetTabColor"
                         @toggle-sidebar="serverLogs.toggleSidebar()"
                         @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
                     />
@@ -126,7 +128,8 @@ const app = createApp({
                     <plan-modal
                         v-if="showPlanModal"
                         :plan="planContent"
-                        @close="showPlanModal = false"
+                        @approve="handlePlanApprove"
+                        @reject="handlePlanReject"
                     />
                 </div>
 
@@ -138,12 +141,14 @@ const app = createApp({
                     :expanded="editorSidebarExpanded"
                     :lsp-client="editorSidebarLspClient"
                     :expanded-width="editorWidthValue"
+                    :diff-ranges="editorSidebarDiffRanges"
                     @toggle-expanded="editorSidebar.toggleExpanded()"
                     @close-file="editorSidebar.closeFile($event)"
                     @set-active="editorSidebar.setActiveFile($event)"
                     @file-dirty="handleFileDirty"
                     @save-file="handleSaveFile"
                     @update-content="handleEditorContentUpdate"
+                    @clear-diff="handleClearDiff"
                 />
 
                 <!-- Tasks sidebar derecha (siempre visible) -->
@@ -173,6 +178,8 @@ const app = createApp({
                         @switch-tab="handleSwitchTab"
                         @close-tab="handleCloseTab"
                         @new-tab="handleNewTab"
+                        @rename-tab="handleRenameTab"
+                        @set-tab-color="handleSetTabColor"
                         @toggle-sidebar="toggleMobileDrawer('logs')"
                         @toggle-todo-sidebar="todoSidebar.toggleSidebar()"
                         @toggle-filetree="toggleMobileDrawer('filetree')"
@@ -271,7 +278,8 @@ const app = createApp({
                     <plan-modal
                         v-if="showPlanModal"
                         :plan="planContent"
-                        @close="showPlanModal = false"
+                        @approve="handlePlanApprove"
+                        @reject="handlePlanReject"
                     />
                 </div>
 
@@ -320,12 +328,14 @@ const app = createApp({
                         :expanded="true"
                         :is-mobile="true"
                         :lsp-client="editorSidebarLspClient"
+                        :diff-ranges="editorSidebarDiffRanges"
                         @toggle-expanded="closeMobileDrawer"
                         @close-file="editorSidebar.closeFile($event)"
                         @set-active="editorSidebar.setActiveFile($event)"
                         @file-dirty="handleFileDirty"
                         @save-file="handleSaveFile"
                         @update-content="handleEditorContentUpdate"
+                        @clear-diff="handleClearDiff"
                     />
                 </div>
 
@@ -371,6 +381,9 @@ const app = createApp({
         const filetreeWidthValue = computed(() => 320);
         const editorWidthValue = computed(() => 500);
         const tasksWidthValue = computed(() => 320);
+
+        // Pending diffs: toolUseId → { filePath, oldContent, block }
+        const pendingDiffs = new Map();
 
         // Scroll ratio por tab
         const activeScrollRatio = computed(() => {
@@ -425,12 +438,161 @@ const app = createApp({
         const editorSidebarExpanded = computed(() => editorSidebar.expanded.value);
         const editorSidebarLspClient = computed(() => editorSidebar.getLspClient());
         const editorSidebarRef = ref(null); // template ref para acceder al componente
+        const editorSidebarDiffRanges = computed(() => {
+            const path = editorSidebar.activeFilePath.value;
+            return path ? editorSidebar.getDiffRanges(path) : null;
+        });
 
         // Modal state
         const showMcpModal = ref(false);
         const showSettingsModal = ref(false);
         const showPlanModal = ref(false);
         const planContent = ref('');
+        const planTab = ref(null); // tab activo cuando se recibió el plan
+
+        function handlePlanApprove() {
+            showPlanModal.value = false;
+            const tab = planTab.value;
+            if (tab?.ws?.readyState === WebSocket.OPEN) {
+                tab.ws.send(JSON.stringify({ type: 'tool_approval_response', allow: true }));
+            }
+            planTab.value = null;
+        }
+
+        function handlePlanReject() {
+            showPlanModal.value = false;
+            const tab = planTab.value;
+            if (tab?.ws?.readyState === WebSocket.OPEN) {
+                tab.ws.send(JSON.stringify({ type: 'tool_approval_response', allow: false }));
+            }
+            planTab.value = null;
+        }
+
+        // ===== Diff Capture for Agent Edits =====
+        async function captureBeforeContent(block) {
+            const filePath = block.input?.file_path;
+            if (!filePath) return;
+            const toolUseId = block.id;
+            let oldContent = '';
+
+            try {
+                // Check if file is open in editor and not dirty — use its content
+                const existing = editorSidebar.openFiles.value.find(f => f.path === filePath);
+                if (existing && !existing.dirty) {
+                    oldContent = existing.content;
+                } else {
+                    // Fetch current content from disk (before SDK executes the tool)
+                    const res = await fetch('/api/file?path=' + encodeURIComponent(filePath));
+                    if (res.ok) {
+                        const data = await res.json();
+                        oldContent = data.content || '';
+                    } else {
+                        // File doesn't exist yet (new file) — old content is empty
+                        oldContent = '';
+                    }
+                }
+            } catch {
+                oldContent = '';
+            }
+
+            console.log('[diff] captureBeforeContent stored — toolUseId:', toolUseId, 'filePath:', filePath, 'oldContent len:', oldContent.length);
+            pendingDiffs.set(toolUseId, { filePath, oldContent, block });
+        }
+
+        async function handleFileEditComplete(toolUseId) {
+            const pending = pendingDiffs.get(toolUseId);
+            if (!pending) return;
+            pendingDiffs.delete(toolUseId);
+
+            const { filePath, oldContent, block } = pending;
+
+            try {
+                // Determine new content
+                let newContent;
+                if (block.name === 'Write' && block.input?.content !== undefined) {
+                    // Write tool has the full content in the input
+                    newContent = block.input.content;
+                } else {
+                    // Edit tool or fallback — fetch the file from disk
+                    const res = await fetch('/api/file?path=' + encodeURIComponent(filePath));
+                    if (res.ok) {
+                        const data = await res.json();
+                        newContent = data.content || '';
+                    } else {
+                        return; // Can't get new content
+                    }
+                }
+
+                // Compute diff
+                const diffLines = computeLineDiff(oldContent, newContent);
+
+                // Build ranges for diff decorations
+                const addRanges = [];
+                const removeRanges = [];
+
+                // Track current line in new content (1-based)
+                let newLineNum = 0;
+                for (const line of diffLines) {
+                    if (line.type === 'equal') {
+                        newLineNum = line.newLine + 1;
+                    } else if (line.type === 'add') {
+                        newLineNum = line.newLine + 1;
+                        addRanges.push({ line: newLineNum });
+                    } else if (line.type === 'remove') {
+                        // Insert remove widget before the next new-line or at position
+                        const insertLine = newLineNum > 0 ? newLineNum + 1 : 1;
+                        removeRanges.push({ line: insertLine, content: line.content });
+                    }
+                }
+
+                const ranges = { addRanges, removeRanges };
+
+                // If no diff, skip
+                if (addRanges.length === 0 && removeRanges.length === 0) return;
+
+                // Save diff state
+                editorSidebar.setDiffRanges(filePath, ranges);
+
+                // Check if file is dirty in editor — don't overwrite
+                const existing = editorSidebar.openFiles.value.find(f => f.path === filePath);
+                if (existing && existing.dirty) {
+                    // Just activate the tab, don't overwrite content
+                    editorSidebar.setActiveFile(filePath);
+                    editorSidebar.setExpanded(true);
+                    return;
+                }
+
+                // Open/update file in editor with new content
+                const name = filePath.split(/[\\/]/).pop();
+                const ext = name.split('.').pop().toLowerCase();
+                const langMap = {
+                    py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript',
+                    tsx: 'typescript', html: 'html', css: 'css', json: 'json',
+                    md: 'markdown', txt: 'text',
+                };
+
+                if (existing) {
+                    editorSidebar.updateFileContent(filePath, newContent);
+                    editorSidebar.setActiveFile(filePath);
+                    editorSidebar.setExpanded(true);
+                } else {
+                    editorSidebar.openFile(filePath, name, newContent, langMap[ext] || 'text');
+                }
+
+                // Esperar dos ticks: el watcher de activeContent llama $nextTick internamente,
+                // necesitamos que updateEditor() termine antes de aplicar el diff.
+                await nextTick();
+                await nextTick();
+
+                // Guardar diff state y aplicar al editor
+                editorSidebar.setDiffRanges(filePath, ranges);
+                if (editorSidebarRef.value?.showDiff) {
+                    editorSidebarRef.value.showDiff(ranges);
+                }
+            } catch (e) {
+                console.error('[handleFileEditComplete] Error:', e);
+            }
+        }
 
         // ===== WebSocket Message Handler =====
         function handleMessage(data, tabId) {
@@ -457,12 +619,28 @@ const app = createApp({
                 },
                 assistant: () => {
                     const blocks = msg.processAssistantBlocks(data.blocks);
-                    blocks.forEach(block => msg.addMessageToTab(tab, block));
+                    blocks.forEach(block => {
+                        msg.addMessageToTab(tab, block);
+                        if (block.type === 'tool_use') {
+                            console.log('[diff] tool_use block:', block.name, 'id:', block.id, 'input keys:', Object.keys(block.input || {}));
+                        }
+                        // Capture before-content for Write/Edit tools
+                        if (block.type === 'tool_use' && (block.name === 'Write' || block.name === 'Edit')) {
+                            captureBeforeContent(block);
+                        }
+                    });
                 },
                 user: () => {
                     if (data.blocks) {
                         const results = msg.processToolResultBlocks(data.blocks);
-                        results.forEach(r => msg.addMessageToTab(tab, r));
+                        results.forEach(r => {
+                            msg.addMessageToTab(tab, r);
+                            console.log('[diff] tool_result — toolUseId:', r.toolUseId, 'pendingDiffs has it:', pendingDiffs.has(r.toolUseId), 'pendingDiffs keys:', [...pendingDiffs.keys()]);
+                            // Check if this result corresponds to a pending diff
+                            if (r.toolUseId && pendingDiffs.has(r.toolUseId)) {
+                                handleFileEditComplete(r.toolUseId);
+                            }
+                        });
                     }
                 },
                 result: () => {
@@ -498,6 +676,7 @@ const app = createApp({
                 },
                 file_view: () => {
                     planContent.value = data.content || '';
+                    planTab.value = tab;
                     showPlanModal.value = true;
                 },
                 todo_update: () => {
@@ -540,6 +719,14 @@ const app = createApp({
                 ws.disconnectTab(tab);
             }
             tabs.closeTab(tabId);
+        }
+
+        function handleRenameTab(tabId, newName) {
+            tabs.renameTab(tabId, newName);
+        }
+
+        function handleSetTabColor(tabId, color) {
+            tabs.setTabColor(tabId, color);
         }
 
         // ===== Input =====
@@ -631,7 +818,7 @@ const app = createApp({
         }
 
         async function handleOpenFile(path) {
-            const name = path.split('/').pop();
+            const name = path.split(/[\\/]/).pop();
             const ext = name.split('.').pop().toLowerCase();
             const langMap = {
                 py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript',
@@ -694,6 +881,10 @@ const app = createApp({
             const files = editorSidebar.openFiles.value;
             const file = files.find(f => f.path === path);
             if (file) file.content = content;
+        }
+
+        function handleClearDiff({ path }) {
+            editorSidebar.clearDiff(path);
         }
 
         function handleApplyMcp(disabledServers) {
@@ -814,31 +1005,16 @@ const app = createApp({
             if (savedTabs.length > 0) {
                 tabs.deserializeTabs(savedTabs);
 
-                // Filtrar tabs sin sesión real (temporal) — no se pueden reconectar
-                const reconnectable = [];
-                const discarded = [];
-                tabs.tabsArray.value.forEach(tab => {
-                    if (tab.sessionId && tab.id === tab.sessionId) {
-                        reconnectable.push(tab);
-                    } else {
-                        discarded.push(tab);
-                    }
-                });
-
-                // Descartar tabs temporales del mapa
-                discarded.forEach(tab => {
-                    tabs.closeTab(tab.id);
-                });
-
-                if (reconnectable.length > 0) {
+                const allTabs = tabs.tabsArray.value;
+                if (allTabs.length > 0) {
                     if (savedActiveTabId && tabs.getTab(savedActiveTabId)) {
                         tabs.switchTab(savedActiveTabId);
                     } else {
-                        tabs.switchTab(reconnectable[0].id);
+                        tabs.switchTab(allTabs[0].id);
                     }
 
-                    // Reconectar WebSocket solo para tabs con sesión real
-                    reconnectable.forEach(tab => {
+                    // Reconectar todos los tabs — si no tienen sessionId, el backend crea sesión nueva
+                    allTabs.forEach(tab => {
                         ws.connectTab(tab, handleMessage);
                     });
                 }
@@ -861,6 +1037,8 @@ const app = createApp({
             showSettingsModal,
             showPlanModal,
             planContent,
+            handlePlanApprove,
+            handlePlanReject,
             serverLogs,
             logSidebarOpen,
             todoSidebar,
@@ -886,6 +1064,7 @@ const app = createApp({
             editorSidebarActiveFilePath,
             editorSidebarExpanded,
             editorSidebarLspClient,
+            editorSidebarDiffRanges,
             logSidebarFilteredLogs,
             logSidebarErrorCount,
             logSidebarWarnCount,
@@ -893,6 +1072,8 @@ const app = createApp({
             handleNewTab,
             handleSwitchTab,
             handleCloseTab,
+            handleRenameTab,
+            handleSetTabColor,
             handleSend,
             handleChangeModel,
             handleStop,
@@ -906,6 +1087,7 @@ const app = createApp({
             handleFileDirty,
             handleSaveFile,
             handleEditorContentUpdate,
+            handleClearDiff,
             isMobileValue,
             mobileDrawer,
             toggleMobileDrawer,

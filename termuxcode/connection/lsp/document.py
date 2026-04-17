@@ -24,8 +24,11 @@ class DocumentManager:
         self._version: dict[str, int] = {}
 
     async def open(self, file_path: str, content: str) -> None:
-        """Envia textDocument/didOpen."""
+        """Envia textDocument/didOpen (o didChange si ya está abierto)."""
         uri = file_path_to_uri(file_path)
+        if self._version.get(uri, 0) > 0:
+            await self.update(file_path, content)
+            return
         language_id = extension_to_language_id(file_path)
         self._version[uri] = 1
         await self._transport.send_notification(
@@ -54,8 +57,10 @@ class DocumentManager:
         )
 
     async def close(self, file_path: str) -> None:
-        """Envia textDocument/didClose."""
+        """Envia textDocument/didClose solo si el documento está abierto."""
         uri = file_path_to_uri(file_path)
+        if self._version.pop(uri, 0) == 0:
+            return  # Nunca se abrió o ya fue cerrado — no enviar didClose
         await self._transport.send_notification(
             "textDocument/didClose",
             {"textDocument": {"uri": uri}},
@@ -67,19 +72,20 @@ class DocumentManager:
         content: str,
         timeout: float = 10.0,
     ) -> list[dict]:
-        """Envia didOpen y espera publishDiagnostics atomicamente."""
+        """Envia didOpen (o didChange si ya está abierto) y espera publishDiagnostics."""
         uri = file_path_to_uri(file_path)
+        if self._version.get(uri, 0) > 0:
+            return await self.update_and_wait(file_path, content, timeout)
         self._diagnostics.clear_event(uri)
 
-        version = self._version.get(uri, 0) + 1
-        self._version[uri] = version
+        self._version[uri] = 1
         await self._transport.send_notification(
             "textDocument/didOpen",
             {
                 "textDocument": {
                     "uri": uri,
                     "languageId": extension_to_language_id(file_path),
-                    "version": version,
+                    "version": 1,
                     "text": content,
                 },
             },

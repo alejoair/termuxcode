@@ -131,8 +131,19 @@ class MessageProcessor:
             except Exception as e:
                 logger.debug(f"Error actualizando CLAUDE.md (no crítico): {e}")
 
+        # Inyectar contexto dinámico (fecha/hora + git status) al inicio del mensaje
+        query_content = content
+        if self._cwd:
+            try:
+                from termuxcode.connection.claude_md_manager import build_message_context
+                ctx = build_message_context(self._cwd)
+                if ctx:
+                    query_content = ctx + content
+            except Exception as e:
+                logger.debug(f"Error generando context para mensaje (no crítico): {e}")
+
         try:
-            await self._sdk_client.query(content)
+            await self._sdk_client.query(query_content)
         except Exception as e:
             logger.warning(f"Query falló (SDK posiblemente muerto): {e}, intentando recovery...")
             await self._try_recover_sdk()

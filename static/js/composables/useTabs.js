@@ -59,6 +59,7 @@ export function useTabs() {
         const newTab = reactive({
             id: tabId,
             name: tabName,
+            color: null,
             cwd: cwd || null,
             sessionId: null,
             settings: { ...DEFAULT_SETTINGS },
@@ -138,6 +139,13 @@ export function useTabs() {
         if (!tab || !newName?.trim()) return false;
 
         tab.name = newName.trim();
+        return true;
+    }
+
+    function setTabColor(tabId, color) {
+        const tab = tabs.get(tabId);
+        if (!tab) return false;
+        tab.color = color || null;
         return true;
     }
 
@@ -292,6 +300,7 @@ export function useTabs() {
         return Array.from(tabs.entries()).map(([id, tab]) => ({
             id,
             name: tab.name,
+            color: tab.color,
             cwd: tab.cwd,
             sessionId: tab.sessionId,
             renderedMessages: tab.renderedMessages,
@@ -311,6 +320,7 @@ export function useTabs() {
         data.forEach((tabData) => {
             const tab = reactive({
                 ...tabData,
+                color: tabData.color || null,
                 isConnected: false,
                 mcpReady: false,
                 toolsReady: false,
@@ -364,6 +374,7 @@ export function useTabs() {
         switchTab,
         closeTab,
         renameTab,
+        setTabColor,
         getTab,
         updateTabSessionId,
         clearTabMessages,

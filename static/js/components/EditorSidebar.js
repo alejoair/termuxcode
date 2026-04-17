@@ -2,7 +2,7 @@
 
 import { computed, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 import { EditorView, basicSetup } from 'codemirror';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Compartment } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { python } from '@codemirror/lang-python';
 import { javascript } from '@codemirror/lang-javascript';
@@ -11,9 +11,11 @@ import { css as cssLang } from '@codemirror/lang-css';
 import { json as jsonLang } from '@codemirror/lang-json';
 import { markdown as mdLang } from '@codemirror/lang-markdown';
 import { lspDiagnostics, lspCompletion, lspHover, lspSync } from '../editor/lsp-extensions.js';
+import { diffExtension, setDiffRanges as applyDiffRanges, clearDiffDecorations } from '../editor/diff-extensions.js';
 import { autocompletion } from '@codemirror/autocomplete';
 import { hoverTooltip } from '@codemirror/view';
 import { useResizable } from '../composables/useResizable.js';
+import { getFileIcon } from '../composables/useFileIcons.js';
 
 function getLang(filename) {
     const ext = filename.split('.').pop().toLowerCase();
@@ -31,14 +33,10 @@ function getLang(filename) {
     }
 }
 
-function fileIcon(name) {
+function fileIconSvg(name) {
     const ext = name.split('.').pop().toLowerCase();
-    const map = {
-        py: '\uD83D\uDC0D', js: '\uD83D\uDCDC', ts: '\uD83D\uDCDC',
-        html: '\uD83C\uDF10', css: '\uD83C\uDFA8', json: '{ }',
-        md: '\uD83D\uDCDD', txt: '\uD83D\uDCC4',
-    };
-    return map[ext] || '\uD83D\uDCC4';
+    const inner = getFileIcon(ext);
+    return `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${inner}</svg>`;
 }
 
 export default {
@@ -77,7 +75,7 @@ export default {
                             class="flex items-center justify-center relative"
                             :title="file.name + (file.dirty ? ' (modificado)' : '')"
                         >
-                            <span class="text-xs">{{ fileIcon(file.name) }}</span>
+                            <span class="text-muted" v-html="fileIcon(file.name)"></span>
                             <span v-if="file.dirty" class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
                         </div>
                     </div>
@@ -111,6 +109,13 @@ export default {
                                     d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                             </svg>
                         </button>
+                        <!-- Clear diff button -->
+                        <button v-if="hasDiff" @click="handleClearDiff" title="Descartar diff"
+                            class="w-6 h-6 flex items-center justify-center text-ok hover:text-accent transition-colors rounded">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
                         <!-- Save status -->
                         <span v-if="saveStatus" class="text-[10px] text-green-400 mr-1">{{ saveStatus }}</span>
                         <button v-if="!isMobile" @click="$emit('toggle-expanded')" title="Colapsar"
@@ -132,7 +137,7 @@ export default {
                         :class="['editor-tab', file.path === activeFilePath ? 'active' : '']"
                         @click="$emit('set-active', file.path)"
                     >
-                        <span class="text-[10px]">{{ fileIcon(file.name) }}</span>
+                        <span class="editor-tab-icon" v-html="fileIcon(file.name)"></span>
                         <span>{{ file.name }}</span>
                         <span v-if="file.dirty" class="w-1.5 h-1.5 rounded-full bg-yellow-400 ml-0.5"></span>
                         <span class="close-btn" @click.stop="$emit('close-file', file.path)">&times;</span>
@@ -165,9 +170,10 @@ export default {
         lspClient: { type: Object, default: null },
         isMobile: { type: Boolean, default: false },
         expandedWidth: { type: Number, default: 500 },
+        diffRanges: { type: Object, default: null },
     },
 
-    emits: ['toggle-expanded', 'close-file', 'set-active', 'file-dirty', 'save-file', 'update-content'],
+    emits: ['toggle-expanded', 'close-file', 'set-active', 'file-dirty', 'save-file', 'update-content', 'clear-diff'],
 
     setup(props) {
         const { width: resizedWidth, isResizing, resizeHandleProps } = useResizable({
@@ -199,7 +205,12 @@ export default {
         return {
             editorView: null,
             saveStatus: '',
+            hasDiff: false,
             _saveStatusTimeout: null,
+            _langCompartment: new Compartment(),
+            _lspCompartment: new Compartment(),
+            _diffCompartment: new Compartment(),
+            _dirtyListener: null,
         };
     },
 
@@ -232,6 +243,14 @@ export default {
             if (this.expanded) {
                 this.$nextTick(() => this.updateEditor());
             }
+            // Re-apply diff for the new active file
+            this.$nextTick(() => {
+                if (this.diffRanges && this.diffRanges.addRanges?.length + this.diffRanges.removeRanges?.length > 0) {
+                    this._applyDiffToView(this.diffRanges);
+                } else {
+                    this._clearDiffFromView();
+                }
+            });
         },
         activeContent(newVal) {
             if (this.expanded) {
@@ -239,6 +258,15 @@ export default {
                 if (this.editorView && this.editorView.state.doc.toString() === newVal) return;
                 this.$nextTick(() => this.updateEditor());
             }
+        },
+        diffRanges(newRanges) {
+            this.$nextTick(() => {
+                if (newRanges && (newRanges.addRanges?.length + newRanges.removeRanges?.length > 0)) {
+                    this._applyDiffToView(newRanges);
+                } else {
+                    this._clearDiffFromView();
+                }
+            });
         },
     },
 
@@ -268,29 +296,17 @@ export default {
     },
 
     methods: {
-        _getExtensions(file) {
-            const lang = file ? getLang(file.name) : [];
-            const extensions = [
-                basicSetup, oneDark, lang,
-                EditorView.updateListener.of((tr) => {
-                    if (tr.docChanged && this.activeFilePath) {
-                        this.$emit('file-dirty', { path: this.activeFilePath });
-                    }
-                }),
-            ];
-
-            // Add LSP extensions if client is ready
+        _getLspExtensions() {
             if (this.lspClient && this.lspClient.ready && this.lspClient._documentUri) {
                 const uri = this.lspClient._documentUri;
-                extensions.push(
+                return [
                     lspDiagnostics(this.lspClient, uri),
                     lspSync(this.lspClient, uri),
                     autocompletion({ override: [lspCompletion(this.lspClient, uri)] }),
                     hoverTooltip(lspHover(this.lspClient, uri)),
-                );
+                ];
             }
-
-            return extensions;
+            return [];
         },
 
         mountEditor() {
@@ -299,12 +315,30 @@ export default {
 
             const file = this.activeFile;
             const content = file ? file.content : '';
+            const lang = file ? getLang(file.name) : [];
+            const lspExts = this._getLspExtensions();
+
+            this._dirtyListener = EditorView.updateListener.of((tr) => {
+                if (tr.docChanged && this.activeFilePath) {
+                    this.$emit('file-dirty', { path: this.activeFilePath });
+                    // Auto-clear diff when user edits
+                    if (this.hasDiff) {
+                        this._clearDiffFromView();
+                    }
+                }
+            });
 
             try {
                 this.editorView = new EditorView({
                     state: EditorState.create({
                         doc: content,
-                        extensions: this._getExtensions(file),
+                        extensions: [
+                            basicSetup, oneDark,
+                            this._langCompartment.of(lang),
+                            this._lspCompartment.of(lspExts),
+                            this._diffCompartment.of(diffExtension()),
+                            this._dirtyListener,
+                        ],
                     }),
                     parent: container,
                 });
@@ -322,22 +356,33 @@ export default {
             if (!file) return;
 
             try {
-                const newState = EditorState.create({
-                    doc: file.content,
-                    extensions: this._getExtensions(file),
-                });
-                this.editorView.setState(newState);
+                const currentContent = this.editorView.state.doc.toString();
+                const lang = getLang(file.name);
+                const lspExts = this._getLspExtensions();
+                const dispatches = [];
+
+                // Reconfigure language compartment
+                dispatches.push(this._langCompartment.reconfigure(lang));
+                // Reconfigure LSP compartment
+                dispatches.push(this._lspCompartment.reconfigure(lspExts));
+                // Note: _diffCompartment NO se reconfigura aquí — el StateField
+                // mapea las decoraciones automáticamente con decorations.map(tr.changes)
+
+                // Only replace document content if it actually changed
+                if (currentContent !== file.content) {
+                    dispatches.push({
+                        changes: {
+                            from: 0,
+                            to: currentContent.length,
+                            insert: file.content,
+                        },
+                    });
+                }
+
+                this.editorView.dispatch(...dispatches);
             } catch (e) {
                 console.error('[EditorSidebar] Error updating editor:', e);
             }
-            // Force CodeMirror to recalculate viewport after setState.
-            // Without this, syntax highlighting breaks when switching editor tabs.
-            requestAnimationFrame(() => {
-                if (this.editorView) {
-                    this.editorView.requestMeasure();
-                    this.editorView.update([]);
-                }
-            });
         },
 
         destroyEditor() {
@@ -345,12 +390,46 @@ export default {
                 this.editorView.destroy();
                 this.editorView = null;
             }
+            // Recreate compartments so next mountEditor starts fresh
+            this._langCompartment = new Compartment();
+            this._lspCompartment = new Compartment();
+            this._diffCompartment = new Compartment();
+            this._dirtyListener = null;
+            this.hasDiff = false;
         },
 
         handleSave() {
             if (!this.editorView || !this.activeFilePath) return;
             const content = this.editorView.state.doc.toString();
             this.$emit('save-file', { path: this.activeFilePath, content });
+        },
+
+        /**
+         * Show diff decorations from externally provided ranges.
+         * Called by app-vue.js after computing diff.
+         * @param {{ addRanges: Array, removeRanges: Array }} ranges
+         */
+        showDiff(ranges) {
+            this._applyDiffToView(ranges);
+        },
+
+        _applyDiffToView(ranges) {
+            if (!this.editorView) return;
+            applyDiffRanges(this.editorView, ranges);
+            this.hasDiff = true;
+        },
+
+        _clearDiffFromView() {
+            if (!this.editorView) return;
+            clearDiffDecorations(this.editorView);
+            this.hasDiff = false;
+        },
+
+        handleClearDiff() {
+            this._clearDiffFromView();
+            if (this.activeFilePath) {
+                this.$emit('clear-diff', { path: this.activeFilePath });
+            }
         },
 
         showSaveStatus(text) {
@@ -362,7 +441,7 @@ export default {
         },
 
         fileIcon(name) {
-            return fileIcon(name);
+            return fileIconSvg(name);
         },
     },
 };

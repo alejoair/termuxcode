@@ -152,6 +152,47 @@ def update_claude_md(cwd: str, session_id: str | None = None) -> bool:
         return False
 
 
+def build_message_context(cwd: str) -> str:
+    """Genera contexto dinámico para inyectar al inicio de cada mensaje del usuario.
+
+    Para agregar un provider nuevo, añadir una entrada a MESSAGE_CONTEXT_PROVIDERS:
+        ("nombre", requires_git, callable)
+
+    Args:
+        cwd: Directorio de trabajo del proyecto
+
+    Returns:
+        String con el contexto listo para prefijar al mensaje, o "" si no hay nada
+    """
+    from termuxcode.connection.context.system_provider import generate_system_context
+    from termuxcode.connection.context.git_provider import generate_git_status_context
+
+    # (nombre, requires_git, función)
+    MESSAGE_CONTEXT_PROVIDERS = [
+        ("system",     False, generate_system_context),
+        ("git_status", True,  generate_git_status_context),
+    ]
+
+    has_git = _is_git_repo(cwd)
+    parts = []
+
+    for name, requires_git, fn in MESSAGE_CONTEXT_PROVIDERS:
+        if requires_git and not has_git:
+            continue
+        try:
+            result = fn(cwd)
+            if result and result.strip():
+                parts.append(result.strip())
+        except Exception as e:
+            logger.debug(f"{name} provider falló en build_message_context: {e}")
+
+    if not parts:
+        return ""
+
+    combined = "\n\n".join(parts)
+    return f"<context>\n{combined}\n</context>\n\n"
+
+
 def list_active_providers() -> list[dict[str, Any]]:
     """Retorna metadata de todos los providers registrados (para debugging).
 

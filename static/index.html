@@ -380,6 +380,24 @@
             font-size: 12px;
         }
 
+        /* Diff inline in editor */
+        .editor-sidebar .cm-line.cm-diff-add {
+            background: rgba(34, 211, 238, 0.12) !important;
+            border-left: 3px solid rgba(34, 211, 238, 0.5);
+        }
+        .editor-sidebar .cm-diff-remove-widget {
+            background: rgba(244, 63, 94, 0.15);
+            border-left: 3px solid rgba(244, 63, 94, 0.6);
+            color: rgba(244, 63, 94, 0.8);
+            text-decoration: line-through;
+            padding: 0 4px 0 8px;
+            display: block;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre;
+            line-height: 1.5;
+        }
+
         /* LSP hover tooltip */
         .cm-lsp-hover {
             padding: 6px 10px;

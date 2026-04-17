@@ -17,7 +17,13 @@
   - `SettingsModal.js` - Modal de configuración con tools del backend
   - `McpModal.js` - Modal de servidores MCP con toggles
   - `PlanModal.js` - Modal para vista de contenido (file_view)
-  - `EditorSidebar.js` - Panel colapsable derecho con CodeMirror 6, tabs de archivos, dirty tracking, save (Ctrl+S)
+  - `EditorSidebar.js` - Panel colapsable derecho con CodeMirror 6, tabs de archivos, dirty tracking, save (Ctrl+S). Usa `Compartment` para reconfiguración de lenguaje/LSP sin perder syntax highlighting.
+  - `QuestionModal.js` - Modal de AskUserQuestion del SDK (preguntas al usuario)
+  - `ApprovalModal.js` - Modal de aprobación de tools del agente
+  - `FileViewModal.js` - Modal de vista de archivo (file_view)
+  - `FloatingActionButton.js` - Botón flotante genérico (mobile)
+  - `TypingIndicator.js` - Indicador visual "Claude está escribiendo..." (dots animados)
+  - `StatsDisplay.js` - Visualización de estadísticas por query (session stats expandible)
 - **Composables**:
   - `useTabs.js` - Gestión de pestañas (crear, cambiar, cerrar, serialización)
   - `useWebSocket.js` - Conexión WebSocket con reconexión automática
@@ -30,6 +36,14 @@
   - `useFiletree.js` - Estado global del árbol de archivos del proyecto (singleton)
   - `useEditorSidebar.js` - Estado global del editor (singleton, openFiles con dirty, markDirty/markClean)
   - `useIsMobile.js` - Singleton reactivo, detecta viewport < 768px via matchMedia
+  - `useModals.js` - Estado centralizado de todas las modales (question, approval, mcp, settings, fileView, plan). Singleton reactive.
+  - `useUiState.js` - Persistencia centralizada del estado de UI (isOpen/expanded de sidebars, expandedPaths, openFiles, levelFilter, scrollRatio). Key: `ccm_ui_state`.
+  - `useResizable.js` - Drag-resize reutilizable para sidebars. Persiste ancho en `ccm_settings_<key>`. Props: `{storageKey, defaultWidth, minWidth, maxWidth, side}`.
+  - `useTypewriter.js` - Efecto typewriter para el título del header
+  - `useHaptics.js` - Haptic feedback (vibración) para mobile: `vibrateSend`, `vibrateReceive`, `vibrateResult`
+  - `useFileIcons.js` - SVG icons para file tree (folder, file, extensiones específicas: py, js, ts, html, etc.)
+  - `WsLspClient.js` - Adaptador LspClient sobre el WebSocket principal (misma interfaz que `lsp-client.js` pero enruta vía WS). Usado por EditorSidebar para LSP integrado.
+  - `diff-extensions.js` - Extensiones CM6 para diff inline: `StateEffect` setDiff/clearDiff, `StateField` con `Decoration.line` (added) y `Decoration.widget` (removed). Exporta `diffExtension()`, `setDiffRanges()`, `clearDiffDecorations()`.
 
 ### Funcionalidades Implementadas
 
@@ -112,7 +126,7 @@ Recibe `tabs` (de `useTabs`) y retorna `{ state, inputMessage }`:
 - **Props reactivas en template inline**: `createApp({ setup() }).mount('#app')` con template en HTML externo no re-renderiza hijos cuando cambian refs del `setup()`. Workaround: envolver en `reactive({ get prop() { return ref.value } })` y pasar el reactive como prop.
 - **Template string vs HTML inline**: Los componentes hijos registrados con `components: {}` no se resuelven desde templates inline del HTML. Solución: usar `template:` string en JS y `app.component()` para registro global.
 - **Tailwind CDN + Vue templates**: Las clases dinámicas en `:class` sí funcionan con Tailwind CDN (MutationObserver detecta cambios en el DOM).
-- **CodeMirror `setState()` destruye el editor**: Llamar `editorView.setState(EditorState.create({...}))` reemplaza todo el estado (syntax highlighting, cursor, scroll). Nunca llamar cuando el contenido no cambió. En el watcher `activeContent`, comparar con `editorView.state.doc.toString()` antes de actualizar.
+- **CodeMirror `setState()` destruye el editor**: Llamar `editorView.setState(EditorState.create({...}))` reemplaza todo el estado (syntax highlighting, cursor, scroll). **Solución**: usar `Compartment` para extensiones dinámicas (lenguaje, LSP) y `dispatch()` con `compartment.reconfigure()` + `changes` para actualizar contenido sin destruir el estado. Al cambiar de tab: `_langCompartment.reconfigure(newLang)` + `_lspCompartment.reconfigure(newLspExts)` + `changes` solo si el contenido difiere. `destroyEditor()` debe recrear los compartments con `new Compartment()`.
 
 ### Patron: Sidebars Colapsables
 
@@ -132,18 +146,16 @@ Patron fijo de 7 capas para sidebars (paneles laterales izq/der con toggle en he
 |---------|------|------------|------------|-------|
 | LogSidebar | Izq | `useServerLogs.js` | `LogSidebar.js` | `log_handler.py` → CustomEvent `server-log` |
 | FiletreeSidebar | Izq | `useFiletree.js` | `FiletreeSidebar.js` | filetree del proyecto |
-| EditorSidebar | Der | `useEditorSidebar.js` | `EditorSidebar.js` | archivos del proyecto; slim (48px) / expanded (500px); dirty tracking + save |
+| EditorSidebar | Der | `useEditorSidebar.js` | `EditorSidebar.js` | archivos del proyecto; slim (48px) / expanded (resizable 300-900px); dirty tracking + save; Compartment para lang/LSP |
 | TasksSidebar | Der | `useTasksSidebar.js` | `TasksSidebar.js` | reutiliza `todo_update`; slim (48px) / expanded (320px) |
 
 ### Pendientes
-- Conectar handlers faltantes: `question`, `tool_approval_request`
 - Montar `FloatingActionButton`
 - Importar `useTypewriter`, `useHaptics`
-- Implementar modales faltantes: `question`, `approval`
 
 ### Archivos Modificados
 - `static/index.html` - Solo mount point + CSS + scripts. CSS transitions para `.sidebar` (izquierda) y `.sidebar-right` (derecha).
-- `static/js/app-vue.js` - Template string del root, componentes globales, coordina composables y handlers de mensajes. Handlers de editor: `handleFileDirty`, `handleSaveFile` (PUT /api/file), `handleEditorContentUpdate`
+- `static/js/app-vue.js` - Template string del root, componentes globales, coordina composables y handlers de mensajes. Handlers de editor: `handleFileDirty`, `handleSaveFile` (PUT /api/file), `handleEditorContentUpdate`, `handleClearDiff`. Intercepta `tool_use` Write/Edit para capturar before/after y computar diff inline.
 - `static/js/components/AppHeader.js` - Header con tabs, recibe `state` + props de sidebars (log, filetree, todo, tasks), botones toggle
 - `static/js/components/LogSidebar.js` - Panel colapsable izquierdo de logs del servidor (filtro por nivel, auto-scroll, badges de errores/warnings)
 - `static/js/components/FiletreeSidebar.js` - Panel colapsable izquierdo de árbol de archivos del proyecto
@@ -155,15 +167,29 @@ Patron fijo de 7 capas para sidebars (paneles laterales izq/der con toggle en he
 - `static/js/components/SettingsModal.js` - Modal de configuración. La lista de tools viene del backend vía `tools_list` (solo builtins), no hardcodeada. Cada tool muestra `name` y tooltip con `desc`.
 - `static/js/components/McpModal.js` - Modal de servidores MCP con toggles enable/disable
 - `static/js/components/PlanModal.js` - Modal de vista de contenido (file_view)
-- `static/js/components/EditorSidebar.js` - Panel colapsable derecho con CodeMirror 6. Tabs de archivos, dirty tracking (punto amarillo ●), botón save, Ctrl+S/Cmd+S, `updateListener` detecta edits, preservación de contenido al cambiar tab. Emits: `file-dirty`, `save-file`, `update-content`.
+- `static/js/components/EditorSidebar.js` - Panel colapsable derecho con CodeMirror 6. Tabs de archivos, dirty tracking (punto amarillo ●), botón save, Ctrl+S/Cmd+S, `updateListener` detecta edits, preservación de contenido al cambiar tab. Usa `Compartment` para lenguaje/LSP/diff. Diff inline con `_diffCompartment`, auto-clear al editar, botón ✕ para descartar diff. Emits: `file-dirty`, `save-file`, `update-content`, `clear-diff`.
 - `static/js/composables/useSharedState.js` - Estado reactivo compartido centralizado
 - `static/js/composables/useServerLogs.js` - Estado global de logs del servidor (singleton, filteredLogs computed, levelFilter)
 - `static/js/composables/useTodoSidebar.js` - Estado global de todos (singleton, `todos`, `isOpen`, `setTodos`, `toggleSidebar`)
 - `static/js/composables/useTasksSidebar.js` - Estado global de tasks con slim/expanded (singleton, `tasks`, `isOpen`, `expanded`, computed counts/progress)
 - `static/js/composables/useFiletree.js` - Estado global del árbol de archivos (singleton)
-- `static/js/composables/useEditorSidebar.js` - Estado global del editor (singleton). `openFiles` con campo `dirty`, métodos `markDirty(path)` / `markClean(path)`. Archivo default `welcome.py` precargado.
-- `static/js/composables/useMessages.js` - Procesamiento de mensajes (assistant, tool_use, tool_result)
+- `static/js/composables/useEditorSidebar.js` - Estado global del editor (singleton). `openFiles` con campo `dirty`, métodos `markDirty(path)` / `markClean(path)`. Estado diff por archivo: `setDiffRanges`, `getDiffRanges`, `clearDiff`. Archivo default `welcome.py` precargado.
+- `static/js/composables/useMessages.js` - Procesamiento de mensajes (assistant, tool_use, tool_result). Myers diff O(ND) en `computeLineDiff()`, wrapper legacy `computeDiffLines()` para MessageList.
 - `static/js/composables/useTabs.js` - Gestión de pestañas. Cada tab tiene `builtinTools`, `toolsReady` (análogo a `mcpServers`, `mcpReady`) que se llenan al recibir `tools_list` del backend y se resetean al deserializar de localStorage.
+- `static/js/composables/useModals.js` - Estado centralizado de modales (singleton reactive). Props: `question`, `approval`, `mcp`, `settings`, `fileView`, `plan`.
+- `static/js/composables/useUiState.js` - Persistencia de estado de UI en `ccm_ui_state`. Sidebars (isOpen/expanded), expandedPaths, openFiles, levelFilter, scrollRatio.
+- `static/js/composables/useResizable.js` - Drag-resize reutilizable para sidebars. Persiste en `ccm_settings_<key>`.
+- `static/js/composables/useTypewriter.js` - Efecto typewriter para título del header
+- `static/js/composables/useHaptics.js` - Haptic feedback para mobile (vibración)
+- `static/js/composables/useFileIcons.js` - SVG icons para file tree por extensión
+- `static/js/composables/WsLspClient.js` - Adaptador LspClient sobre WebSocket principal. Misma interfaz que `lsp-client.js` pero enruta vía WS del app.
+- `static/js/components/QuestionModal.js` - Modal de AskUserQuestion del SDK
+- `static/js/components/ApprovalModal.js` - Modal de aprobación de tools
+- `static/js/components/FileViewModal.js` - Modal de vista de archivo
+- `static/js/components/FloatingActionButton.js` - Botón flotante genérico (mobile)
+- `static/js/components/TypingIndicator.js` - Indicador visual "escribiendo..."
+- `static/js/components/StatsDisplay.js` - Estadísticas por query expandible
+- `static/js/editor/diff-extensions.js` - Extensiones CM6 para diff inline. `StateEffect` setDiff/clearDiff, `StateField` con `Decoration.line` (adds) y `Decoration.widget` con `RemovedLineWidget` (removes).
 
 ---
 
@@ -193,7 +219,7 @@ Dependencia clave: `claude-agent-sdk` - SDK de Python que spawnea un subproceso 
 | `termuxcode/connection/session.py` | `Session` - posee todos los recursos por pestaña (SDK, LSP, handlers) |
 | `termuxcode/connection/session_registry.py` | Dict global `session_id -> WebSocketConnection` para reconexión |
 | `termuxcode/connection/sdk_client.py` | `SDKClient` - wrapper de `claude-agent-sdk.ClaudeSDKClient` |
-| `termuxcode/connection/message_processor.py` | Consume cola de mensajes, envía queries al SDK, streamea respuestas |
+| `termuxcode/connection/message_processor.py` | Consume cola de mensajes, envía queries al SDK, streamea respuestas. En `_handle_query`: trunca historial, actualiza CLAUDE.md, **prefixa contexto dinámico al mensaje** (`build_message_context`), luego envía al SDK. |
 | `termuxcode/connection/sender.py` | `MessageSender` - envía mensajes al frontend, buffer cuando desconectado |
 | `termuxcode/connection/ask_handler.py` | Flujo bidireccional de AskUserQuestion |
 | `termuxcode/connection/tool_approval_handler.py` | Flujo de aprobación de tools |
@@ -335,31 +361,62 @@ async def my_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 ---
 
-## Sistema de Context Providers para CLAUDE.md
+## Sistema de Context Providers
 
-Inyecta info actualizada del proyecto en `CLAUDE.md` antes de cada query del SDK. `message_processor._handle_query()` llama `update_claude_md(cwd, session_id)`, que ejecuta todos los providers registrados y **REEMPLAZA** la sección `## Project Context (Auto-generated)` (no duplica).
+Hay **dos mecanismos** para inyectar contexto del proyecto en cada query, ambos orquestados desde `claude_md_manager.py`:
+
+### Mecanismo 1: CLAUDE.md (estático por sesión)
+
+`update_claude_md(cwd, session_id)` — ejecuta todos los providers registrados y **REEMPLAZA** la sección `## Project Context (Auto-generated)` en el CLAUDE.md del proyecto. Claude lo lee al inicio de la sesión. Útil para contexto estructural que no cambia frecuentemente.
+
+### Mecanismo 2: Prefijo de mensaje (dinámico por query)
+
+`build_message_context(cwd)` — ejecuta un subconjunto de providers y devuelve el resultado como string que se **prefixa al inicio de cada mensaje del usuario**, envuelto en `<context>...</context>`. El LLM recibe contexto actualizado en cada query sin depender de cuándo leyó el CLAUDE.md.
+
+```
+<context>
+### System Info
+- Date/Time: 2026-04-16 14:23:01 ...
+
+### Git Status
+  M static/js/app-vue.js
+</context>
+
+<mensaje del usuario>
+```
+
+Para agregar un provider al prefijo de mensaje, añadir una entrada a `MESSAGE_CONTEXT_PROVIDERS` dentro de `build_message_context()`:
+```python
+MESSAGE_CONTEXT_PROVIDERS = [
+    ("system",     False, generate_system_context),
+    ("git_status", True,  generate_git_status_context),
+    ("mi_provider", False, mi_funcion),   # ← una línea
+]
+```
+Formato de cada tupla: `(nombre_para_logs, requires_git, callable(cwd) -> str)`.
 
 ### Arquitectura
 
 ```
 termuxcode/connection/
-├── claude_md_manager.py       # Orquesta providers, actualiza CLAUDE.md
+├── claude_md_manager.py       # update_claude_md() + build_message_context()
 └── context/
     ├── __init__.py            # Registry con decorador @register_context_provider
+    ├── system_provider.py     # OS, usuario, fecha/hora, Python, shell
     ├── filetree_provider.py   # File tree + estadísticas
     └── git_provider.py        # Git info (branch, commits, status)
 ```
 
 ### Providers Implementados
 
-| Provider | Prioridad | Req. Git | Descripción |
-|----------|-----------|----------|-------------|
-| `generate_system_context` | 5 | No | OS, usuario, fecha, Python, shell |
-| `generate_extended_system_context` | 6 | No | Variables de entorno (PATH, LANG, TERM) |
-| `generate_filetree_context` | 10 | No | Árbol de archivos (profundidad 3) |
-| `generate_stats_context` | 20 | No | Estadísticas (Python/JS/TS files) |
-| `generate_git_context` | 30 | Sí | Branch actual + últimos 3 commits |
-| `generate_git_status_context` | 31 | Sí | Archivos modificados |
+| Provider | Prioridad | Req. Git | Descripción | En mensaje |
+|----------|-----------|----------|-------------|------------|
+| `generate_system_context` | 5 | No | OS, usuario, fecha, Python, shell | ✅ |
+| `generate_extended_system_context` | 6 | No | Variables de entorno (PATH, LANG, TERM) | — |
+| `generate_filetree_context` | 10 | No | Árbol de archivos (profundidad 3) | — |
+| `generate_stats_context` | 20 | No | Estadísticas (Python/JS/TS files) | — |
+| `generate_git_context` | 30 | Sí | Branch actual + últimos 3 commits | — |
+| `generate_git_status_context` | 31 | Sí | Archivos modificados | ✅ |
 
 ### Patrón: Crear un Context Provider
 
@@ -372,7 +429,8 @@ def generate_mi_context(cwd: str) -> str:
     return "### Mi Sección\n\n- **Dato**: valor"
 ```
 
-2. Importar en `claude_md_manager.py`: `from termuxcode.connection.context import mi_provider  # noqa: F401`
+2. Para CLAUDE.md: importar en `claude_md_manager.py`: `from termuxcode.connection.context import mi_provider  # noqa: F401`
+3. Para prefijo de mensaje: añadir a `MESSAGE_CONTEXT_PROVIDERS` en `build_message_context()`
 
 **Reglas**:
 - Prioridades: 1-10 crítica, 10-30 estructura, 30-50 git, 50-100 custom
@@ -398,7 +456,8 @@ Browser (CodeMirror 6)
   ├── css/editor-tests.css       ← Estilos (Catppuccin Mocha theme)
   ├── js/editor/
   │   ├── lsp-client.js          ← LspClient (JSON-RPC over WebSocket)
-  │   └── lsp-extensions.js      ← Extensiones CM6 (diagnostics, completion, hover, sync)
+  │   ├── lsp-extensions.js      ← Extensiones CM6 (diagnostics, completion, hover, sync)
+  │   └── diff-extensions.js     ← Extensiones CM6 diff inline (added lines green bg, removed lines red strikethrough widgets)
   │
   └── WebSocket ──→ lsp_proxy.py (puerto 2087) ──→ ty/ruff (stdio)
 ```
@@ -485,6 +544,7 @@ Todas las dependencias se cargan desde esm.sh sin bundler:
 | Paquete | Versión | Uso |
 |---------|---------|-----|
 | `codemirror` | 6.0.2 | `EditorView`, `basicSetup` |
+| `@codemirror/state` | 6 | `EditorState`, `Compartment` (reconfiguración dinámica de extensiones sin `setState`) |
 | `@codemirror/lang-python` | 6 | Syntax highlighting Python |
 | `@codemirror/lang-javascript` | 6 | Syntax highlighting JS/TS |
 | `@codemirror/lang-html` | 6 | Syntax highlighting HTML |

@@ -1,6 +1,7 @@
 // Componente: Filetree Sidebar (panel izquierdo siempre visible, slim/expanded modes)
 import { computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 import { useResizable } from '../composables/useResizable.js';
+import { getFileIcon, getFolderIcon } from '../composables/useFileIcons.js';
 
 export default {
     template: `
@@ -38,7 +39,8 @@ export default {
                             class="flex items-center justify-center"
                             :title="node.name"
                         >
-                            <span class="text-xs">{{ nodeIcon(node) }}</span>
+                            <svg v-if="node.type === 'dir'" class="w-3.5 h-3.5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="getFolderIcon(false)"></svg>
+                            <svg v-else class="w-3.5 h-3.5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="nodeIcon(node)"></svg>
                         </div>
                     </div>
                     <!-- Count badge -->
@@ -143,17 +145,11 @@ export default {
     },
 
     methods: {
+        getFolderIcon,
         nodeIcon(node) {
-            if (node.type === 'dir') return '\uD83D\uDCC1';
+            if (node.type === 'dir') return getFolderIcon(false);
             const ext = node.name.split('.').pop().toLowerCase();
-            const map = {
-                js: '\uD83D\uDCDC', ts: '\uD83D\uDCDC', py: '\uD83D\uDC0D',
-                json: '{ }', md: '\uD83D\uDCDD', html: '\uD83C\uDF10',
-                css: '\uD83C\uDFA8', vue: '\uD83D\uDE80', yml: '\u2699\uFE0F',
-                yaml: '\u2699\uFE0F', sh: '\uD83D\uDDA5\uFE0F', bash: '\uD83D\uDDA5\uFE0F',
-                txt: '\uD83D\uDCD4', env: '\uD83D\uDD10', gitignore: '\uD83D\uDD10',
-            };
-            return map[ext] || '\uD83D\uDCC4';
+            return getFileIcon(ext);
         },
     },
 };
@@ -180,8 +176,8 @@ const FiletreeNode = {
                 </svg>
                 <span v-else class="w-3 flex-shrink-0"></span>
 
-                <!-- Icono -->
-                <span class="flex-shrink-0">{{ icon }}</span>
+                <!-- Icono SVG -->
+                <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="icon"></svg>
 
                 <!-- Nombre -->
                 <span class="truncate">{{ node.name }}</span>
@@ -216,17 +212,10 @@ const FiletreeNode = {
         },
         icon() {
             if (this.node.type === 'dir') {
-                return this.isExpanded ? '\uD83D\uDCC2' : '\uD83D\uDCC1';
+                return getFolderIcon(this.isExpanded);
             }
             const ext = this.node.name.split('.').pop().toLowerCase();
-            const map = {
-                js: '\uD83D\uDCDC', ts: '\uD83D\uDCDC', py: '\uD83D\uDC0D',
-                json: '{ }', md: '\uD83D\uDCDD', html: '\uD83C\uDF10',
-                css: '\uD83C\uDFA8', vue: '\uD83D\uDE80', yml: '\u2699\uFE0F',
-                yaml: '\u2699\uFE0F', sh: '\uD83D\uDDA5\uFE0F', bash: '\uD83D\uDDA5\uFE0F',
-                txt: '\uD83D\uDCD4', env: '\uD83D\uDD10', gitignore: '\uD83D\uDD10',
-            };
-            return map[ext] || '\uD83D\uDCC4';
+            return getFileIcon(ext);
         },
     },
 };

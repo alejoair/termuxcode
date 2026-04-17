@@ -11,6 +11,9 @@ const expanded = ref(false);
 // Singleton LSP client
 const lspClient = new WsLspClient();
 
+// Diff state: path → { ranges: { addRanges, removeRanges } }
+const diffState = ref({});
+
 // Flag para inicialización desde estado persistido
 let _initialized = false;
 
@@ -180,6 +183,26 @@ export function useEditorSidebar() {
         _lspOpenFile(file.path, file.content, file.language);
     }
 
+    // ── Diff state ────────────────────────────────────────────
+
+    function setDiffRanges(path, ranges) {
+        diffState.value = { ...diffState.value, [path]: ranges };
+    }
+
+    function getDiffRanges(path) {
+        return diffState.value[path] || null;
+    }
+
+    function clearDiff(path) {
+        const next = { ...diffState.value };
+        delete next[path];
+        diffState.value = next;
+    }
+
+    function clearAllDiffs() {
+        diffState.value = {};
+    }
+
     /**
      * Inicializa el estado del editor desde datos persistidos.
      * Se llama una vez desde useUiState.restore() antes del primer render.
@@ -253,5 +276,10 @@ export function useEditorSidebar() {
         handleLspMessage,
         getLspClient,
         reconnectLsp,
+        // Diff
+        setDiffRanges,
+        getDiffRanges,
+        clearDiff,
+        clearAllDiffs,
     };
 }

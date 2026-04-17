@@ -5,65 +5,131 @@ import { ref, computed, nextTick } from 'https://unpkg.com/vue@3/dist/vue.esm-br
 const MAX_RENDERED_MESSAGES = 200;
 
 /**
- * Computa líneas de diff entre old_string y new_string.
+ * Myers diff O(ND) — retorna diff de líneas.
+ * [{type: 'equal'|'remove'|'add', oldLine: number, newLine: number, content: string}]
+ * oldLine/newLine son 0-based (null si no aplica al lado).
+ */
+export function computeLineDiff(oldStr, newStr) {
+    const oldLines = (oldStr || '').split('\n');
+    const newLines = (newStr || '').split('\n');
+    if (oldLines.length > 0 && oldLines[oldLines.length - 1] === '') oldLines.pop();
+    if (newLines.length > 0 && newLines[newLines.length - 1] === '') newLines.pop();
+
+    const N = oldLines.length;
+    const M = newLines.length;
+    const MAX = N + M;
+    if (MAX === 0) return [];
+
+    // Myers algorithm
+    const V = new Array(2 * MAX + 1);
+    const trace = [];
+    V[MAX + 1] = 0;
+
+    outer:
+    for (let D = 0; D <= MAX; D++) {
+        const v = new Array(2 * MAX + 1);
+        for (let k = -D; k <= D; k += 2) {
+            let x;
+            if (k === -D || (k !== D && V[MAX + k - 1] < V[MAX + k + 1])) {
+                x = V[MAX + k + 1]; // down (add)
+            } else {
+                x = V[MAX + k - 1] + 1; // right (remove)
+            }
+            let y = x - k;
+            while (x < N && y < M && oldLines[x] === newLines[y]) {
+                x++; y++;
+            }
+            v[MAX + k] = x;
+            if (x >= N && y >= M) {
+                trace.push(v.slice());
+                break outer;
+            }
+        }
+        trace.push(v.slice());
+        for (let i = 0; i < v.length; i++) V[i] = v[i] ?? V[i];
+    }
+
+    // Backtrack to get edit script
+    let x = N, y = M;
+    const edits = [];
+    for (let D = trace.length - 1; D > 0; D--) {
+        const v = trace[D];
+        const vPrev = trace[D - 1];
+        let k = x - y;
+        let prevK;
+        if (k === -D || (k !== D && (vPrev[MAX + k - 1] ?? 0) < (vPrev[MAX + k + 1] ?? 0))) {
+            prevK = k + 1; // down (add)
+        } else {
+            prevK = k - 1; // right (remove)
+        }
+
+        const prevX = vPrev[MAX + prevK] ?? 0;
+        const prevY = prevX - prevK;
+
+        // Diagonal (equal)
+        while (x > prevX && y > prevY) {
+            x--; y--;
+            edits.push({ type: 'equal', oldLine: x, newLine: y });
+        }
+
+        if (D > 0) {
+            if (x === prevX) {
+                y--;
+                edits.push({ type: 'add', oldLine: null, newLine: y, content: newLines[y] });
+            } else {
+                x--;
+                edits.push({ type: 'remove', oldLine: x, newLine: null, content: oldLines[x] });
+            }
+        }
+    }
+    // Remaining diagonal at D=0
+    while (x > 0 && y > 0) {
+        x--; y--;
+        edits.push({ type: 'equal', oldLine: x, newLine: y });
+    }
+
+    edits.reverse();
+
+    // Fill content for equal lines
+    for (const e of edits) {
+        if (e.type === 'equal') {
+            e.content = oldLines[e.oldLine];
+        }
+    }
+
+    return edits;
+}
+
+/**
+ * Computa líneas de diff entre old_string y new_string (formato legacy para MessageList).
  * Retorna array de { type: 'context'|'remove'|'add', sign: ' '|'-'|'+', lineNum, content }
  */
 export function computeDiffLines(oldStr, newStr) {
-    const oldLines = (oldStr || '').split('\n');
-    const newLines = (newStr || '').split('\n');
-
-    // Strip trailing empty line from trailing newline
-    if (oldLines.length > 1 && oldLines[oldLines.length - 1] === '') oldLines.pop();
-    if (newLines.length > 1 && newLines[newLines.length - 1] === '') newLines.pop();
-
+    const lines = computeLineDiff(oldStr, newStr);
     const result = [];
+    let lastType = null;
 
-    // Find common prefix length
-    let prefixLen = 0;
-    const minLen = Math.min(oldLines.length, newLines.length);
-    while (prefixLen < minLen && oldLines[prefixLen] === newLines[prefixLen]) {
-        prefixLen++;
-    }
-
-    // Find common suffix length (don't overlap with prefix)
-    let suffixLen = 0;
-    while (
-        suffixLen < (oldLines.length - prefixLen) &&
-        suffixLen < (newLines.length - prefixLen) &&
-        oldLines[oldLines.length - 1 - suffixLen] === newLines[newLines.length - 1 - suffixLen]
-    ) {
-        suffixLen++;
-    }
-
-    const contextBefore = Math.min(1, prefixLen);
-    const contextAfter = Math.min(1, suffixLen);
-
-    // Context lines before the change
-    for (let i = prefixLen - contextBefore; i < prefixLen; i++) {
-        if (i >= 0) {
-            result.push({ type: 'context', sign: ' ', lineNum: i + 1, content: oldLines[i] });
+    for (const line of lines) {
+        // Add context line before change block (1 line)
+        if ((line.type === 'remove' || line.type === 'add') && lastType === 'equal') {
+            const prev = result[result.length - 1];
+            if (prev && prev.type === 'context') {
+                // already there from last equal
+            }
         }
-    }
 
-    // Removed lines
-    const removeStart = prefixLen;
-    const removeEnd = oldLines.length - suffixLen;
-    for (let i = removeStart; i < removeEnd; i++) {
-        result.push({ type: 'remove', sign: '-', lineNum: i + 1, content: oldLines[i] });
-    }
-
-    // Added lines
-    const addStart = prefixLen;
-    const addEnd = newLines.length - suffixLen;
-    for (let i = addStart; i < addEnd; i++) {
-        result.push({ type: 'add', sign: '+', lineNum: i + 1, content: newLines[i] });
-    }
-
-    // Context lines after the change
-    for (let i = oldLines.length - suffixLen; i < oldLines.length - suffixLen + contextAfter; i++) {
-        if (i < oldLines.length) {
-            result.push({ type: 'context', sign: ' ', lineNum: i + 1, content: oldLines[i] });
+        switch (line.type) {
+            case 'equal':
+                result.push({ type: 'context', sign: ' ', lineNum: (line.oldLine ?? 0) + 1, content: line.content });
+                break;
+            case 'remove':
+                result.push({ type: 'remove', sign: '-', lineNum: (line.oldLine ?? 0) + 1, content: line.content });
+                break;
+            case 'add':
+                result.push({ type: 'add', sign: '+', lineNum: (line.newLine ?? 0) + 1, content: line.content });
+                break;
         }
+        lastType = line.type;
     }
 
     return result;
