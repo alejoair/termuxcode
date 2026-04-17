@@ -306,8 +306,21 @@ export function useMessages() {
                 tab.renderedMessages.push(message);
             }
         }
-        // No agregar result (ya se procesan sus bloques arriba)
-        else if (message.type !== 'result') {
+        // Result: adjuntar stats al último mensaje assistant text
+        else if (message.type === 'result') {
+            const lastTextIdx = tab.renderedMessages.map(m => m.type).lastIndexOf('text');
+            if (lastTextIdx !== -1 && message.usage) {
+                const existing = tab.renderedMessages[lastTextIdx];
+                tab.renderedMessages.splice(lastTextIdx, 1, {
+                    ...existing,
+                    queryStats: {
+                        inputTokens: message.usage.input_tokens || 0,
+                        outputTokens: message.usage.output_tokens || 0,
+                    },
+                });
+            }
+        }
+        else {
             tab.renderedMessages.push(message);
         }
 

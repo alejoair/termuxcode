@@ -45,7 +45,7 @@ class MessageConverter:
             "type": "assistant",
             "model": getattr(msg, "model", "unknown"),
             "blocks": blocks,
-            "usage": msg.usage,
+            "usage": getattr(msg, "usage", None),
         }
 
     @staticmethod

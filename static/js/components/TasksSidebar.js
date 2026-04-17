@@ -148,6 +148,10 @@ export default {
 
                 <!-- Stats section -->
                 <div v-if="stats" class="border-t border-border flex-shrink-0">
+                    <div class="flex items-center justify-between px-3 py-1.5 border-b border-border/50">
+                        <span class="text-xs font-semibold text-muted">Session Stats</span>
+                        <span class="text-[10px] font-mono text-muted">{{ stats.queryCount }} queries</span>
+                    </div>
                     <div class="px-3 py-1.5 space-y-0.5 text-[10px]">
                         <!-- Totals -->
                         <div class="flex items-center justify-between">
@@ -177,10 +181,6 @@ export default {
                         <div v-if="stats.totalApiDurationMs > 0" class="flex items-center justify-between">
                             <span class="text-muted">API time:</span>
                             <span class="text-txt font-mono">{{ formatDuration(stats.totalApiDurationMs) }}</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-muted">Queries:</span>
-                            <span class="text-txt font-mono">{{ stats.queryCount }}</span>
                         </div>
                     </div>
 

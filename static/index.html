@@ -116,6 +116,24 @@
             border-left: 3px solid var(--color-accent);
         }
 
+        .query-stats-badge {
+            position: absolute;
+            top: 0.4rem;
+            right: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.625rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            color: var(--color-text);
+            opacity: 0.45;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+        .message.assistant:hover .query-stats-badge {
+            opacity: 0.85;
+        }
+
         .message.system .bubble {
             background-color: transparent;
             color: var(--color-text-muted);

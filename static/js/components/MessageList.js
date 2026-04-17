@@ -54,8 +54,13 @@ export default {
                     </div>
 
                     <!-- Content -->
-                    <div class="bubble">
-                        <!-- Assistant text with markdown (msg.type === 'text') -->
+                    <div class="bubble" style="position:relative;">
+                        <!-- Per-query stats badge (top-right corner of assistant text) -->
+                        <div v-if="msg.type === 'text' && msg.queryStats" class="query-stats-badge">
+                            <span title="Input tokens">{{ formatTokens(msg.queryStats.inputTokens) }} in</span>
+                            <span class="text-border">|</span>
+                            <span title="Output tokens">{{ formatTokens(msg.queryStats.outputTokens) }} out</span>
+                        </div>
                         <div
                             v-if="msg.type === 'text' && msg.html"
                             class="markdown-content"
@@ -322,6 +327,12 @@ export default {
             return content;
         }
 
+        function formatTokens(n) {
+            if (!n) return '0';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+            return String(n);
+        }
+
         // Manejar accordion toggle
         onMounted(() => {
             if (!container.value) return;
@@ -386,6 +397,7 @@ export default {
             scrollToBottom,
             getDiffLines,
             truncateContent,
+            formatTokens,
         };
     },
 };
