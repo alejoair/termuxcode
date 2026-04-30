@@ -18,9 +18,9 @@ from cryptography.hazmat.primitives import serialization
 import datetime
 
 PORT = 1988
-BASE_DIR = Path(__file__).parent.parent.absolute()
-STATIC_DIR = BASE_DIR / "static"
-CERT_DIR = BASE_DIR / ".certs"
+_PKG_DIR = Path(__file__).parent.absolute()
+STATIC_DIR = _PKG_DIR / "static"
+CERT_DIR = _PKG_DIR / ".certs"
 
 
 def generate_self_signed_cert():

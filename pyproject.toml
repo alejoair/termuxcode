@@ -29,6 +29,12 @@ Repository = "https://github.com/alejoair/termuxcode"
 where = ["."]
 include = ["termuxcode*"]
 
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.setuptools.package-data]
+termuxcode = ["static/**/*"]
+
 [project.scripts]
 termuxcode = "termuxcode.cli:main"
 

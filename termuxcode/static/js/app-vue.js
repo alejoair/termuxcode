@@ -1009,8 +1009,10 @@ const app = createApp({
                         tabs.switchTab(allTabs[0].id);
                     }
 
-                    // Reconectar todos los tabs — si no tienen sessionId, el backend crea sesión nueva
+                    // Reconectar tabs — en Tauri solo los que tienen cwd válido
+                    const isTauri = window.location.protocol === 'tauri:';
                     allTabs.forEach(tab => {
+                        if (isTauri && !tab.cwd) return; // sin cwd en Tauri = no reconectar
                         ws.connectTab(tab, handleMessage);
                     });
                 }

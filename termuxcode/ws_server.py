@@ -41,7 +41,7 @@ async def handle_connection(websocket: Any) -> None:
     if cwd_raw:
         cwd = normalize_path(unquote(cwd_raw))
     else:
-        cwd = normalize_path(os.environ['TERMUXCODE_CWD'])
+        cwd = normalize_path(os.environ.get('TERMUXCODE_CWD', os.getcwd()))
 
     # Verificar si es una reconexión de sesión existente
     if resume_id:

@@ -2,7 +2,9 @@
 
 import { ref } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
-const TERMINAL_WS_URL = `ws://${window.location.hostname}:2088`;
+const TERMINAL_WS_URL = window.location.protocol === 'tauri:'
+    ? 'ws://localhost:2088'
+    : `ws://${window.location.hostname}:2088`;
 
 // Singleton state (module-level)
 const isOpen = ref(false);

@@ -11,8 +11,7 @@ from typing import Any
 from urllib.parse import urlparse, parse_qs
 
 PORT = 1988
-BASE_DIR = Path(__file__).parent.parent.absolute()
-STATIC_DIR = BASE_DIR / "static"
+STATIC_DIR = Path(__file__).parent.absolute() / "static"
 
 
 class ChatHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
