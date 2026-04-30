@@ -442,7 +442,7 @@ Ejemplos:
     parser.add_argument(
         "--version", "-v",
         action="version",
-        version="termuxcode 1.1.3"
+        version="termuxcode 1.1.4"
     )
 
     parser.add_argument(
