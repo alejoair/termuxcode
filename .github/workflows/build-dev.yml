@@ -26,19 +26,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # --- Sync version from git tag (or 0.0.0-dev for branch builds) ---
+      # --- Sync version from git tag (or derive from latest tag for branch builds) ---
       - name: Sync version from git tag
         shell: bash
         run: |
           if [[ "$GITHUB_REF_NAME" == v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="0.0.1-dev"
+            # Derive numeric version: latest tag + patch bump (e.g. 1.1.4 -> 1.1.5)
+            LATEST=$(git tag --sort=-v:refname | head -1 | sed 's/^v//')
+            MAJOR=$(echo "$LATEST" | cut -d. -f1)
+            MINOR=$(echo "$LATEST" | cut -d. -f2)
+            PATCH=$(echo "$LATEST" | cut -d. -f3)
+            VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))-dev$(git rev-list --count HEAD)"
           fi
           echo "Syncing version: $VERSION"
+          # For MSI compatibility, keep a numeric-only version in tauri.conf.json
+          VERSION_NUMERIC=$(echo "$VERSION" | sed 's/-.*//')
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION_NUMERIC\"/" src-tauri/tauri.conf.json
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
           sed -i "s/version=\"termuxcode [^\"]*\"/version=\"termuxcode $VERSION\"/" termuxcode/cli.py
