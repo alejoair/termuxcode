@@ -25,6 +25,13 @@ class ChatHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         """Log personalizado más limpio."""
         print(f"[HTTP] {self.address_string()} - {self.path}")
 
+    def end_headers(self) -> None:
+        """Inject no-cache headers on all responses."""
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
+
     def do_GET(self) -> None:
         """Override: intercept /api/file, delegate the rest to static file serving."""
         if self.path.startswith('/api/file'):
@@ -131,9 +138,12 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 def main() -> None:
-    with ThreadedHTTPServer(("", PORT), ChatHTTPRequestHandler) as httpd:
-        print(f"[HTTP] Servidor corriendo en http://localhost:{PORT}")
-        print(f"[HTTP] Chat disponible en http://localhost:{PORT}")
+    import os
+    host = os.environ.get("TERMUXCODE_HOST", "localhost")
+    bind_host = "" if host == "0.0.0.0" else host
+    with ThreadedHTTPServer((bind_host, PORT), ChatHTTPRequestHandler) as httpd:
+        print(f"[HTTP] Servidor corriendo en http://{host}:{PORT}")
+        print(f"[HTTP] Chat disponible en http://{host}:{PORT}")
         httpd.serve_forever()
 
 

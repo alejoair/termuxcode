@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-"""Servidor WebSocket-to-PTY para terminal funcional."""
+"""Servidor WebSocket-to-PTY para terminal funcional (cross-platform)."""
 
 import asyncio
-import fcntl
 import json
 import logging
 import os
-import pty
-import signal
-import struct
-import termios
+import sys
 
 import websockets
 
 # Config
-TERMINAL_HOST = "localhost"
+_host_override = os.environ.get("TERMUXCODE_HOST")
+TERMINAL_HOST = "" if _host_override == "0.0.0.0" else (_host_override or "localhost")
 TERMINAL_PORT = 2088
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [terminal] %(message)s")
@@ -23,12 +20,66 @@ logger = logging.getLogger(__name__)
 # Conexión activa (solo una a la vez)
 _active_session = None
 
+# --- Platform-conditional imports ---
+_IS_WINDOWS = sys.platform == "win32"
 
-def create_pty(shell=None, cwd=None, cols=80, rows=24):
-    """Crea un PTY y forkea un proceso shell.
+if _IS_WINDOWS:
+    try:
+        from winpty import PTY as WinPTY
+    except ImportError:
+        WinPTY = None
+else:
+    import fcntl
+    import pty
+    import signal
+    import struct
+    import termios
 
-    Returns (master_fd, child_pid).
-    """
+
+# ---------------------------------------------------------------------------
+# PTY Adapter: Unix (pty/fcntl)
+# ---------------------------------------------------------------------------
+class UnixPtyProcess:
+    """PTY via Unix pty.openpty() + os.fork()."""
+
+    def __init__(self, master_fd: int, child_pid: int) -> None:
+        self._master_fd = master_fd
+        self._child_pid = child_pid
+
+    def read(self) -> bytes:
+        return os.read(self._master_fd, 65536)
+
+    def write(self, data: bytes) -> None:
+        os.write(self._master_fd, data)
+
+    def resize(self, cols: int, rows: int) -> None:
+        try:
+            winsize = struct.pack("HHHH", rows, cols, 0, 0)
+            fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, winsize)
+        except OSError:
+            pass
+
+    def destroy(self) -> None:
+        try:
+            os.kill(self._child_pid, signal.SIGHUP)
+        except ProcessLookupError:
+            pass
+        try:
+            pid, _ = os.waitpid(self._child_pid, os.WNOHANG)
+            if pid == 0:
+                import time
+                time.sleep(0.1)
+                os.kill(self._child_pid, signal.SIGKILL)
+                os.waitpid(self._child_pid, 0)
+        except ChildProcessError:
+            pass
+        try:
+            os.close(self._master_fd)
+        except OSError:
+            pass
+
+
+def _create_unix_pty(shell, cwd, cols, rows) -> UnixPtyProcess:
     if shell is None:
         shell = os.environ.get("SHELL", "/bin/bash")
     if cwd is None:
@@ -36,50 +87,122 @@ def create_pty(shell=None, cwd=None, cols=80, rows=24):
 
     master_fd, slave_fd = pty.openpty()
 
-    # Tamaño inicial del terminal
     winsize = struct.pack("HHHH", rows, cols, 0, 0)
     fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
 
     pid = os.fork()
     if pid == 0:
-        # Proceso hijo
         os.close(master_fd)
         os.setsid()
-
-        # Hacer el slave el controlling terminal
         fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
-
-        os.dup2(slave_fd, 0)  # stdin
-        os.dup2(slave_fd, 1)  # stdout
-        os.dup2(slave_fd, 2)  # stderr
+        os.dup2(slave_fd, 0)
+        os.dup2(slave_fd, 1)
+        os.dup2(slave_fd, 2)
         if slave_fd > 2:
             os.close(slave_fd)
-
         try:
             os.chdir(cwd)
         except OSError:
             pass
-
-        # Set terminal environment for TUI apps (nano, vim, htop, etc.)
         os.environ['TERM'] = 'xterm-256color'
         os.environ['COLUMNS'] = str(cols)
         os.environ['LINES'] = str(rows)
-
         os.execvp(shell, [shell])
-        # No llega aquí
     else:
-        # Proceso padre
         os.close(slave_fd)
-        return master_fd, pid
+        return UnixPtyProcess(master_fd, pid)
 
 
+# ---------------------------------------------------------------------------
+# PTY Adapter: Windows (pywinpty / ConPTY)
+# ---------------------------------------------------------------------------
+class WindowsPtyProcess:
+    """PTY via pywinpty (ConPTY on Windows 10 1809+)."""
+
+    def __init__(self, pty_proc, cwd: str | None) -> None:
+        self._pty = pty_proc
+        self._cwd = cwd
+        self._closed = False
+
+    def read(self) -> bytes:
+        """Blocking read suitable for run_in_executor.
+
+        pywinpty 3.x read() is non-blocking: returns '' when no data.
+        We poll with a small sleep to simulate blocking behavior.
+        """
+        import time
+        while not self._closed:
+            data = self._pty.read()
+            if data:
+                return data.encode("utf-8", errors="replace")
+            if not self._pty.isalive():
+                self._closed = True
+                raise OSError("PTY process exited")
+            time.sleep(0.02)  # 50Hz polling
+        raise OSError("PTY closed")
+
+    def write(self, data: bytes) -> None:
+        if isinstance(data, bytes):
+            data = data.decode("utf-8", errors="replace")
+        self._pty.write(data)
+
+    def resize(self, cols: int, rows: int) -> None:
+        try:
+            self._pty.set_size(cols, rows)
+        except Exception:
+            pass
+
+    def destroy(self) -> None:
+        self._closed = True
+        try:
+            del self._pty
+        except Exception:
+            pass
+
+
+def _create_windows_pty(shell, cwd, cols, rows) -> WindowsPtyProcess:
+    if WinPTY is None:
+        raise RuntimeError(
+            "pywinpty no está instalado. "
+            "Instálalo con: pip install pywinpty"
+        )
+    if shell is None:
+        shell = os.environ.get("COMSPEC", "cmd.exe")
+    if cwd is None:
+        cwd = os.environ.get("TERMUXCODE_CWD", os.getcwd())
+
+    pty_proc = WinPTY(cols, rows)
+    pty_proc.spawn(shell)
+
+    proc = WindowsPtyProcess(pty_proc, cwd)
+
+    # pywinpty low-level PTY doesn't accept cwd in spawn,
+    # so send a cd command after startup
+    if cwd:
+        proc.write(f'cd /d "{cwd}"\r\n'.encode("utf-8"))
+
+    return proc
+
+
+# ---------------------------------------------------------------------------
+# Factory
+# ---------------------------------------------------------------------------
+def create_pty(shell=None, cwd=None, cols=80, rows=24):
+    """Crea un PTY adaptado a la plataforma actual."""
+    if _IS_WINDOWS:
+        return _create_windows_pty(shell, cwd, cols, rows)
+    return _create_unix_pty(shell, cwd, cols, rows)
+
+
+# ---------------------------------------------------------------------------
+# Terminal Session (bridge WebSocket ↔ PTY)
+# ---------------------------------------------------------------------------
 class TerminalSession:
     """Sesión de terminal: bridge entre WebSocket y PTY."""
 
-    def __init__(self, websocket, master_fd, child_pid):
+    def __init__(self, websocket, pty_proc):
         self._ws = websocket
-        self._master_fd = master_fd
-        self._child_pid = child_pid
+        self._pty = pty_proc
         self._running = True
 
     async def handle(self):
@@ -94,7 +217,6 @@ class TerminalSession:
             return_when=asyncio.FIRST_COMPLETED,
         )
 
-        # Cancelar la tarea que sigue corriendo
         for task in pending:
             task.cancel()
             try:
@@ -106,9 +228,7 @@ class TerminalSession:
         """Lee del PTY y envía al WebSocket."""
         try:
             while self._running:
-                data = await loop.run_in_executor(
-                    None, os.read, self._master_fd, 65536
-                )
+                data = await loop.run_in_executor(None, self._pty.read)
                 if not data:
                     break
                 try:
@@ -125,27 +245,23 @@ class TerminalSession:
         try:
             async for message in self._ws:
                 if isinstance(message, bytes):
-                    # Input binario directo
-                    os.write(self._master_fd, message)
+                    self._pty.write(message)
                 elif isinstance(message, str):
-                    # Podría ser input de texto o un comando JSON
                     try:
                         parsed = json.loads(message)
                         if isinstance(parsed, dict):
                             msg_type = parsed.get("type")
                             if msg_type == "resize":
-                                self.resize(
+                                self._pty.resize(
                                     parsed.get("cols", 80),
                                     parsed.get("rows", 24),
                                 )
                             elif msg_type == "ping":
-                                # Keepalive, no hacer nada
                                 pass
                             continue
                     except (json.JSONDecodeError, ValueError):
                         pass
-                    # Texto plano → escribir al PTY
-                    os.write(self._master_fd, message.encode("utf-8"))
+                    self._pty.write(message.encode("utf-8"))
         except websockets.ConnectionClosed:
             pass
         except OSError:
@@ -153,40 +269,15 @@ class TerminalSession:
         finally:
             self._running = False
 
-    def resize(self, cols, rows):
-        """Redimensiona el PTY."""
-        try:
-            winsize = struct.pack("HHHH", rows, cols, 0, 0)
-            fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, winsize)
-        except OSError:
-            pass
-
     def destroy(self):
-        """Limpia el proceso hijo y el file descriptor."""
+        """Limpia el proceso PTY."""
         self._running = False
-        try:
-            os.kill(self._child_pid, signal.SIGHUP)
-        except ProcessLookupError:
-            pass
-
-        # Esperar brevemente al hijo
-        try:
-            pid, _ = os.waitpid(self._child_pid, os.WNOHANG)
-            if pid == 0:
-                # Hijo aún vivo, esperar un poco más
-                import time
-                time.sleep(0.1)
-                os.kill(self._child_pid, signal.SIGKILL)
-                os.waitpid(self._child_pid, 0)
-        except ChildProcessError:
-            pass
-
-        try:
-            os.close(self._master_fd)
-        except OSError:
-            pass
+        self._pty.destroy()
 
 
+# ---------------------------------------------------------------------------
+# WebSocket Handler
+# ---------------------------------------------------------------------------
 async def handle_terminal_connection(websocket):
     """Handler principal para conexiones WebSocket de terminal."""
     global _active_session
@@ -211,16 +302,16 @@ async def handle_terminal_connection(websocket):
 
     # Crear PTY
     try:
-        master_fd, child_pid = create_pty(shell=shell, cwd=cwd, cols=cols, rows=rows)
-    except OSError as e:
+        pty_proc = create_pty(shell=shell, cwd=cwd, cols=cols, rows=rows)
+    except (OSError, RuntimeError) as e:
         logger.error(f"Error creando PTY: {e}")
         await websocket.close(1011, f"PTY error: {e}")
         return
 
-    session = TerminalSession(websocket, master_fd, child_pid)
+    session = TerminalSession(websocket, pty_proc)
     _active_session = session
 
-    logger.info(f"Sesión terminal creada (PID={child_pid})")
+    logger.info("Sesión terminal creada")
 
     try:
         await session.handle()
@@ -239,9 +330,9 @@ async def main():
         handle_terminal_connection,
         TERMINAL_HOST,
         TERMINAL_PORT,
-        max_size=2**20,  # 1MB max message
+        max_size=2**20,
     ):
-        await asyncio.Future()  # Run forever
+        await asyncio.Future()
 
 
 if __name__ == "__main__":

@@ -7,7 +7,22 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
+from typing import Any
+
+# En Windows, patchear subprocess para que no abra ventanas de consola
+if sys.platform == "win32":
+    _original_popen_init = subprocess.Popen.__init__
+
+    def _no_window_popen_init(
+        self: subprocess.Popen[Any], *args: Any, **kwargs: Any
+    ) -> None:
+        kwargs.setdefault("creationflags", 0)
+        kwargs["creationflags"] |= subprocess.CREATE_NO_WINDOW
+        _original_popen_init(self, *args, **kwargs)
+
+    subprocess.Popen.__init__ = _no_window_popen_init
 
 
 # Configuración
@@ -223,14 +238,14 @@ def check_ports(mode: str, force: bool = False) -> None:
         sys.exit(1)
 
 
-def print_banner() -> None:
+def print_banner(host: str = "localhost") -> None:
     """Muestra el banner de inicio."""
     print("\n" + "=" * 50)
     print("  termuxcode")
     print("=" * 50)
-    print(f"  HTTP: http://localhost:{HTTP_PORT}")
+    print(f"  HTTP:     http://{host}:{HTTP_PORT}")
     print(f"  WebSocket: ws://localhost:{WS_PORT}")
-    print(f"  Terminal: ws://localhost:{TERMINAL_PORT}")
+    print(f"  Terminal:  ws://localhost:{TERMINAL_PORT}")
     print("=" * 50 + "\n")
 
 
@@ -263,7 +278,7 @@ def _release_wake_lock() -> None:
             pass
 
 
-def run_servers(mode: str = "both", force: bool = False) -> None:
+def run_servers(mode: str = "both", host: str = "localhost", force: bool = False) -> None:
     """
     Ejecuta los servidores.
 
@@ -272,7 +287,7 @@ def run_servers(mode: str = "both", force: bool = False) -> None:
         force: si True, mata procesos en los puertos necesarios
     """
     check_ports(mode, force=force)
-    print_banner()
+    print_banner(host)
 
     wake_lock_held = _acquire_wake_lock()
 
@@ -284,6 +299,7 @@ def run_servers(mode: str = "both", force: bool = False) -> None:
     # Pasar el CWD original a los subprocesos via variable de entorno
     env = os.environ.copy()
     env['TERMUXCODE_CWD'] = original_cwd
+    env['TERMUXCODE_HOST'] = host
 
     try:
         if mode in ("both", "ws"):
@@ -305,31 +321,92 @@ def run_servers(mode: str = "both", force: bool = False) -> None:
             processes.append(("HTTP", http_proc))
 
         if mode in ("both", "terminal"):
-            print(f"[*] Iniciando servidor de terminal (puerto {TERMINAL_PORT})...")
-            terminal_proc = subprocess.Popen(
-                [sys.executable, str(TERMINAL_SERVER)],
-                cwd=original_cwd,
-                env=env
-            )
-            processes.append(("Terminal", terminal_proc))
+            # En Windows, verificar que pywinpty esté disponible
+            _terminal_available = True
+            if sys.platform == "win32":
+                try:
+                    import winpty  # noqa: F401
+                except ImportError:
+                    print("[!] pywinpty no instalado. Terminal deshabilitado.")
+                    print("    Instala con: pip install pywinpty")
+                    _terminal_available = False
+
+            if _terminal_available:
+                print(f"[*] Iniciando servidor de terminal (puerto {TERMINAL_PORT})...")
+                terminal_proc = subprocess.Popen(
+                    [sys.executable, str(TERMINAL_SERVER)],
+                    cwd=original_cwd,
+                    env=env
+                )
+                processes.append(("Terminal", terminal_proc))
 
         print("\n[OK] Servidor(es) iniciado(s)")
+        print(f"  Logs: {Path.home() / '.termuxcode' / 'websocket_server.log'}")
         print("\nAbre en tu navegador:")
         print(f"  http://localhost:{HTTP_PORT}")
         print("\nPresiona Ctrl+C para detener...\n")
 
-        # Esperar a que los procesos terminen
-        for name, proc in processes:
-            proc.wait()
+        # Esperar a que los procesos terminen (poll en Windows para permitir Ctrl+C)
+        if sys.platform == "win32":
+            while processes:
+                alive = []
+                for name, proc in processes:
+                    ret = proc.poll()
+                    if ret is None:
+                        alive.append((name, proc))
+                    else:
+                        print(f"[!] {name} terminó con código {ret}")
+                if not alive:
+                    break
+                processes = alive
+                time.sleep(0.5)
+        else:
+            for name, proc in processes:
+                proc.wait()
 
     except KeyboardInterrupt:
-        print("\n\n[!] Deteniendo servidores...")
+        print("\n\n[!] Deteniendo servidores (graceful)...")
+
+        # Fase 1: SIGTERM — permite cleanup graceful (shutdown LSP, etc.)
         for name, proc in processes:
-            proc.terminate()
+            if proc.poll() is not None:
+                continue
+            if sys.platform == "win32":
+                # Enviar CTRL_BREAK_EVENT al árbol de procesos (sin /F = graceful)
+                proc.terminate()
+            else:
+                proc.terminate()
+
+        # Esperar hasta 5s para shutdown graceful
+        deadline = time.monotonic() + 5
+        for name, proc in processes:
+            remaining = max(0, deadline - time.monotonic())
+            if remaining == 0:
+                break
             try:
-                proc.wait(timeout=2)
+                proc.wait(timeout=remaining)
+                print(f"  [OK] {name} detenido gracefully")
             except subprocess.TimeoutExpired:
-                proc.kill()
+                pass
+
+        # Fase 2: Fuerza bruta para los que no murieron
+        still_alive = [(n, p) for n, p in processes if p.poll() is None]
+        if still_alive:
+            print(f"[!] Forzando {len(still_alive)} proceso(s) restante(s)...")
+            for name, proc in still_alive:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(proc.pid), "/F", "/T"],
+                        capture_output=True,
+                    )
+                else:
+                    proc.kill()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    pass
+                print(f"  [OK] {name} terminado (force)")
+
         print("[OK] Servidores detenidos")
     finally:
         if wake_lock_held:
@@ -337,16 +414,16 @@ def run_servers(mode: str = "both", force: bool = False) -> None:
 
 
 def main() -> None:
-    """Punto de entrada del comando ccm."""
+    """Punto de entrada del comando termuxcode."""
     parser = argparse.ArgumentParser(
         description="termuxcode - Cliente web para Claude",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos:
-  ccm               Inicia todos los servidores (HTTP + WebSocket)
-  ccm --ws          Inicia solo el servidor WebSocket
-  ccm --http        Inicia solo el servidor HTTP
-  ccm --version     Muestra la versión
+  termuxcode               Inicia todos los servidores (HTTP + WebSocket)
+  termuxcode --ws          Inicia solo el servidor WebSocket
+  termuxcode --http        Inicia solo el servidor HTTP
+  termuxcode --version     Muestra la versión
         """
     )
 
@@ -369,6 +446,12 @@ Ejemplos:
     )
 
     parser.add_argument(
+        "--host",
+        default="localhost",
+        help="Host de escucha (default: localhost, usar 0.0.0.0 para acceso externo)"
+    )
+
+    parser.add_argument(
         "--force", "-f",
         action="store_true",
         help="Matar procesos que estén usando los puertos necesarios"
@@ -384,7 +467,7 @@ Ejemplos:
     else:
         mode = "both"
 
-    run_servers(mode, force=args.force)
+    run_servers(mode, host=args.host, force=args.force)
 
 
 if __name__ == "__main__":

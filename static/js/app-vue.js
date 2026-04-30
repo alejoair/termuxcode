@@ -601,6 +601,11 @@ const app = createApp({
                 },
                 mcp_status: () => {
                     tabs.updateTabMcpServers(tabId, data.servers);
+                    // Sincronizar disabledMcpServers con el estado real del backend
+                    const backendDisabled = (data.servers || [])
+                        .filter(s => s.status === 'disabled')
+                        .map(s => s.name);
+                    tabs.updateTabSettings(tabId, { disabledMcpServers: backendDisabled });
                     tab.mcpReady = true;
                 },
                 assistant: () => {

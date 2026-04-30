@@ -143,22 +143,32 @@ class Session:
 
         # Sincronizar estado de MCP servers: deshabilitar/habilitar explícitamente
         # para sobrescribir cualquier estado heredado de la sesión anterior (resume).
+        # Si disabledMcpServers viene en las opciones, es reconexión: habilitar los
+        # que NO están en la lista, deshabilitar los que sí.
+        # Si no viene (sesión nueva): deshabilitar todos por defecto.
+        has_explicit_prefs = 'disabledMcpServers' in self.agent_options
         disabled_set = set(self.agent_options.get('disabledMcpServers', []))
         mcp_status = await self._sdk_client.get_mcp_status()
         all_servers = [s['name'] for s in mcp_status.get('mcpServers', [])]
         for name in all_servers:
             try:
-                if name in disabled_set:
-                    await self._sdk_client.toggle_mcp_server(name, False)
+                if has_explicit_prefs:
+                    if name in disabled_set:
+                        await self._sdk_client.toggle_mcp_server(name, False)
+                    else:
+                        await self._sdk_client.toggle_mcp_server(name, True)
                 else:
-                    await self._sdk_client.toggle_mcp_server(name, True)
+                    await self._sdk_client.toggle_mcp_server(name, False)
             except Exception as e:
                 logger.warning(f"No se pudo cambiar estado de MCP '{name}': {e}")
-        if disabled_set:
-            logger.info(f"MCP servers desactivados al conectar: {sorted(disabled_set)}")
-        enabled = [n for n in all_servers if n not in disabled_set]
-        if enabled:
-            logger.info(f"MCP servers habilitados al conectar: {enabled}")
+        if not has_explicit_prefs:
+            logger.info(f"Sesión nueva: todos los MCP servers deshabilitados por defecto")
+        else:
+            if disabled_set:
+                logger.info(f"MCP servers desactivados al reconectar: {sorted(disabled_set)}")
+            enabled = [n for n in all_servers if n not in disabled_set]
+            if enabled:
+                logger.info(f"MCP servers habilitados al reconectar: {enabled}")
 
         # Enviar lista de tools al frontend tras dar tiempo a MCP servers de conectar
         asyncio.create_task(self._send_tools_list())
