@@ -27,6 +27,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # --- Sync version from git tag (or 0.0.0-dev for branch builds) ---
+      - name: Sync version from git tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_NAME" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "Syncing version: $VERSION"
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
+          sed -i "s/version=\"termuxcode [^\"]*\"/version=\"termuxcode $VERSION\"/" termuxcode/cli.py
+          echo "Done."
+
       # --- JDK + Android SDK (Android only) ---
       - name: Setup JDK 17
         if: matrix.platform == 'android'

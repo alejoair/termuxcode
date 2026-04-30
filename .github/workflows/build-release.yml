@@ -71,6 +71,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # --- Sync version from tag ---
+      - name: Sync version from git tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Syncing version: $VERSION"
+          # pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+          # tauri.conf.json
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
+          # Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          # package.json
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
+          # cli.py
+          sed -i "s/version=\"termuxcode [^\"]*\"/version=\"termuxcode $VERSION\"/" termuxcode/cli.py
+          echo "Done. Versions synced to $VERSION"
+
       # --- System dependencies (Linux desktop) ---
       - name: Install Linux dependencies
         if: matrix.target == 'linux'
