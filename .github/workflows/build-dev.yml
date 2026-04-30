@@ -46,11 +46,13 @@ jobs:
           echo "Syncing version: $VERSION"
           # For MSI compatibility, keep a numeric-only version in tauri.conf.json
           VERSION_NUMERIC=$(echo "$VERSION" | sed 's/-.*//')
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION_NUMERIC\"/" src-tauri/tauri.conf.json
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
-          sed -i "s/version=\"termuxcode [^\"]*\"/version=\"termuxcode $VERSION\"/" termuxcode/cli.py
+          # macOS sed requires -i '' while Linux/GNU uses -i
+          if [[ "$RUNNER_OS" == "macOS" ]]; then SEDI="sed -i ''"; else SEDI="sed -i"; fi
+          $SEDI "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+          $SEDI "s/\"version\": \".*\"/\"version\": \"$VERSION_NUMERIC\"/" src-tauri/tauri.conf.json
+          $SEDI "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          $SEDI "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
+          $SEDI "s/version=\"termuxcode [^\"]*\"/version=\"termuxcode $VERSION\"/" termuxcode/cli.py
           echo "Done."
 
       # --- JDK + Android SDK (Android only) ---
