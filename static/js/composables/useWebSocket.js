@@ -2,7 +2,9 @@
 
 import { ref, computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
-const WS_URL = `ws://${window.location.hostname}:2025`;
+const WS_URL = window.location.protocol === 'tauri:'
+    ? 'ws://localhost:2025'
+    : `ws://${window.location.hostname}:2025`;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const INITIAL_RECONNECT_DELAY = 3000;
 const MAX_RECONNECT_DELAY = 30000;

@@ -2,6 +2,9 @@
 
 import { createApp, ref, computed, onMounted, nextTick } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
+// API base: in Tauri mode (tauri:// protocol) relative URLs don't work, use localhost
+const API_BASE = window.location.protocol === 'tauri:' ? 'http://localhost:1988' : '';
+
 // Importar componentes
 import AppHeader from './components/AppHeader.js';
 import MessageList from './components/MessageList.js';
@@ -468,7 +471,7 @@ const app = createApp({
                     oldContent = existing.content;
                 } else {
                     // Fetch current content from disk (before SDK executes the tool)
-                    const res = await fetch('/api/file?path=' + encodeURIComponent(filePath));
+                    const res = await fetch(API_BASE + '/api/file?path=' + encodeURIComponent(filePath));
                     if (res.ok) {
                         const data = await res.json();
                         oldContent = data.content || '';
@@ -500,7 +503,7 @@ const app = createApp({
                     newContent = block.input.content;
                 } else {
                     // Edit tool or fallback — fetch the file from disk
-                    const res = await fetch('/api/file?path=' + encodeURIComponent(filePath));
+                    const res = await fetch(API_BASE + '/api/file?path=' + encodeURIComponent(filePath));
                     if (res.ok) {
                         const data = await res.json();
                         newContent = data.content || '';
@@ -689,8 +692,9 @@ const app = createApp({
         }
 
         // ===== Tabs Handlers =====
-        function handleNewTab() {
-            const tabId = tabs.createTab();
+        async function handleNewTab() {
+            const tabId = await tabs.createTab();
+            if (!tabId) return; // Usuario canceló diálogo en Tauri
             const tab = tabs.getTab(tabId);
             if (tab) {
                 ws.connectTab(tab, handleMessage);
@@ -829,7 +833,7 @@ const app = createApp({
 
             // Fetch contenido real
             try {
-                const res = await fetch('/api/file?path=' + encodeURIComponent(path));
+                const res = await fetch(API_BASE + '/api/file?path=' + encodeURIComponent(path));
                 if (!res.ok) {
                     const err = await res.json();
                     editorSidebar.updateFileContent(path, `// Error: ${err.error}`);
@@ -848,7 +852,7 @@ const app = createApp({
 
         async function handleSaveFile({ path, content }) {
             try {
-                const res = await fetch('/api/file', {
+                const res = await fetch(API_BASE + '/api/file', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path, content }),

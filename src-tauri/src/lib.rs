@@ -1,4 +1,8 @@
+use std::sync::Mutex;
+use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
+
+static SIDECAR_CHILD: Mutex<Option<CommandChild>> = Mutex::new(None);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,14 +19,30 @@ pub fn run() {
                     .sidecar("termuxcode-server")
                     .expect("failed to create sidecar command");
 
-                let (_rx, _child) = sidecar
+                let (_rx, child) = sidecar
                     .spawn()
                     .expect("failed to spawn termuxcode-server sidecar");
 
-                std::mem::forget(_child);
+                *SIDECAR_CHILD.lock().unwrap() = Some(child);
             }
 
             Ok(())
+        })
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let Ok(mut guard) = SIDECAR_CHILD.lock() {
+                    if let Some(child) = guard.take() {
+                        let _ = child.kill();
+                    }
+                }
+                // Also kill any remaining termuxcode-server processes
+                #[cfg(target_os = "windows")]
+                {
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/IM", "termuxcode-server.exe"])
+                        .output();
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

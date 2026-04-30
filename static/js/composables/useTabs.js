@@ -51,7 +51,22 @@ export function useTabs() {
     });
 
     // Métodos
-    function createTab(name = null, cwd = null) {
+    async function createTab(name = null, cwd = null) {
+        // En Tauri sin cwd: abrir diálogo de carpeta nativo
+        if (!cwd && window.__TAURI__) {
+            try {
+                const selected = await window.__TAURI__.dialog.open({
+                    directory: true,
+                    multiple: false,
+                    title: 'Select working folder',
+                });
+                if (!selected) return null; // Usuario canceló
+                cwd = selected;
+            } catch (e) {
+                console.warn('[useTabs] Dialog not available:', e);
+            }
+        }
+
         tabCounter++;
         const tabId = `tab_${Date.now()}_${tabCounter}`;
         const tabName = name || `Chat ${tabCounter}`;

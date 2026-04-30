@@ -3,6 +3,8 @@
 import { ref, computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 import { WsLspClient } from './WsLspClient.js';
 
+// API base: in Tauri mode (tauri:// protocol) relative URLs don't work
+const _API_BASE = window.location.protocol === 'tauri:' ? 'http://localhost:1988' : '';
 // Singleton refs — compartidos entre todas las instancias
 const openFiles = ref([]);
 const activeFilePath = ref(null);
@@ -238,7 +240,7 @@ export function useEditorSidebar() {
             await Promise.allSettled(
                 files.map(async (f) => {
                     try {
-                        const res = await fetch('/api/file?path=' + encodeURIComponent(f.path));
+                        const res = await fetch(_API_BASE + '/api/file?path=' + encodeURIComponent(f.path));
                         if (res.ok) {
                             const data = await res.json();
                             updateFileContent(f.path, data.content);
