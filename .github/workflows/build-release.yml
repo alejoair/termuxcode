@@ -180,9 +180,13 @@ jobs:
           args: --target ${{ matrix.rust-target }}
 
       # --- Build: Android ---
-      - name: Build Tauri (android)
+      - name: Build Tauri (android release)
         if: matrix.platform == 'android'
         run: npx tauri android build --apk --target aarch64
+
+      - name: Build Tauri (android debug)
+        if: matrix.platform == 'android'
+        run: npx tauri android build --apk --target aarch64 --debug
 
       # --- Upload artifacts ---
       - name: Upload artifact
@@ -190,6 +194,14 @@ jobs:
         with:
           name: termuxcode-${{ matrix.target }}
           path: ${{ matrix.artifact-glob }}
+          retention-days: 90
+
+      - name: Upload artifact (debug)
+        if: matrix.platform == 'android'
+        uses: actions/upload-artifact@v4
+        with:
+          name: termuxcode-${{ matrix.target }}-debug
+          path: "src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk"
           retention-days: 90
 
   # ============================================
