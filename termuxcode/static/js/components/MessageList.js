@@ -145,6 +145,19 @@ export default {
                             </div>
                         </div>
 
+                        <!-- Ask User Question (inline in chat) -->
+                        <div v-else-if="msg.type === 'ask_user_question'" class="ask-question-block">
+                            <div v-for="(q, qi) in msg.questions" :key="qi" class="mb-3">
+                                <span v-if="q.header" class="inline-block text-xs font-medium px-2 py-0.5 rounded bg-accent/20 text-accent mb-1">
+                                    {{ q.header }}
+                                </span>
+                                <p class="text-sm mb-1">{{ q.question }}</p>
+                                <ul class="list-disc list-inside text-xs text-muted space-y-0.5">
+                                    <li v-for="(opt, oi) in q.options" :key="oi">{{ opt.label }}</li>
+                                </ul>
+                            </div>
+                        </div>
+
                         <!-- Tool Result (sin tool_use asociado - fallback) -->
                         <div v-else-if="msg.type === 'tool_result'" class="tool-result-block accordion-item">
                             <div class="tool-header accordion-item-toggle">
@@ -295,6 +308,7 @@ export default {
                 case 'tool_use': return 'tool-call';
                 case 'thinking': return 'thinking-msg';
                 case 'tool_result': return 'tool-result';
+                case 'ask_user_question': return 'assistant';
                 default: return '';
             }
         }
@@ -304,6 +318,7 @@ export default {
                 case 'user': return 'Tu';
                 case 'text': return 'Claude';
                 case 'system': return 'Sistema';
+                case 'ask_user_question': return 'Claude';
                 default: return '';
             }
         }

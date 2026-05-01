@@ -16,5 +16,9 @@ export function useHaptics() {
         vibrate([10, 50, 10]);
     }
 
-    return { vibrateSend, vibrateReceive, vibrateResult };
+    function vibrateAttention() {
+        vibrate([50, 80]);
+    }
+
+    return { vibrateSend, vibrateReceive, vibrateResult, vibrateAttention };
 }

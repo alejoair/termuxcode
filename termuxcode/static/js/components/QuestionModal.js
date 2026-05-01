@@ -13,25 +13,42 @@ export default {
                 <!-- Content -->
                 <div class="p-4 space-y-4">
                     <div v-for="(q, qIdx) in modal.questions" :key="qIdx" class="question-block">
+                        <span v-if="q.header" class="inline-block text-xs font-medium px-2 py-0.5 rounded bg-accent/20 text-accent mb-2">
+                            {{ q.header }}
+                        </span>
                         <p class="mb-2 text-sm">{{ q.question }}</p>
+                        <div v-if="q.multiSelect" class="text-xs text-muted mb-2">
+                            Puedes seleccionar varias opciones
+                        </div>
 
                         <div class="space-y-2">
-                            <button
-                                v-for="(opt, oIdx) in q.options"
-                                :key="oIdx"
-                                @click="selectOption(qIdx, oIdx)"
-                                :class="[
-                                    'w-full text-left px-3 py-2 rounded text-sm transition-colors',
-                                    isSelected(qIdx, oIdx)
-                                        ? 'bg-accent text-txt'
-                                        : 'bg-surface hover:bg-raised'
-                                ]"
-                            >
-                                <span class="font-medium">{{ opt.label }}</span>
-                                <span v-if="opt.description" class="block text-xs opacity-70 mt-1">
-                                    {{ opt.description }}
-                                </span>
-                            </button>
+                            <div v-for="(opt, oIdx) in q.options" :key="oIdx">
+                                <button
+                                    @click="selectOption(qIdx, oIdx)"
+                                    :class="[
+                                        'w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-start gap-2',
+                                        isSelected(qIdx, oIdx)
+                                            ? 'bg-accent text-txt'
+                                            : 'bg-surface hover:bg-raised'
+                                    ]"
+                                >
+                                    <span v-if="isSelected(qIdx, oIdx)" class="mt-0.5 flex-shrink-0">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                    </span>
+                                    <span v-else class="mt-0.5 w-3.5 flex-shrink-0"></span>
+                                    <span class="flex-1">
+                                        <span class="font-medium">{{ opt.label }}</span>
+                                        <span v-if="opt.description" class="block text-xs opacity-70 mt-1">
+                                            {{ opt.description }}
+                                        </span>
+                                    </span>
+                                </button>
+                                <div v-if="opt.preview && isSelected(qIdx, oIdx)" class="mt-1 ml-6 p-2 bg-surface rounded text-xs font-mono whitespace-pre-wrap border border-border max-h-40 overflow-y-auto">
+                                    {{ opt.preview }}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

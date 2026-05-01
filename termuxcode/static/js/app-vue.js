@@ -18,6 +18,7 @@ import TodoSidebar from './components/TodoSidebar.js';
 import TasksSidebar from './components/TasksSidebar.js';
 import EditorSidebar from './components/EditorSidebar.js';
 import PlanModal from './components/PlanModal.js';
+import QuestionModal from './components/QuestionModal.js';
 
 
 // Importar composables
@@ -34,6 +35,8 @@ import { useFiletree } from './composables/useFiletree.js';
 import { useEditorSidebar } from './composables/useEditorSidebar.js';
 import { useIsMobile } from './composables/useIsMobile.js';
 import { useUiState } from './composables/useUiState.js';
+import { useHaptics } from './composables/useHaptics.js';
+import { useNotifications } from './composables/useNotifications.js';
 
 // ===== Componente Principal =====
 const app = createApp({
@@ -129,6 +132,13 @@ const app = createApp({
                         :plan="planContent"
                         @approve="handlePlanApprove"
                         @reject="handlePlanReject"
+                    />
+
+                    <question-modal
+                        v-if="showQuestionModal"
+                        :modal="questionTab"
+                        @submit="handleQuestionSubmit"
+                        @cancel="handleQuestionCancel"
                     />
                 </div>
 
@@ -280,6 +290,13 @@ const app = createApp({
                         @approve="handlePlanApprove"
                         @reject="handlePlanReject"
                     />
+
+                    <question-modal
+                        v-if="showQuestionModal"
+                        :modal="questionTab"
+                        @submit="handleQuestionSubmit"
+                        @cancel="handleQuestionCancel"
+                    />
                 </div>
 
                 <!-- ===== Mobile Drawers (position: fixed) ===== -->
@@ -365,6 +382,9 @@ const app = createApp({
         const { isMobile } = useIsMobile();
         const isMobileValue = computed(() => isMobile.value);
 
+        const haptics = useHaptics();
+        const notifications = useNotifications();
+
         // UI State persistence
         const uiState = useUiState();
 
@@ -438,6 +458,8 @@ const app = createApp({
         const showPlanModal = ref(false);
         const planContent = ref('');
         const planTab = ref(null); // tab activo cuando se recibió el plan
+        const showQuestionModal = ref(false);
+        const questionTab = ref(null); // { tab, questions }
 
         function handlePlanApprove() {
             showPlanModal.value = false;
@@ -455,6 +477,50 @@ const app = createApp({
                 tab.ws.send(JSON.stringify({ type: 'tool_approval_response', allow: false }));
             }
             planTab.value = null;
+        }
+
+        function handleQuestionSubmit({ responses }) {
+            showQuestionModal.value = false;
+            const { tab, questions } = questionTab.value || {};
+            if (!tab) return;
+
+            // Convert indices to a parallel list of labels (matches legacy format)
+            // responses[i].answers = [oIdx, ...] → labels
+            const labelResponses = questions.map((q, qIdx) => {
+                const r = responses.find(resp => resp.question === q.question);
+                const indices = r ? r.answers : [];
+                const labels = indices.map(idx => q.options[idx]?.label || String(idx));
+                return q.multiSelect ? labels : (labels[0] || null);
+            });
+
+            ws.sendQuestionResponse(tab, labelResponses, false);
+
+            // Add user message to chat showing selected labels
+            let responseText = '';
+            questions.forEach((q, qIdx) => {
+                const r = labelResponses[qIdx];
+                if (Array.isArray(r)) {
+                    responseText += `${q.header || 'Pregunta'}: ${r.join(', ')}\n`;
+                } else if (r) {
+                    responseText += `${q.header || 'Pregunta'}: ${r}\n`;
+                }
+            });
+            msg.addMessageToTab(tab, { type: 'user', content: responseText.trim() });
+
+            tab._pendingQuestion = null;
+            questionTab.value = null;
+        }
+
+        function handleQuestionCancel() {
+            showQuestionModal.value = false;
+            const { tab } = questionTab.value || {};
+            if (!tab) return;
+
+            ws.sendQuestionResponse(tab, [], true);
+            msg.addMessageToTab(tab, { type: 'system', message: 'Pregunta cancelada' });
+
+            tab._pendingQuestion = null;
+            questionTab.value = null;
         }
 
         // ===== Diff Capture for Agent Edits =====
@@ -677,6 +743,16 @@ const app = createApp({
                     todoSidebar.setTodos(data.todos || []);
                     tasksSidebar.setTasks(data.todos || []);
                 },
+                ask_user_question: () => {
+                    msg.addMessageToTab(tab, { type: 'ask_user_question', questions: data.questions });
+                    if (tabs.activeTabId.value === tabId) {
+                        showQuestionModal.value = true;
+                        questionTab.value = { tab, questions: data.questions };
+                        haptics.vibrateAttention();
+                        notifications.notifyQuestion();
+                    }
+                    tab._pendingQuestion = data.questions;
+                },
                 lsp_open_result: () => {
                     editorSidebar.handleLspMessage(data);
                 },
@@ -705,6 +781,19 @@ const app = createApp({
         function handleSwitchTab(tabId) {
             tabs.switchTab(tabId);
             updateLspConnection();
+
+            // Restore question modal if the new tab has a pending question
+            const tab = tabs.getTab(tabId);
+            if (tab?._pendingQuestion) {
+                showQuestionModal.value = true;
+                questionTab.value = { tab, questions: tab._pendingQuestion };
+            } else {
+                // Dismiss if modal belongs to another tab
+                if (questionTab.value && questionTab.value.tab.id !== tabId) {
+                    showQuestionModal.value = false;
+                    questionTab.value = null;
+                }
+            }
         }
 
         function handleCloseTab(tabId) {
@@ -712,6 +801,11 @@ const app = createApp({
             if (tab) {
                 ws.sendCommand(tab, '/destroy');
                 ws.disconnectTab(tab);
+            }
+            // Dismiss question modal if it belongs to this tab
+            if (questionTab.value && questionTab.value.tab.id === tabId) {
+                showQuestionModal.value = false;
+                questionTab.value = null;
             }
             tabs.closeTab(tabId);
         }
@@ -920,6 +1014,8 @@ const app = createApp({
         onMounted(async () => {
             console.log('[Vue] App montada');
 
+            notifications.init();
+
             // Escuchar logs del servidor
             window.addEventListener('server-log', (event) => {
                 serverLogs.addLog(event.detail);
@@ -1037,6 +1133,10 @@ const app = createApp({
             planContent,
             handlePlanApprove,
             handlePlanReject,
+            showQuestionModal,
+            questionTab,
+            handleQuestionSubmit,
+            handleQuestionCancel,
             serverLogs,
             terminal,
             terminalOpen,
@@ -1109,5 +1209,6 @@ app.component('TodoSidebar', TodoSidebar);
 app.component('TasksSidebar', TasksSidebar);
 app.component('EditorSidebar', EditorSidebar);
 app.component('PlanModal', PlanModal);
+app.component('QuestionModal', QuestionModal);
 
 app.mount('#app');
