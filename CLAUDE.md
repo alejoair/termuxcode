@@ -42,6 +42,8 @@
 - **Props reactivas**: `createApp({ setup() }).mount('#app')` no re-renderiza hijos con refs de `setup()`. Usar `reactive({ get prop() { return ref.value } })`.
 - **Template string**: Componentes hijos se registran con `app.component()` (global), no con `components: {}`.
 - **CodeMirror `setState()` destruye el editor**: Usar `Compartment` + `dispatch()` con `compartment.reconfigure()` para extensiones dinámicas. Al cambiar tab: reconfigurar compartments. `destroyEditor()` debe recrear compartments con `new Compartment()`.
+- **Sin global `Vue`**: Los componentes se cargan como ES modules. Importar `ref`, `computed`, etc. directamente desde `'https://unpkg.com/vue@3/dist/vue.esm-browser.js'`. Nunca usar `Vue.xxx` (el global no existe).
+- **Cleanup en `onUnmounted`**: Todo `setTimeout`/`setInterval` y `addEventListener` registrado en `onMounted` debe limpiarse en `onUnmounted`. Usar flag `_isMounted` para evitar que callbacks diferidos ejecuten `emit()` sobre un componente desmontado (causa crash `emitsOptions null`).
 
 ---
 
