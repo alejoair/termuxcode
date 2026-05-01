@@ -110,6 +110,11 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
+      # --- Copy web assets so frontendDist "../static" resolves ---
+      - name: Copy web assets to static/
+        shell: bash
+        run: cp -r termuxcode/static static
+
       # --- Android init ---
       - name: Initialize Tauri Android
         if: matrix.platform == 'android'
