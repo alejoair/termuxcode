@@ -229,6 +229,7 @@ export default {
         const container = ref(null);
         let _hasRestoredScroll = false;
         let _scrollTimeout = null;
+        let _isMounted = false;
 
         // Loading state
         const loadingProgress = ref(0);
@@ -297,7 +298,12 @@ export default {
         );
 
         onUnmounted(() => {
+            _isMounted = false;
             _stopLoading();
+            if (_scrollTimeout) {
+                clearTimeout(_scrollTimeout);
+                _scrollTimeout = null;
+            }
         });
 
         function getMessageClass(type) {
@@ -351,6 +357,7 @@ export default {
 
         // Manejar accordion toggle
         onMounted(() => {
+            _isMounted = true;
             if (!container.value) return;
 
             // Restaurar posición de scroll si hay ratio guardado
@@ -368,12 +375,11 @@ export default {
             container.value.addEventListener('scroll', () => {
                 if (_scrollTimeout) clearTimeout(_scrollTimeout);
                 _scrollTimeout = setTimeout(() => {
-                    if (container.value) {
-                        const ratio = container.value.scrollHeight > 0
-                            ? container.value.scrollTop / container.value.scrollHeight
-                            : 0;
-                        emit('scroll-change', ratio);
-                    }
+                    if (!_isMounted || !container.value) return;
+                    const ratio = container.value.scrollHeight > 0
+                        ? container.value.scrollTop / container.value.scrollHeight
+                        : 0;
+                    emit('scroll-change', ratio);
                 }, 200);
             }, { passive: true });
 

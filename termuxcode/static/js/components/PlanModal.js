@@ -1,3 +1,5 @@
+import { computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+
 // Componente: Modal Plan
 export default {
     template: `
@@ -38,8 +40,6 @@ export default {
     emits: ['approve', 'reject'],
 
     setup(props, { emit }) {
-        const { computed } = Vue;
-
         const renderedPlan = computed(() => {
             if (!props.plan) return '<em>No hay plan disponible</em>';
             try {
