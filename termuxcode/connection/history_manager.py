@@ -21,14 +21,14 @@ def get_history_path(cwd: str, session_id: str) -> Path | None:
     # Transformar cwd a nombre de carpeta igual que Claude Code:
     # C:\Users\foo\bar -> C--Users-foo-bar  (: -> -, \ -> -)
     # /home/foo/bar -> -home-foo-bar
-    project_name = cwd.replace(":", "-").replace("\\", "-").replace("/", "-").replace(".", "-")
+    project_name = cwd.replace(":", "-").replace("\\", "-").replace("/", "-").replace(".", "-").replace("_", "-")
     claude_dir = Path.home() / ".claude" / "projects" / project_name
     history_file = claude_dir / f"{session_id}.jsonl"
 
     if history_file.exists():
         return history_file
 
-    logger.warning(f"Archivo de historial no encontrado: {history_file}")
+    logger.debug(f"Archivo de historial no encontrado: {history_file}")
     return None
 
 
