@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from pathlib import Path
 
 import pathspec
@@ -10,7 +11,7 @@ from termuxcode.connection.context import register_context_provider
 
 
 def _load_spec(root: Path) -> pathspec.PathSpec:
-    """Carga y combina todos los .gitignore desde root hacia abajo (primer nivel)."""
+    """Carga y combina todos los .gitignore desde root hacia abajo."""
     patterns: list[str] = []
     for gitignore in root.rglob(".gitignore"):
         try:
@@ -88,16 +89,16 @@ def generate_stats_context(cwd: str) -> str:
             p for p in root.rglob("*.py")
             if not _is_ignored(p, root, spec)
         ]
-        js_files = [
-            p for p in root.rglob("*.js") + root.rglob("*.ts")
+        js_ts_files = [
+            p for p in itertools.chain(root.rglob("*.js"), root.rglob("*.ts"))
             if not _is_ignored(p, root, spec)
         ]
-        total_files = len(py_files) + len(js_files)
+        total_files = len(py_files) + len(js_ts_files)
 
         return f"""### Project Stats
 
 - **Python files**: {len(py_files)}
-- **JS/TS files**: {len(js_files)}
+- **JS/TS files**: {len(js_ts_files)}
 - **Total tracked files**: {total_files}"""
     except Exception:
         return "### Project Stats\n\n⚠️ No se pudieron calcular las estadísticas"
