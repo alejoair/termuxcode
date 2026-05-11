@@ -1,35 +1,44 @@
-"""Context provider: File tree del proyecto."""
+"""Context provider: File tree del proyecto (gitignore-aware)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pathspec
+
 from termuxcode.connection.context import register_context_provider
 
 
-_EXCLUDE_DIRS = {
-    "node_modules", ".git", "__pycache__", "venv", ".venv",
-    "dist", "build", ".pytest_cache", ".mypy_cache",
-    "target", ".cargo", "bin", "obj",
-    "site-packages", "dist-packages", "lib-dynload",
-    "Lib", "Include", "Scripts", "tcl", "tk",
-}
+def _load_spec(root: Path) -> pathspec.PathSpec:
+    """Carga y combina todos los .gitignore desde root hacia abajo (primer nivel)."""
+    patterns: list[str] = []
+    for gitignore in root.rglob(".gitignore"):
+        try:
+            patterns.extend(gitignore.read_text(errors="ignore").splitlines())
+        except OSError:
+            pass
+    return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
 
-def _looks_like_python_install(path: Path) -> bool:
-    """True si el directorio parece una instalación de Python (PythonXYZ, pythonX.Y)."""
-    name = path.name
-    lower = name.lower()
-    if lower.startswith("python") and len(name) > 6:
-        suffix = name[6:]
-        return suffix[:1].isdigit() or suffix[:1] in ("3", "2")
-    return False
+def _is_ignored(path: Path, root: Path, spec: pathspec.PathSpec) -> bool:
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return False
+    rel_str = str(rel).replace("\\", "/")
+    if path.is_dir():
+        rel_str += "/"
+    return spec.match_file(rel_str)
 
 
 @register_context_provider("filetree", priority=10)
 def generate_filetree_context(cwd: str) -> str:
+    root = Path(cwd)
+    if not root.exists():
+        return f"### File Tree\n\n⚠️ Error: Directorio no encontrado: {cwd}"
+
+    spec = _load_spec(root)
     max_depth = 3
-    exclude_files = {".DS_Store", "Thumbs.db", "*.pyc"}
 
     def build_tree(path: Path, prefix: str = "", depth: int = 0) -> list[str]:
         if depth > max_depth:
@@ -39,33 +48,24 @@ def generate_filetree_context(cwd: str) -> str:
         except PermissionError:
             return []
 
-        lines = []
-        for i, entry in enumerate(entries):
-            if entry.name.startswith('.') and entry.name not in {'.github', '.gitignore', '.env.example'}:
-                continue
+        visible = [
+            e for e in entries
+            if not _is_ignored(e, root, spec)
+            and not (e.name.startswith(".") and e.name not in {".github", ".gitignore", ".env.example"})
+        ]
 
+        lines = []
+        for i, entry in enumerate(visible):
+            is_last = i == len(visible) - 1
+            connector = "└── " if is_last else "├── "
             if entry.is_dir():
-                if entry.name in _EXCLUDE_DIRS or _looks_like_python_install(entry):
-                    continue
-                is_last = i == len(entries) - 1
-                connector = "└── " if is_last else "├── "
                 lines.append(f"{prefix}{connector}{entry.name}/")
                 child_prefix = prefix + ("    " if is_last else "│   ")
                 lines.extend(build_tree(entry, child_prefix, depth + 1))
             else:
-                if any(entry.name.endswith(ext.removeprefix('*')) for ext in exclude_files if '*' in ext):
-                    continue
-                if entry.name in exclude_files:
-                    continue
-                is_last = i == len(entries) - 1
-                connector = "└── " if is_last else "├── "
                 lines.append(f"{prefix}{connector}{entry.name}")
 
         return lines
-
-    root = Path(cwd)
-    if not root.exists():
-        return f"### File Tree\n\n⚠️ Error: Directorio no encontrado: {cwd}"
 
     tree_lines = [root.name + "/"]
     tree_lines.extend(build_tree(root))
@@ -78,24 +78,20 @@ def generate_filetree_context(cwd: str) -> str:
 ```"""
 
 
-def _iter_project_files(cwd: str, pattern: str):
-    """rglob excluyendo site-packages e instalaciones de Python."""
-    root = Path(cwd)
-    for p in root.rglob(pattern):
-        parts = p.relative_to(root).parts
-        if any(
-            part in _EXCLUDE_DIRS or _looks_like_python_install(Path(part))
-            for part in parts
-        ):
-            continue
-        yield p
-
-
 @register_context_provider("stats", priority=20)
 def generate_stats_context(cwd: str) -> str:
     try:
-        py_files = list(_iter_project_files(cwd, "*.py"))
-        js_files = list(_iter_project_files(cwd, "*.js")) + list(_iter_project_files(cwd, "*.ts"))
+        root = Path(cwd)
+        spec = _load_spec(root)
+
+        py_files = [
+            p for p in root.rglob("*.py")
+            if not _is_ignored(p, root, spec)
+        ]
+        js_files = [
+            p for p in root.rglob("*.js") + root.rglob("*.ts")
+            if not _is_ignored(p, root, spec)
+        ]
         total_files = len(py_files) + len(js_files)
 
         return f"""### Project Stats
