@@ -7,22 +7,28 @@ from pathlib import Path
 from termuxcode.connection.context import register_context_provider
 
 
+_EXCLUDE_DIRS = {
+    "node_modules", ".git", "__pycache__", "venv", ".venv",
+    "dist", "build", ".pytest_cache", ".mypy_cache",
+    "target", ".cargo", "bin", "obj",
+    "site-packages", "dist-packages", "lib-dynload",
+    "Lib", "Include", "Scripts", "tcl", "tk",
+}
+
+
+def _looks_like_python_install(path: Path) -> bool:
+    """True si el directorio parece una instalación de Python (PythonXYZ, pythonX.Y)."""
+    name = path.name
+    lower = name.lower()
+    if lower.startswith("python") and len(name) > 6:
+        suffix = name[6:]
+        return suffix[:1].isdigit() or suffix[:1] in ("3", "2")
+    return False
+
+
 @register_context_provider("filetree", priority=10)
 def generate_filetree_context(cwd: str) -> str:
-    """Genera un árbol de archivos del proyecto.
-
-    Args:
-        cwd: Directorio raíz del proyecto
-
-    Returns:
-        String con el árbol de archivos en formato markdown
-    """
     max_depth = 3
-    exclude_dirs = {
-        "node_modules", ".git", "__pycache__", "venv", ".venv",
-        "dist", "build", ".pytest_cache", ".mypy_cache",
-        "target", ".cargo", "bin", "obj"
-    }
     exclude_files = {".DS_Store", "Thumbs.db", "*.pyc"}
 
     def build_tree(path: Path, prefix: str = "", depth: int = 0) -> list[str]:
@@ -39,7 +45,7 @@ def generate_filetree_context(cwd: str) -> str:
                 continue
 
             if entry.is_dir():
-                if entry.name in exclude_dirs:
+                if entry.name in _EXCLUDE_DIRS or _looks_like_python_install(entry):
                     continue
                 is_last = i == len(entries) - 1
                 connector = "└── " if is_last else "├── "
@@ -72,19 +78,24 @@ def generate_filetree_context(cwd: str) -> str:
 ```"""
 
 
+def _iter_project_files(cwd: str, pattern: str):
+    """rglob excluyendo site-packages e instalaciones de Python."""
+    root = Path(cwd)
+    for p in root.rglob(pattern):
+        parts = p.relative_to(root).parts
+        if any(
+            part in _EXCLUDE_DIRS or _looks_like_python_install(Path(part))
+            for part in parts
+        ):
+            continue
+        yield p
+
+
 @register_context_provider("stats", priority=20)
 def generate_stats_context(cwd: str) -> str:
-    """Genera estadísticas del proyecto.
-
-    Args:
-        cwd: Directorio raíz del proyecto
-
-    Returns:
-        String con estadísticas en formato markdown
-    """
     try:
-        py_files = list(Path(cwd).rglob("*.py"))
-        js_files = list(Path(cwd).rglob("*.js")) + list(Path(cwd).rglob("*.ts"))
+        py_files = list(_iter_project_files(cwd, "*.py"))
+        js_files = list(_iter_project_files(cwd, "*.js")) + list(_iter_project_files(cwd, "*.ts"))
         total_files = len(py_files) + len(js_files)
 
         return f"""### Project Stats
