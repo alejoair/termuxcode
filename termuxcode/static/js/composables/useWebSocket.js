@@ -57,7 +57,7 @@ export function useWebSocket() {
             if (settings.system_prompt) opts.system_prompt = settings.system_prompt;
             if (settings.rolling_window) opts.rolling_window = parseInt(settings.rolling_window);
             if (settings.tools && settings.tools.length > 0) opts.tools = settings.tools;
-            if (Array.isArray(settings.disabledMcpServers) && settings.disabledMcpServers.length > 0) opts.disabledMcpServers = settings.disabledMcpServers;
+            if (Array.isArray(settings.disabledMcpServers)) opts.disabledMcpServers = settings.disabledMcpServers;
 
             if (Object.keys(opts).length > 0) {
                 params.set('options', JSON.stringify(opts));
