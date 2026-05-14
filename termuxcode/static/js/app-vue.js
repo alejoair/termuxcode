@@ -148,7 +148,6 @@ const app = createApp({
                     :open-files="editorSidebarOpenFiles"
                     :active-file-path="editorSidebarActiveFilePath"
                     :expanded="editorSidebarExpanded"
-                    :lsp-client="editorSidebarLspClient"
                     :expanded-width="editorWidthValue"
                     :diff-ranges="editorSidebarDiffRanges"
                     @toggle-expanded="editorSidebar.toggleExpanded()"
@@ -337,7 +336,6 @@ const app = createApp({
                         :active-file-path="editorSidebarActiveFilePath"
                         :expanded="true"
                         :is-mobile="true"
-                        :lsp-client="editorSidebarLspClient"
                         :diff-ranges="editorSidebarDiffRanges"
                         @toggle-expanded="closeMobileDrawer"
                         @close-file="editorSidebar.closeFile($event)"
@@ -445,7 +443,6 @@ const app = createApp({
         const editorSidebarOpenFiles = computed(() => editorSidebar.openFiles.value);
         const editorSidebarActiveFilePath = computed(() => editorSidebar.activeFilePath.value);
         const editorSidebarExpanded = computed(() => editorSidebar.expanded.value);
-        const editorSidebarLspClient = computed(() => editorSidebar.getLspClient());
         const editorSidebarRef = ref(null); // template ref para acceder al componente
         const editorSidebarDiffRanges = computed(() => {
             const path = editorSidebar.activeFilePath.value;
@@ -753,14 +750,15 @@ const app = createApp({
                     }
                     tab._pendingQuestion = data.questions;
                 },
-                lsp_open_result: () => {
-                    editorSidebar.handleLspMessage(data);
-                },
-                lsp_response: () => {
-                    editorSidebar.handleLspMessage(data);
-                },
-                lsp_notification: () => {
-                    editorSidebar.handleLspMessage(data);
+                ask_user_question: () => {
+                    msg.addMessageToTab(tab, { type: 'ask_user_question', questions: data.questions });
+                    if (tabs.activeTabId.value === tabId) {
+                        showQuestionModal.value = true;
+                        questionTab.value = { tab, questions: data.questions };
+                        haptics.vibrateAttention();
+                        notifications.notifyQuestion();
+                    }
+                    tab._pendingQuestion = data.questions;
                 },
             };
 
@@ -775,12 +773,10 @@ const app = createApp({
             if (tab) {
                 ws.connectTab(tab, handleMessage);
             }
-            updateLspConnection();
         }
 
         function handleSwitchTab(tabId) {
             tabs.switchTab(tabId);
-            updateLspConnection();
 
             // Restore question modal if the new tab has a pending question
             const tab = tabs.getTab(tabId);
@@ -888,22 +884,6 @@ const app = createApp({
 
         function handleOpenSettings() {
             showSettingsModal.value = true;
-        }
-
-        // ===== LSP Connection =====
-        function updateLspConnection() {
-            const tab = tabs.activeTab.value;
-            if (tab?.ws?.readyState === WebSocket.OPEN) {
-                editorSidebar.setLspSendFunction((data) => {
-                    if (tab.ws?.readyState === WebSocket.OPEN) {
-                        tab.ws.send(JSON.stringify(data));
-                    }
-                });
-                // Re-open active file in new session's LSP
-                editorSidebar.reconnectLsp();
-            } else {
-                editorSidebar.setLspSendFunction(null);
-            }
         }
 
         async function handleOpenFile(path) {
@@ -1041,7 +1021,6 @@ const app = createApp({
             window.addEventListener('tab-connected', (event) => {
                 const tab = tabs.getTab(event.detail.tabId);
                 if (tab) tab.reconnectFailed = false;
-                updateLspConnection();
             });
 
             // Conexion: marcar tab como fallido
@@ -1162,7 +1141,6 @@ const app = createApp({
             editorSidebarOpenFiles,
             editorSidebarActiveFilePath,
             editorSidebarExpanded,
-            editorSidebarLspClient,
             editorSidebarDiffRanges,
             handleNewTab,
             handleSwitchTab,

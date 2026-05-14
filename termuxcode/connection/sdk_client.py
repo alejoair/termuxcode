@@ -3,24 +3,16 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import TYPE_CHECKING, Any
 
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from claude_agent_sdk.types import HookMatcher
 
-from termuxcode.connection.hooks import (
-    make_pre_tool_use_hook,
-    make_post_tool_use_read_hook,
-    make_post_tool_use_edit_hook,
-)
-from termuxcode.custom_tools import get_custom_mcp_server
 from termuxcode.ws_config import logger
 
 if TYPE_CHECKING:
     from claude_agent_sdk._internal.transport import Transport
-    from termuxcode.connection.lsp_manager import LspManager
 
 
 async def _dummy_hook(input_data: dict[str, Any], tool_use_id: str, context: dict[str, Any]) -> dict[str, bool]:
@@ -33,7 +25,7 @@ class SDKClient:
 
     def __init__(self, resume_id: str | None = None, cwd: str | None = None,
                  can_use_tool: Callable[..., Coroutine[Any, Any, bool]] | None = None,
-                 agent_options: dict[str, Any] | None = None, lsp_manager: LspManager | None = None) -> None:
+                 agent_options: dict[str, Any] | None = None) -> None:
         """Inicializa el cliente SDK.
 
         Args:
@@ -41,14 +33,12 @@ class SDKClient:
             cwd: Directorio de trabajo
             can_use_tool: Callback async para aprobación de herramientas
             agent_options: Opciones del agente desde el frontend
-            lsp_manager: LspManager de la sesión (para hooks LSP aislados)
         """
         self._client = None
         self.resume_id = resume_id
         self.cwd = cwd
         self._can_use_tool = can_use_tool
         self._agent_options = agent_options or {}
-        self._lsp_manager = lsp_manager
 
     def _build_options(self, resume: bool = True) -> ClaudeAgentOptions:
         """Construye las opciones del agente.
@@ -66,7 +56,6 @@ class SDKClient:
             model=o.get("model", "glm-5"),
             setting_sources=["user", "project", "local"],
             stderr=lambda line: logger.error(f"Claude CLI stderr: {line}"),
-            mcp_servers={"termuxcode": get_custom_mcp_server(lsp_manager=self._lsp_manager)},
         )
         if o.get("system_prompt"):
             options.system_prompt = o["system_prompt"]
@@ -79,31 +68,12 @@ class SDKClient:
 
         if self._can_use_tool:
             options.can_use_tool = self._can_use_tool
-
-            # Hooks LSP: solo si hay un LspManager asignado a esta sesión
-            if self._lsp_manager:
-                options.hooks = {
-                    "PreToolUse": [
-                        HookMatcher(matcher="Write|Edit",
-                            hooks=[make_pre_tool_use_hook(self._lsp_manager)]),
-                        HookMatcher(matcher=None, hooks=[_dummy_hook]),
-                    ],
-                    "PostToolUse": [
-                        HookMatcher(matcher="Read",
-                            hooks=[make_post_tool_use_read_hook(self._lsp_manager)]),
-                        HookMatcher(matcher="Write|Edit",
-                            hooks=[make_post_tool_use_edit_hook(self._lsp_manager)]),
-                    ],
-                }
-                logger.info("can_use_tool + LSP hooks configurados (per-session)")
-            else:
-                # Sin LSP — solo el dummy hook
-                options.hooks = {
-                    "PreToolUse": [
-                        HookMatcher(matcher=None, hooks=[_dummy_hook]),
-                    ],
-                }
-                logger.info("can_use_tool configurado sin LSP hooks")
+            # Dummy hook necesario para que can_use_tool funcione en streaming mode
+            options.hooks = {
+                "PreToolUse": [
+                    HookMatcher(matcher=None, hooks=[_dummy_hook]),
+                ],
+            }
 
         if self.cwd:
             options.cwd = self.cwd

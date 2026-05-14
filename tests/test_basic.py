@@ -44,23 +44,3 @@ class TestConnection:
         """Verifica que MessageSender se puede importar."""
         from termuxcode.connection.sender import MessageSender
         assert MessageSender is not None
-
-
-class TestLSP:
-    """Pruebas relacionadas con LSP."""
-
-    def test_lsp_client_import(self):
-        """Verifica que LSPClient se puede importar."""
-        from termuxcode.connection.lsp import LSPClient
-        assert LSPClient is not None
-
-    def test_uri_functions_import(self):
-        """Verifica que las funciones URI se pueden importar."""
-        from termuxcode.connection.lsp import (
-            extension_to_language_id,
-            file_path_to_uri,
-            uri_to_file_path,
-        )
-        assert file_path_to_uri is not None
-        assert uri_to_file_path is not None
-        assert extension_to_language_id is not None

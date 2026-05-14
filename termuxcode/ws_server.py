@@ -14,12 +14,20 @@ import websockets
 from termuxcode.ws_config import WS_HOST, WS_PORT, attach_ws_log_handler, logger
 from termuxcode.connection import WebSocketConnection
 from termuxcode.connection import session_registry
-from termuxcode.connection.lsp.uri import normalize_path
 
 # Permitir override del host via env var (cli.py pasa TERMUXCODE_HOST)
 _host_override = os.environ.get("TERMUXCODE_HOST")
 if _host_override:
     WS_HOST = "" if _host_override == "0.0.0.0" else _host_override
+
+
+def _normalize_path(path: str) -> str:
+    """Convierte paths MSYS (/c/Users/...) a formato nativo Windows (C:\\Users\\...)."""
+    if not path:
+        return path
+    if sys.platform == "win32" and len(path) >= 2 and path[0] == '/' and path[1].isalpha():
+        return path[1] + ':' + path[2:]
+    return os.path.normpath(path)
 
 
 # Evento global para señalizar shutdown graceful
@@ -39,9 +47,9 @@ async def handle_connection(websocket: Any) -> None:
     agent_options = json.loads(options_raw) if options_raw else {}
 
     if cwd_raw:
-        cwd = normalize_path(unquote(cwd_raw))
+        cwd = _normalize_path(unquote(cwd_raw))
     else:
-        cwd = normalize_path(os.environ.get('TERMUXCODE_CWD', os.getcwd()))
+        cwd = _normalize_path(os.environ.get('TERMUXCODE_CWD', os.getcwd()))
 
     # Verificar si es una reconexión de sesión existente
     if resume_id:
@@ -62,7 +70,7 @@ async def handle_connection(websocket: Any) -> None:
 
 
 async def _graceful_shutdown() -> None:
-    """Destruye todas las sesiones activas (graceful LSP shutdown)."""
+    """Destruye todas las sesiones activas (graceful shutdown)."""
     sessions = session_registry.all_sessions()
     if not sessions:
         return

@@ -13,7 +13,7 @@
 
 ### Composables (`static/js/composables/`)
 
-17 composables: useTabs, useWebSocket, useStorage, useMessages, useSharedState, useServerLogs, useTodoSidebar, useTasksSidebar, useFiletree, useEditorSidebar, useIsMobile, useModals, useUiState, useResizable, useTypewriter, useHaptics, useFileIcons + WsLspClient (adaptador LSP sobre WS) + diff-extensions.js (CM6 diff inline).
+17 composables: useTabs, useWebSocket, useStorage, useMessages, useSharedState, useServerLogs, useTodoSidebar, useTasksSidebar, useFiletree, useEditorSidebar, useIsMobile, useModals, useUiState, useResizable, useTypewriter, useHaptics, useFileIcons + diff-extensions.js (CM6 diff inline).
 
 ### Layout Responsive (breakpoint 768px)
 
@@ -34,7 +34,7 @@
 |---------|------|------------|-------|
 | LogSidebar | Izq | `useServerLogs.js` | `log_handler.py` → CustomEvent |
 | FiletreeSidebar | Izq | `useFiletree.js` | filetree del proyecto |
-| EditorSidebar | Der | `useEditorSidebar.js` | CM6 + Compartment lang/LSP, dirty tracking, diff inline |
+| EditorSidebar | Der | `useEditorSidebar.js` | CM6 + Compartment lang, dirty tracking, diff inline |
 | TasksSidebar | Der | `useTasksSidebar.js` | reutiliza `todo_update` |
 
 ### Lecciones Aprendidas (CRÍTICO)
@@ -65,16 +65,15 @@ Dependencia: `claude-agent-sdk` (spawnea subproceso `claude` CLI).
 | `ws_server.py` | Servidor WebSocket |
 | `serve.py` | HTTP + API REST (`GET/PUT /api/file`) |
 | `connection/base.py` | `WebSocketConnection` - bridge WS lifecycle ↔ Session |
-| `connection/session.py` | `Session` - recursos por pestaña (SDK, LSP, handlers) |
+| `connection/session.py` | `Session` - recursos por pestaña (SDK, handlers) |
 | `connection/session_registry.py` | Dict global `session_id → WebSocketConnection` |
 | `connection/sdk_client.py` | Wrapper de `ClaudeSDKClient` |
 | `connection/message_processor.py` | Cola de mensajes, queries al SDK, stream. Prefixa contexto dinámico (`build_message_context`) |
 | `connection/sender.py` | Envío al frontend, buffer cuando desconectado |
 | `connection/ask_handler.py` | AskUserQuestion bidireccional |
 | `connection/tool_approval_handler.py` | Aprobación de tools |
-| `connection/hooks.py` | Hooks SDK (PreToolUse Write/Edit, PostToolUse Read/Edit) |
+| `connection/hooks.py` | Hooks SDK (sin hooks activos) |
 | `connection/log_handler.py` | Captura logs, ring buffer, broadcast WS |
-| `connection/lsp_manager.py` | Lifecycle LSP, registry, facade de análisis |
 | `connection/claude_md_manager.py` | `update_claude_md()` + `build_message_context()` |
 | `message_converter.py` | SDK → JSON. `SPECIAL_TOOLS = {"AskUserQuestion", "TodoWrite"}` |
 
@@ -82,7 +81,7 @@ Dependencia: `claude-agent-sdk` (spawnea subproceso `claude` CLI).
 
 | Mensaje | Efecto |
 |---------|--------|
-| `{command: "/destroy"}` | Destruye sesión (SDK, LSP, registry) |
+| `{command: "/destroy"}` | Destruye sesión (SDK, registry) |
 | `{command: "/stop"}` | Interrumpe query actual |
 | `{command: "/disconnect"}` | Cierra WS limpiamente |
 | `{content: "..."}` | Query al SDK |
@@ -118,65 +117,9 @@ Ambos usan `_resolve_safe_path()` contra `TERMUXCODE_CWD`, rechazan path travers
 
 ### Flujos
 
-- **Crear tab**: WS connect → `Session.create()` (Sender, LspManager, SDKClient, handlers) → envía `tools_list` + `mcp_status`
+- **Crear tab**: WS connect → `Session.create()` (Sender, SDKClient, handlers) → envía `tools_list` + `mcp_status`
 - **Cerrar tab**: `{command: "/destroy"}` → `_destroy_resources()` + limpia registry
 - **Reconectar**: mismo `session_id` → `resume()` evalúa rebuild (cambiaron cwd/model/permissions) o solo re-attach + replay buffer
-
----
-
-## Custom Tools con LSP
-
-Tools custom in-process servidas vía MCP server (`termuxcode`). Auto-registro en `registry.py` para recibir `LspManager`.
-
-```
-SDKClient → mcp_servers={"termuxcode": get_custom_mcp_server(lsp_manager)}
-  → server.py → registry.py: inject_lsp_manager() → tools
-```
-
-### Patrón: Crear una Tool LSP
-
-1. Crear `termuxcode/custom_tools/tools/my_tool.py`:
-```python
-from typing import TYPE_CHECKING, Any
-from claude_agent_sdk import tool
-from termuxcode.connection.lsp.uri import normalize_path
-if TYPE_CHECKING:
-    from termuxcode.connection.lsp_manager import LspManager
-
-_lsp_manager: "LspManager | None" = None
-def set_lsp_manager(mgr): global _lsp_manager; _lsp_manager = mgr
-
-from termuxcode.custom_tools.registry import register_lsp_tool
-register_lsp_tool(set_lsp_manager)
-
-@tool("my_tool", "Descripción.", {"file_path": str})
-async def my_tool(args: dict[str, Any]) -> dict[str, Any]:
-    file_path = normalize_path(args.get("file_path", "").strip())  # CRÍTICO: siempre normalizar
-    if not _lsp_manager: return {"content": [{"type": "text", "text": "Error: LSP not available"}]}
-    diagnostics = await _lsp_manager.validate_file(file_path, content)
-    return {"content": [{"type": "text", "text": "Result..."}]}
-```
-
-2. Registrar en `tools/__init__.py`: agregar import + entrada en `TOOLS` list
-
-### LspManager API
-
-| Método | Retorna | Descripción |
-|--------|---------|-------------|
-| `validate_file(path, content)` | `list[dict]` | Diagnósticos de todos los LSPs |
-| `analyze_file(path)` | `str` | Contexto semántico completo |
-| `is_supported_file(path)` | `bool` | True si hay LSP para la extensión |
-| `get_client(path)` | `LSPClient \| None` | Cliente LSP principal |
-
-**LSPClient**: `get_symbols`, `get_hover`, `get_references`, `get_type_definition`, `get_type_hierarchy`, `get_inlay_hints`, `format_file`, `get_cached_diagnostics`
-
-### Reglas Custom Tools
-
-- **Imports absolutos** en `custom_tools/` — los relativos causan import circular
-- **`normalize_path()`** de `lsp.uri` es **CRÍTICO** — convierte relativas a absolutas, maneja MSYS en Windows
-- **`TYPE_CHECKING`**: import de `LspManager` solo para type hints
-- **Fallback**: manejar `_lsp_manager is None`
-- **Auto-registro**: `register_lsp_tool(setter)` al importar. Si una falla, no rompe las demás
 
 ---
 
@@ -221,26 +164,6 @@ def generate_mi_context(cwd: str) -> str:
 3. Para prefijo: añadir a `MESSAGE_CONTEXT_PROVIDERS`
 
 **Reglas**: Prioridades 1-10 crítica, 10-30 estructura, 30-50 git, 50-100 custom. Si un provider falla, no rompe los demás.
-
----
-
-## Editor LSP (CodeMirror 6)
-
-Editor standalone con LSP vía WebSocket. Archivos en `static/js/editor/` (lsp-client.js, lsp-extensions.js) + `static/editor-tests.html`.
-
-```
-Browser (CM6) → WebSocket → lsp_proxy.py (puerto 2087) → ty/ruff (stdio)
-```
-
-**LSP Proxy**: `python -m termuxcode.lsp_proxy --port 2087 --log-level DEBUG`
-
-| Lenguaje | Comando |
-|----------|---------|
-| Python | `ty server`, `ruff server` |
-| TS/JS | `typescript-language-server --stdio` |
-| Go | `gopls` |
-
-**Features implementadas**: Diagnostics (push), Completion, Hover, Document sync.
 
 ---
 

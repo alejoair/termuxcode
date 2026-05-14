@@ -367,7 +367,7 @@ def run_servers(mode: str = "both", host: str = "localhost", force: bool = False
     except KeyboardInterrupt:
         print("\n\n[!] Deteniendo servidores (graceful)...")
 
-        # Fase 1: SIGTERM — permite cleanup graceful (shutdown LSP, etc.)
+        # Fase 1: SIGTERM — permite cleanup graceful
         for name, proc in processes:
             if proc.poll() is not None:
                 continue

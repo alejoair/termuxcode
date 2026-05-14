@@ -1,4 +1,4 @@
-// Componente: Editor Sidebar (panel derecho con CodeMirror 6 + LSP)
+// Componente: Editor Sidebar (panel derecho con CodeMirror 6)
 
 import { computed, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 import { EditorView, basicSetup } from 'codemirror';
@@ -10,10 +10,7 @@ import { html as htmlLang } from '@codemirror/lang-html';
 import { css as cssLang } from '@codemirror/lang-css';
 import { json as jsonLang } from '@codemirror/lang-json';
 import { markdown as mdLang } from '@codemirror/lang-markdown';
-import { lspDiagnostics, lspCompletion, lspHover, lspSync } from '../editor/lsp-extensions.js';
 import { diffExtension, setDiffRanges as applyDiffRanges, clearDiffDecorations } from '../editor/diff-extensions.js';
-import { autocompletion } from '@codemirror/autocomplete';
-import { hoverTooltip } from '@codemirror/view';
 import { useResizable } from '../composables/useResizable.js';
 import { getFileIcon } from '../composables/useFileIcons.js';
 
@@ -98,7 +95,6 @@ export default {
                         <span class="text-xs font-medium text-txt">Editor</span>
                         <span class="text-xs text-muted font-mono" v-if="activeFile">{{ activeFile.name }}</span>
                         <span v-if="activeFile && activeFile.dirty" class="w-2 h-2 rounded-full bg-yellow-400" title="Sin guardar"></span>
-                        <span v-if="lspClient && lspClient.ready" class="w-2 h-2 rounded-full bg-green-400" title="LSP conectado"></span>
                     </div>
                     <div class="flex items-center gap-1">
                         <!-- Save button -->
@@ -167,7 +163,6 @@ export default {
         openFiles: { type: Array, default: () => [] },
         activeFilePath: { type: String, default: null },
         expanded: { type: Boolean, default: false },
-        lspClient: { type: Object, default: null },
         isMobile: { type: Boolean, default: false },
         expandedWidth: { type: Number, default: 500 },
         diffRanges: { type: Object, default: null },
@@ -208,7 +203,6 @@ export default {
             hasDiff: false,
             _saveStatusTimeout: null,
             _langCompartment: new Compartment(),
-            _lspCompartment: new Compartment(),
             _diffCompartment: new Compartment(),
             _dirtyListener: null,
         };
@@ -296,19 +290,6 @@ export default {
     },
 
     methods: {
-        _getLspExtensions() {
-            if (this.lspClient && this.lspClient.ready && this.lspClient._documentUri) {
-                const uri = this.lspClient._documentUri;
-                return [
-                    lspDiagnostics(this.lspClient, uri),
-                    lspSync(this.lspClient, uri),
-                    autocompletion({ override: [lspCompletion(this.lspClient, uri)] }),
-                    hoverTooltip(lspHover(this.lspClient, uri)),
-                ];
-            }
-            return [];
-        },
-
         mountEditor() {
             const container = this.$refs.editorContainer;
             if (!container || this.editorView) return;
@@ -316,7 +297,6 @@ export default {
             const file = this.activeFile;
             const content = file ? file.content : '';
             const lang = file ? getLang(file.name) : [];
-            const lspExts = this._getLspExtensions();
 
             this._dirtyListener = EditorView.updateListener.of((tr) => {
                 if (tr.docChanged && this.activeFilePath) {
@@ -335,7 +315,6 @@ export default {
                         extensions: [
                             basicSetup, oneDark,
                             this._langCompartment.of(lang),
-                            this._lspCompartment.of(lspExts),
                             this._diffCompartment.of(diffExtension()),
                             this._dirtyListener,
                         ],
@@ -358,13 +337,10 @@ export default {
             try {
                 const currentContent = this.editorView.state.doc.toString();
                 const lang = getLang(file.name);
-                const lspExts = this._getLspExtensions();
                 const dispatches = [];
 
                 // Reconfigure language compartment
                 dispatches.push(this._langCompartment.reconfigure(lang));
-                // Reconfigure LSP compartment
-                dispatches.push(this._lspCompartment.reconfigure(lspExts));
                 // Note: _diffCompartment NO se reconfigura aquí — el StateField
                 // mapea las decoraciones automáticamente con decorations.map(tr.changes)
 
@@ -392,7 +368,6 @@ export default {
             }
             // Recreate compartments so next mountEditor starts fresh
             this._langCompartment = new Compartment();
-            this._lspCompartment = new Compartment();
             this._diffCompartment = new Compartment();
             this._dirtyListener = null;
             this.hasDiff = false;

@@ -1,7 +1,6 @@
 // ===== Composable: Editor Sidebar (singleton) =====
 
 import { ref, computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
-import { WsLspClient } from './WsLspClient.js';
 
 // API base: in Tauri mode (tauri:// protocol) relative URLs don't work
 const _API_BASE = window.location.protocol === 'tauri:' ? 'http://localhost:1988' : '';
@@ -10,17 +9,11 @@ const openFiles = ref([]);
 const activeFilePath = ref(null);
 const expanded = ref(false);
 
-// Singleton LSP client
-const lspClient = new WsLspClient();
-
 // Diff state: path → { ranges: { addRanges, removeRanges } }
 const diffState = ref({});
 
 // Flag para inicialización desde estado persistido
 let _initialized = false;
-
-// Supported languages for LSP
-const LSP_LANGUAGES = new Set(['python', 'javascript', 'typescript', 'html', 'css', 'json']);
 
 const DEFAULT_FILE = {
     path: '__welcome__.py',
@@ -81,15 +74,11 @@ export function useEditorSidebar() {
             if (content !== undefined) existing.content = content;
             activeFilePath.value = path;
             expanded.value = true;
-            // Re-open in LSP if language is supported
-            _lspOpenFile(path, content || existing.content, language || existing.language);
             return;
         }
         openFiles.value = [...openFiles.value, { path, name, content: content || '', language: language || 'text', dirty: false }];
         activeFilePath.value = path;
         expanded.value = true;
-        // Open in LSP if language is supported
-        _lspOpenFile(path, content || '', language || 'text');
     }
 
     function closeFile(path) {
@@ -98,13 +87,9 @@ export function useEditorSidebar() {
         const wasActive = activeFilePath.value === path;
         openFiles.value = openFiles.value.filter(f => f.path !== path);
         if (wasActive) {
-            lspClient.close();
             if (openFiles.value.length > 0) {
                 const newIdx = Math.min(idx, openFiles.value.length - 1);
                 activeFilePath.value = openFiles.value[newIdx].path;
-                // Re-open new active file in LSP
-                const newFile = openFiles.value[newIdx];
-                _lspOpenFile(newFile.path, newFile.content, newFile.language);
             } else {
                 activeFilePath.value = null;
                 expanded.value = false;
@@ -118,9 +103,6 @@ export function useEditorSidebar() {
         const oldPath = activeFilePath.value;
         if (oldPath === path) return;
         activeFilePath.value = path;
-        // Switch LSP document
-        lspClient.close();
-        _lspOpenFile(file.path, file.content, file.language);
     }
 
     function toggleExpanded() {
@@ -156,33 +138,6 @@ export function useEditorSidebar() {
         openFiles.value = openFiles.value.map(f =>
             f.path === path ? { ...f, dirty: false } : f
         );
-    }
-
-    // ── LSP integration ──────────────────────────────────────────────
-
-    function setLspSendFunction(fn) {
-        lspClient.setSendFunction(fn);
-    }
-
-    function handleLspMessage(data) {
-        lspClient.handleMessage(data);
-    }
-
-    function getLspClient() {
-        return lspClient;
-    }
-
-    function _lspOpenFile(path, content, language) {
-        if (!lspClient._sendFn) return;
-        if (!LSP_LANGUAGES.has(language)) return;
-        lspClient.open(path, content, language);
-    }
-
-    function reconnectLsp() {
-        const file = activeFile.value;
-        if (!file) return;
-        lspClient.close();
-        _lspOpenFile(file.path, file.content, file.language);
     }
 
     // ── Diff state ────────────────────────────────────────────
@@ -273,11 +228,6 @@ export function useEditorSidebar() {
         updateFileContent,
         markDirty,
         markClean,
-        // LSP
-        setLspSendFunction,
-        handleLspMessage,
-        getLspClient,
-        reconnectLsp,
         // Diff
         setDiffRanges,
         getDiffRanges,
