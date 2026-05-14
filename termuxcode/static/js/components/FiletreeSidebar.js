@@ -1,7 +1,7 @@
 // Componente: Filetree Sidebar (panel izquierdo siempre visible, slim/expanded modes)
 import { computed } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 import { useResizable } from '../composables/useResizable.js';
-import { getFileIcon, getFolderIcon } from '../composables/useFileIcons.js';
+import { getFileIcon, getFolderIcon, getFileColor } from '../composables/useFileIcons.js';
 
 export default {
     template: `
@@ -159,32 +159,38 @@ const FiletreeNode = {
     name: 'filetree-node',
     template: `
         <div>
-            <div @click="node.type === 'dir' && $emit('toggle', node)"
-                @dblclick="node.type === 'file' && $emit('open-file', node.path)"
-                :class="[
-                    'flex items-center gap-1 cursor-pointer px-2 py-0.5 hover:bg-surface/50 transition-colors select-none',
-                    node.type === 'file' ? 'text-txt/80' : 'text-txt'
-                ]"
-                :style="{ paddingLeft: (depth * 12 + 8) + 'px' }"
+            <div @click="node.type === 'dir' ? $emit('toggle', node) : $emit('open-file', node.path)"
+                class="relative flex items-center gap-1 cursor-pointer py-0.5 hover:bg-surface/60 transition-colors select-none"
+                :style="{ paddingLeft: (depth * 12 + 8) + 'px', paddingRight: '6px' }"
             >
                 <!-- Chevron para dirs -->
                 <svg v-if="node.type === 'dir'"
-                    class="w-3 h-3 text-muted flex-shrink-0 transition-transform"
-                    :class="{ 'rotate-90': isExpanded }"
+                    class="w-3 h-3 flex-shrink-0 transition-transform"
+                    :class="isExpanded ? 'rotate-90' : ''"
+                    :style="{ color: iconColor }"
                     fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
                 </svg>
                 <span v-else class="w-3 flex-shrink-0"></span>
 
-                <!-- Icono SVG -->
-                <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="icon"></svg>
+                <!-- Icono SVG con color -->
+                <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke-width="2"
+                    :style="{ stroke: iconColor }"
+                    v-html="icon"></svg>
 
-                <!-- Nombre -->
-                <span class="truncate">{{ node.name }}</span>
+                <!-- Nombre: dirs en blanco brillante, files con color del tipo -->
+                <span class="truncate text-xs"
+                    :style="{ color: node.type === 'dir' ? '#e2e8f0' : iconColor }">
+                    {{ node.name }}
+                </span>
             </div>
 
-            <!-- Hijos (solo dirs expandidos) -->
-            <template v-if="node.type === 'dir' && isExpanded && node.children">
+            <!-- Hijos con línea guía vertical -->
+            <div v-if="node.type === 'dir' && isExpanded && node.children" class="relative">
+                <!-- línea guía: posicionada al nivel del icono de esta carpeta -->
+                <div class="absolute top-0 bottom-0 pointer-events-none"
+                    :style="{ left: (depth * 12 + 15) + 'px', width: '1px', background: '#243040' }">
+                </div>
                 <filetree-node
                     v-for="child in node.children"
                     :key="child.path"
@@ -194,7 +200,7 @@ const FiletreeNode = {
                     @toggle="n => $emit('toggle', n)"
                     @open-file="p => $emit('open-file', p)"
                 />
-            </template>
+            </div>
         </div>
     `,
 
@@ -210,12 +216,16 @@ const FiletreeNode = {
         isExpanded() {
             return this.expandedPaths.has(this.node.path);
         },
+        ext() {
+            if (this.node.type === 'dir') return '';
+            return this.node.name.split('.').pop().toLowerCase();
+        },
         icon() {
-            if (this.node.type === 'dir') {
-                return getFolderIcon(this.isExpanded);
-            }
-            const ext = this.node.name.split('.').pop().toLowerCase();
-            return getFileIcon(ext);
+            if (this.node.type === 'dir') return getFolderIcon(this.isExpanded);
+            return getFileIcon(this.ext);
+        },
+        iconColor() {
+            return getFileColor(this.ext, this.node.type === 'dir');
         },
     },
 };

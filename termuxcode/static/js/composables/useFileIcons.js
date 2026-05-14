@@ -103,3 +103,43 @@ export function getFileIconSvg(ext, size = 'w-4 h-4') {
         : getFileIcon(ext);
     return `<svg class="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${content}</svg>`;
 }
+
+// Color por extensión / tipo — valores hex inline para no depender de purge de Tailwind
+const FILE_COLORS = {
+    folder: '#f59e0b',
+    js:     '#f7df1e',
+    ts:     '#3b82f6',
+    jsx:    '#61dafb',
+    tsx:    '#61dafb',
+    py:     '#4ade80',
+    html:   '#f97316',
+    css:    '#818cf8',
+    vue:    '#42d392',
+    json:   '#fbbf24',
+    yml:    '#a78bfa',
+    yaml:   '#a78bfa',
+    toml:   '#a78bfa',
+    env:    '#fb923c',
+    md:     '#94a3b8',
+    txt:    '#94a3b8',
+    sh:     '#4ade80',
+    bash:   '#4ade80',
+    svg:    '#f472b6',
+    png:    '#f472b6',
+    jpg:    '#f472b6',
+    jpeg:   '#f472b6',
+    gif:    '#f472b6',
+    lock:   '#64748b',
+    gitignore: '#64748b',
+};
+
+/**
+ * Returns a hex color for a file/folder icon.
+ * @param {string} ext
+ * @param {boolean} isDir
+ * @returns {string} hex color
+ */
+export function getFileColor(ext, isDir = false) {
+    if (isDir) return FILE_COLORS.folder;
+    return FILE_COLORS[ext] || '#94a3b8';
+}
