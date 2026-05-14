@@ -58,6 +58,7 @@ def _format_diagnostic_error(diag: dict) -> str:
 def make_pre_tool_use_hook(lsp_manager: LspManager) -> Callable[..., Coroutine[Any, Any, dict]]:
     """Crea un PreToolUse hook para Write|Edit que captura el LspManager por closure."""
     async def hook(input_data: dict, tool_use_id: str, context: dict) -> dict:
+        return {"continue_": True}  # DISABLED: blocking handled externally
         logger.debug(f"PreToolUse hook invocado: tool_name={input_data.get('tool_name')}")
         manager = lsp_manager
         if not manager or not manager._initialized:
